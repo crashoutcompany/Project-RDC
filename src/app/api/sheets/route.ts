@@ -5,6 +5,8 @@ import { getVideoId } from "@/app/(routes)/admin/_utils/helper-functions";
 import prisma from "prisma/db";
 import { generateText } from "ai";
 import { google as aiGoogle } from "@ai-sdk/google";
+import { withTracing } from "@posthog/ai";
+import posthog from "@/posthog/server-init";
 import {
   logAiGenFailure,
   logAiGenSuccess,
@@ -93,8 +95,15 @@ export async function GET(req: NextRequest) {
       const lastVideoId = getVideoId(items.at(-1)?.videoId || "");
       let summary: string | null = null;
       try {
+        const model = withTracing(aiGoogle("gemini-2.5-pro"), posthog, {
+          posthogDistinctId: "cron-job",
+          posthogProperties: {
+            source: "google-drive-sync",
+          },
+        });
+
         const { text } = await generateText({
-          model: aiGoogle("gemini-2.5-pro"),
+          model: model,
           system:
             "You are a concise summarizer. Produce a short summary highlighting the new rows inserted",
           prompt: `Summarize the following ${items.length} new sheet rows into a short, human-readable summary. Rows: ${JSON.stringify(

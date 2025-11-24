@@ -3,6 +3,8 @@
 import { auth } from "@/auth";
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
+import { withTracing } from "@posthog/ai";
+import posthog from "@/posthog/server-init";
 import type { ProcessedSet } from "../(routes)/(groups)/games/[slug]/_components/match-data";
 // import { createStreamableValue } from "@ai-sdk/rsc";
 
@@ -40,9 +42,16 @@ export const analyzeMvp = async (
 
     const now = performance.now();
 
+    const model = withTracing(google("gemini-2.5-pro"), posthog, {
+      posthogDistinctId: session.user?.email ?? "Unidentified User",
+      posthogProperties: {
+        sessionId,
+      },
+    });
+
     const { object, usage } = await generateObject({
       schema: mvpSchema,
-      model: google("gemini-2.5-pro"),
+      model: model,
       system: mvpSystemPrompt,
       prompt: `Analyze the following game sets and determine the MVP based on the provided statistics: ${JSON.stringify(
         sets,
