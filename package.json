@@ -52,7 +52,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/postcss": "^4.1.11",
     "@tanstack/react-table": "^8.21.3",
-    "ai": "^5.0.77",
+    "ai": "^5.0.102",
     "babel-plugin-react-compiler": "^1.0.0",
     "botid": "^1.5.10",
     "class-variance-authority": "^0.7.1",
