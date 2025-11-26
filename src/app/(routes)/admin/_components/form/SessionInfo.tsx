@@ -17,9 +17,8 @@ import { errorCodes } from "@/lib/constants";
 import { Player } from "prisma/generated";
 import { FormValues } from "../../_utils/form-helpers";
 import { getVideoId } from "../../_utils/helper-functions";
-import { userSignOut } from "@/app/actions/signOut";
+import { authClient } from "@/lib/auth-client";
 import { usePostHog } from "posthog-js/react";
-import { useSession } from "next-auth/react";
 
 export const SessionInfo = ({
   form,
@@ -34,7 +33,7 @@ export const SessionInfo = ({
     formState: { defaultValues },
   } = form;
   const posthog = usePostHog();
-  const { data: user } = useSession();
+  const { data: session } = authClient.useSession();
 
   /**
    * Handles the URL update process for a session.
@@ -77,11 +76,11 @@ export const SessionInfo = ({
       const { error, video } = await getRDCVideoDetails(
         videoId,
         form.getValues("game"),
-        user?.user?.email ?? distinctId,
+        session?.user?.email ?? distinctId,
       );
 
       if (error !== undefined) {
-        if (error === errorCodes.NotAuthenticated) await userSignOut();
+        if (error === errorCodes.NotAuthenticated) await authClient.signOut();
         else {
           form.reset(undefined, { keepIsValid: true });
           toast.error(error, { richColors: true });

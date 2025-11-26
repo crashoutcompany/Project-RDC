@@ -1,12 +1,21 @@
 import posthog from "@/posthog/server-init";
-import { auth } from "@/auth";
+import { auth, Session } from "@/lib/auth";
 import { FormValues } from "@/app/(routes)/admin/_utils/form-helpers";
 import ErrorModelOutput from "@azure-rest/ai-document-intelligence";
-import { Session } from "next-auth";
+// import { Session } from "next-auth";
 import { v4 } from "uuid";
 import type { MvpOutput } from "@/app/ai/types";
 import { after } from "next/server";
 import { PostHogEvents } from "@/posthog/events";
+import { headers } from "next/headers";
+
+const getSession = async () => {
+  try {
+    return await auth.api.getSession({ headers: await headers() });
+  } catch (e) {
+    return null;
+  }
+};
 
 /**
  * Logs an authentication error to PostHog
@@ -17,7 +26,7 @@ export const logAuthError = async (
   userSession?: Session | null,
 ) => {
   try {
-    const session = userSession ?? (await auth());
+    const session = userSession ?? (await getSession());
     posthog.capture({
       event: PostHogEvents.AUTH_ERROR,
       distinctId: session?.user?.email ?? "Unidentified Email",
@@ -42,7 +51,7 @@ export const logAuthEvent = async (
   event: PostHogEvents.SIGN_IN | PostHogEvents.SIGN_OUT,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.capture({
     event,
     distinctId: session?.user?.email || v4(),
@@ -54,7 +63,7 @@ export const logNAN = async (
   statId: number,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.capture({
     event: PostHogEvents.NAN_ERROR,
     distinctId: session?.user?.email || v4(),
@@ -70,7 +79,7 @@ export const logFormError = async (
   session: FormValues,
   userSession?: Session | null,
 ) => {
-  const authSession = userSession ?? (await auth());
+  const authSession = userSession ?? (await getSession());
   posthog.captureException(err, authSession?.user?.email || v4(), {
     session: JSON.stringify(session),
   });
@@ -81,7 +90,7 @@ export const logFormSuccess = async (
   event: Forms,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
 
   const eventName =
     event === "ADMIN_FORM"
@@ -101,7 +110,7 @@ export const logVisionError = async (
   error: typeof ErrorModelOutput | unknown,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4());
 };
 
@@ -110,7 +119,7 @@ export const logMvpUpdateFailure = async (
   error: unknown,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4(), {
     sessionId,
   });
@@ -123,7 +132,7 @@ export const logMvpUpdateSuccess = async (
   duration: number,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
 
   posthog.capture({
     event: PostHogEvents.MVP_UPDATE_SUCCESS,
@@ -227,7 +236,7 @@ export const logAdminAction = async (
   details: Record<string, unknown>,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.capture({
     event,
     distinctId: session?.user?.email || v4(),
@@ -240,7 +249,7 @@ export const logVisionSuccess = async (
   durationMs: number,
   userSession?: Session | null,
 ) => {
-  const session = userSession ?? (await auth());
+  const session = userSession ?? (await getSession());
   posthog.capture({
     event: PostHogEvents.VISION_ANALYSIS_SUCCESS,
     distinctId: session?.user?.email || v4(),
@@ -248,5 +257,15 @@ export const logVisionSuccess = async (
       gameId,
       durationMs,
     },
+  });
+};
+
+export const logDatabaseError = async (
+  error: unknown,
+  userSession?: Session | null,
+) => {
+  const session = userSession ?? (await getSession());
+  posthog.captureException(error, session?.user?.email || v4(), {
+    session: JSON.stringify(session),
   });
 };

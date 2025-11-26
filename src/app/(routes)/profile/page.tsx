@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Icon from "@/app/favicon.ico";
 import { H1 } from "@/components/headings";
@@ -16,10 +16,11 @@ import {
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { Session } from "next-auth";
+// import { Session } from "next-auth";
 import prisma from "prisma/db";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { headers } from "next/headers";
 
 export default async function Page() {
   return (
@@ -30,7 +31,11 @@ export default async function Page() {
 }
 
 const Component = async () => {
-  const session = (await auth()) as Session;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/");
+  
+  // ... session.user.email ...
+
   if (!session) redirect("/");
 
   // Mask email for privacy

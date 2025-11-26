@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import {
   SidebarInset,
@@ -8,7 +8,7 @@ import {
 // import { VersionSwitcher } from "@/components/version-switcher";
 import { AdminProvider } from "@/lib/adminContext";
 import { Separator } from "@radix-ui/react-separator";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { Suspense } from "react";
@@ -27,7 +27,7 @@ export default async function Layout({
 }
 
 const Component = async ({ children }: { children: React.ReactNode }) => {
-  const session = await auth();
+  const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/");
 
   const cookieStore = await cookies();

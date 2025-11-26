@@ -2,8 +2,9 @@
 
 import prisma from "prisma/db";
 import config from "@/lib/config";
-import { Session } from "next-auth";
-import { signOut, auth } from "@/auth";
+// import { Session } from "next-auth";
+import { auth, Session } from "@/lib/auth";
+import { headers } from "next/headers";
 import { errorCodes } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import posthog from "@/posthog/server-init";
@@ -22,7 +23,8 @@ import { revalidatePath } from "next/cache";
 export const updateAuthStatus = async (session: Session | null) => {
   if (session) {
     revalidatePath("/", "layout");
-    await signOut({ redirectTo: "/" });
+    await auth.api.signOut({ headers: await headers() });
+    redirect("/");
   } else redirect("/signin");
 };
 
@@ -56,7 +58,9 @@ export const getRDCVideoDetails = async (
 ): GetRdcVideoDetails => {
   // TODO Maybe only validate if it's a valid video when clicking next.
   try {
-    const isAuthenticated = await auth();
+    const isAuthenticated = await auth.api.getSession({
+      headers: await headers(),
+    });
     if (!isAuthenticated) {
       posthog.capture({
         event: PostHogEvents.VIDEO_FETCH_DENIED,

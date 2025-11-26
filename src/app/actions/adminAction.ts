@@ -3,7 +3,7 @@
 import { GameStat } from "prisma/generated";
 import prisma, { handlePrismaOperation } from "prisma/db";
 import { FormValues } from "../(routes)/admin/_utils/form-helpers";
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import {
@@ -13,11 +13,18 @@ import {
 } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { PostHogEvents } from "@/posthog/events";
+import { headers } from "next/headers";
+
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof auth.api.getSession>>
+>["user"] & { role?: string };
 
 export async function approveSession(sessionId: number) {
   try {
-    const authUser = await auth();
-    if (!authUser) return { error: errorCodes.NotAuthenticated };
+    const authUser = await auth.api.getSession({ headers: await headers() });
+    const user = authUser?.user as AdminUser | undefined;
+    if (!authUser || user?.role !== "admin")
+      return { error: errorCodes.NotAuthenticated };
 
     const query = await handlePrismaOperation((prisma) =>
       prisma.session.update({
@@ -132,11 +139,14 @@ export const insertNewSessionFromAdmin = async (
   console.group("insertNewSessionFromAdmin");
   console.log("Inserting New Session: ", session);
 
-  const user = await auth();
+  const user = await auth.api.getSession({ headers: await headers() });
   let error: null | string = null;
 
+  const adminUser = user?.user as AdminUser | undefined;
+
   try {
-    if (!user) return { error: errorCodes.NotAuthenticated };
+    if (!user || adminUser?.role !== "admin")
+      return { error: errorCodes.NotAuthenticated };
 
     const sessionGame = await prisma.game.findFirst({
       where: { gameName: session.game },
@@ -345,8 +355,10 @@ export const revalidateAction = async (path: string) =>
 export async function addGame(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth();
-  if (!session) return { error: errorCodes.NotAuthenticated };
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user as AdminUser | undefined;
+  if (!session || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
 
   const gameName = formData.get("gameName") as string;
   if (!gameName) return { error: "Game name is required." };
@@ -356,7 +368,7 @@ export async function addGame(
   );
 
   if (!res.success) return { error: res.error || "Failed to add game." };
-  
+
   after(() =>
     logAdminAction(PostHogEvents.GAME_ADDED, { gameName }, session),
   );
@@ -368,8 +380,10 @@ export async function addGame(
 export async function addPlayer(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth();
-  if (!session) return { error: errorCodes.NotAuthenticated };
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user as AdminUser | undefined;
+  if (!session || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
 
   const playerName = formData.get("playerName") as string;
   if (!playerName) return { error: "Player name is required." };
@@ -391,8 +405,10 @@ export async function addPlayer(
 export async function addGameStat(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth();
-  if (!session) return { error: errorCodes.NotAuthenticated };
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session?.user as AdminUser | undefined;
+  if (!session || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
 
   const statName = formData.get("statName") as string;
   const gameId = Number(formData.get("gameId"));

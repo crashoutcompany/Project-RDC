@@ -1,5 +1,10 @@
 "use server";
 
-import { signOut } from "@/auth";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
-export const userSignOut = async () => await signOut({ redirectTo: "/" });
+export const userSignOut = async () => {
+  await auth.api.signOut({ headers: await headers() });
+  redirect("/");
+};

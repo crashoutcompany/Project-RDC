@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { authClient } from "@/lib/auth-client";
 import posthog from "posthog-js";
 
 export default function PostHogIdentify() {
-  const { data: session } = useSession();
+  const { data: session } = authClient.useSession();
 
   useEffect(() => {
     if (session?.user?.email) {

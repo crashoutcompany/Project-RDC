@@ -1,12 +1,11 @@
-"use cache";
-
-import { signIn } from "@/auth";
+import { auth } from "@/lib/auth";
 import { H1 } from "@/components/headings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { domain } from "@/lib/utils";
 // import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export default async function Page() {
   return (
@@ -20,18 +19,30 @@ export default async function Page() {
         <form
           action={async (fd) => {
             "use server";
-            const provider = fd.get("provider")?.slice(13);
+            const rawProvider = fd.get("provider");
+            if (typeof rawProvider !== "string") {
+              console.error("Invalid provider");
+              redirect("/");
+            }
+
+            const provider = rawProvider.slice(13).toLowerCase();
             console.log(provider);
-            switch (provider) {
-              case "Google":
-                await signIn("google", { redirectTo: domain });
-                break;
-              case "Github":
-                await signIn("github", { redirectTo: domain });
-                break;
-              default:
-                console.error("Invalid provider");
-                redirect("/");
+
+            if (provider === "github" || provider === "google") {
+              const data = await auth.api.signInSocial({
+                body: {
+                  provider: provider as "github" | "google",
+                  callbackURL: "/",
+                  errorCallbackURL: "/",
+                },
+                headers: await headers(),
+              });
+              if (data?.url) {
+                redirect(data.url);
+              }
+            } else {
+              console.error("Invalid provider");
+              redirect("/");
             }
           }}
         >

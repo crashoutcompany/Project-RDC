@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth";
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { withTracing } from "@posthog/ai";
@@ -17,13 +17,14 @@ import {
 import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { MvpOutput, mvpSchema } from "./types";
+import { headers } from "next/headers";
 
 export const analyzeMvp = async (
   sets: ProcessedSet[],
   sessionId: number,
 ): Promise<MvpOutput> => {
   try {
-    const session = await auth();
+    const session = await auth.api.getSession({ headers: await headers() });
     if (!session) throw new Error("Unauthorized");
 
     // Fast path: If MVP is already calculated, return it immediately.

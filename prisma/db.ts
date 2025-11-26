@@ -8,6 +8,7 @@ import { neonConfig, NeonDbError } from "@neondatabase/serverless";
 
 import ws from "ws";
 import { PrismaClient } from "./generated";
+import { logDatabaseError } from "@/posthog/server-analytics";
 // import posthog from "@/posthog/server-init";
 // import { v4 } from "uuid";
 
@@ -46,9 +47,11 @@ export async function handlePrismaOperation<T>(
   try {
     const data = await operation(prisma);
     return { success: true, data };
-  } catch (error) {
+  } catch (error: any) {
     // posthog.captureException(error, v4());
-    console.log(error);
+    // logDatabaseError(error);
+    if (error?.code === "P1000")
+      console.warn("Database connection error. Database may be expired.");
     if (error instanceof PrismaClientKnownRequestError) {
       return {
         success: false,
@@ -78,7 +81,6 @@ export async function handlePrismaOperation<T>(
     };
   }
 }
-
 const connectionString = process.env.DATABASE_URL;
 
 const adapter = new PrismaNeon({ connectionString });

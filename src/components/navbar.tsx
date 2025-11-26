@@ -24,9 +24,10 @@ import {
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { getGamesNav } from "@/lib/constants";
 import { getMembersNav } from "prisma/lib/members";
-import { auth } from "@/auth";
+import { auth } from "@/lib/auth";
 import { AuthButton, ToggleThemeButton } from "./client-buttons";
 import { Skeleton } from "./ui/skeleton";
+import { headers } from "next/headers";
 
 export const Navbar = async () => {
   const games = await getGamesNav();
@@ -153,17 +154,17 @@ const ListItem = React.forwardRef<
 ListItem.displayName = "ListItem";
 
 const AuthSection = async () => {
-  const session = await auth();
+  const session = await auth.api.getSession({ headers: await headers() });
   return (
     <>
       {session && <ListItem href="/admin">Admin</ListItem>}
-      <AuthButton hideOnSmallScreens={false} session={session} />
+      <AuthButton hideOnSmallScreens={false} />
     </>
   );
 };
 
 const ProfileSection = async () => {
-  const session = await auth();
+  const session = await auth.api.getSession({ headers: await headers() });
   return (
     <>
       <NavigationMenuItem className="hidden sm:block">
@@ -183,7 +184,7 @@ const ProfileSection = async () => {
           </TooltipProvider>
         )}
       </NavigationMenuItem>
-      <AuthButton hideOnSmallScreens session={session} />
+      <AuthButton hideOnSmallScreens />
     </>
   );
 };

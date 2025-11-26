@@ -9,7 +9,7 @@ import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/ui/sonner";
 import { CSPostHogProvider } from "@/posthog/client-init";
-import { SessionProvider } from "next-auth/react";
+// import { SessionProvider } from "next-auth/react";
 import PostHogIdentify from "@/posthog/PosthogIdentify";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,16 +45,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SessionProvider>
-            <CSPostHogProvider>
-              <PostHogIdentify />
-              {/* Comment this out to see ssg */}
-              <Navbar />
-              <main>{children}</main>
-              <Toaster />
-              <Footer />
-            </CSPostHogProvider>
-          </SessionProvider>
+          {/* <SessionProvider> */}
+          <CSPostHogProvider>
+            <PostHogIdentify />
+            {/* Comment this out to see ssg */}
+            <Navbar />
+            <main>{children}</main>
+            <Toaster />
+            <Footer />
+          </CSPostHogProvider>
+          {/* </SessionProvider> */}
         </ThemeProvider>
       </body>
     </html>
