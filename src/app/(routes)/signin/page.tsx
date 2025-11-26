@@ -38,7 +38,7 @@ export default async function Page() {
           <div className="flex flex-col space-y-4">
             <Button
               type="submit"
-              className="focus-visible:bg-primary/90 cursor-pointer"
+              className="focus-visible:bg-primary/90 cursor-pointer text-white"
               asChild
             >
               <Input
@@ -50,7 +50,7 @@ export default async function Page() {
             </Button>
             <Button
               type="submit"
-              className="focus-visible:bg-primary/90 cursor-pointer"
+              className="focus-visible:bg-primary/90 cursor-pointer text-white"
               asChild
             >
               <Input

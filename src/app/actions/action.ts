@@ -8,6 +8,7 @@ import { errorCodes } from "@/lib/constants";
 import { redirect } from "next/navigation";
 import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
+import { revalidatePath } from "next/cache";
 
 /**
  * Updates the authentication status based on the provided session.
@@ -20,6 +21,7 @@ import { PostHogEvents } from "@/posthog/events";
  */
 export const updateAuthStatus = async (session: Session | null) => {
   if (session) {
+    revalidatePath("/", "layout");
     await signOut({ redirectTo: "/" });
   } else redirect("/signin");
 };
