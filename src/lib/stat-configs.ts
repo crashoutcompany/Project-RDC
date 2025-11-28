@@ -410,6 +410,28 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     dataType: "number",
     validationRules: { min: 0, allowZero: true },
   },
+  mr_mvp: {
+    id: 36,
+    name: StatName.MR_MVP,
+    description: "Marvel Rivals MVP (Most Valuable Player - Winner)",
+    gameId: 6,
+    fieldKey: "mr_mvp",
+    displayName: "MVP",
+    category: "performance",
+    dataType: "boolean",
+    validationRules: { min: 0, max: 1, allowZero: true },
+  },
+  mr_svp: {
+    id: 37,
+    name: StatName.MR_SVP,
+    description: "Marvel Rivals SVP (Second Valuable Player - Loser)",
+    gameId: 6,
+    fieldKey: "mr_svp",
+    displayName: "SVP",
+    category: "performance",
+    dataType: "boolean",
+    validationRules: { min: 0, max: 1, allowZero: true },
+  },
 };
 
 // Utility functions to work with stat configs
