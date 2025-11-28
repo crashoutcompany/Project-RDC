@@ -44,6 +44,8 @@ export const StatName = {
   MR_DMG_BLOCKED: "MR_DMG_BLOCKED",
   MR_HEALING: "MR_HEALING",
   MR_ACCURACY: "MR_ACCURACY",
+  MR_MVP: "MR_MVP",
+  MR_SVP: "MR_SVP",
 } as const;
 
 export type StatName = (typeof StatName)[keyof typeof StatName];

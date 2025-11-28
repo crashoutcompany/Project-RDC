@@ -11,6 +11,8 @@ const MARVEL_RIVALS_OPTIONAL_STATS = [
   StatName.MR_HIGHEST_DMG_BLOCKED,
   StatName.MR_MOST_HEALING,
   StatName.MR_MOST_ASSISTS,
+  StatName.MR_MVP,
+  StatName.MR_SVP,
 ] as const;
 
 // Session Schema Definitions
@@ -331,9 +333,64 @@ const marvelRivalsSchema = baseSessionSchema.extend({
   sets: z.array(
     setSchema.extend({
       matches: z.array(
-        matchSchema.extend({
-          matchWinners: z.array(playerSchema),
-        }),
+        matchSchema
+          .extend({
+            matchWinners: z.array(playerSchema),
+          })
+          .check((ctx) => {
+            const match = ctx.value;
+            let mvpCount = 0;
+            let svpCount = 0;
+            let mvpPlayerId: number | null = null;
+            let svpPlayerId: number | null = null;
+
+            // Count MVP and SVP stats across all player sessions
+            match.playerSessions.forEach((ps) => {
+              ps.playerStats.forEach((stat) => {
+                if (stat.stat === StatName.MR_MVP && stat.statValue === "1") {
+                  mvpCount++;
+                  mvpPlayerId = ps.playerId;
+                }
+                if (stat.stat === StatName.MR_SVP && stat.statValue === "1") {
+                  svpCount++;
+                  svpPlayerId = ps.playerId;
+                }
+              });
+            });
+
+            // Rule 1: Only one MVP or SVP allowed per match (not both on same player)
+            if (mvpCount + svpCount > 1) {
+              ctx.issues.push({
+                code: "custom",
+                message: "Only one player can have MVP or SVP per match.",
+                input: ctx.value,
+              });
+            }
+
+            // Rule 2: MVP must be a match winner
+            if (
+              mvpCount === 1 &&
+              !match.matchWinners.some((w) => w.playerId === mvpPlayerId)
+            ) {
+              ctx.issues.push({
+                code: "custom",
+                message: "MVP must be assigned to a match winner.",
+                input: ctx.value,
+              });
+            }
+
+            // Rule 3: SVP must NOT be a match winner
+            if (
+              svpCount === 1 &&
+              match.matchWinners.some((w) => w.playerId === svpPlayerId)
+            ) {
+              ctx.issues.push({
+                code: "custom",
+                message: "SVP must be assigned to a non-winning player.",
+                input: ctx.value,
+              });
+            }
+          }),
       ),
     }),
   ),
