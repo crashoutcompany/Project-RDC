@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Player } from "prisma/generated";
-import { useFormContext, useFieldArray } from "react-hook-form";
+import { useFormContext, useFieldArray, useWatch } from "react-hook-form";
 import { v4 as uuidv4 } from "uuid";
 import { Input } from "@/components/ui/input";
 import { useAdmin } from "@/lib/adminContext";
@@ -15,6 +15,8 @@ import {
   Plus,
   HandMetal,
   Flame,
+  Trophy,
+  Medal,
 } from "lucide-react";
 import { StatName } from "@/lib/stat-names";
 import { cn } from "@/lib/utils";
@@ -37,13 +39,16 @@ const MARVEL_RIVALS_EXPANDABLE_STATS: StatName[] = [
   StatName.MR_HIGHEST_DMG_BLOCKED,
   StatName.MR_MOST_HEALING,
   StatName.MR_MOST_ASSISTS,
+  StatName.MR_MVP,
+  StatName.MR_SVP,
 ];
 
 const PlayerStatManager = (props: Props) => {
-  const { matchIndex, setIndex, playerSessionIndex } = props;
+  const { matchIndex, setIndex, playerSessionIndex, player } = props;
   const curPlayerSession =
     `sets.${setIndex}.matches.${matchIndex}.playerSessions.${playerSessionIndex}` as const;
-  const { register, control, getValues } = useFormContext<FormValues>();
+  const { register, control, getValues, setValue } =
+    useFormContext<FormValues>();
   const { append, fields } = useFieldArray({
     name: `${curPlayerSession}.playerStats`,
     control,
@@ -55,6 +60,12 @@ const PlayerStatManager = (props: Props) => {
   // Get the current game
   const currentGame = getValues("game");
   const isMarvelRivals = currentGame === "Marvel Rivals";
+
+  // Watch match winners to auto-populate MVP/SVP
+  const matchWinners = useWatch({
+    control,
+    name: `sets.${setIndex}.matches.${matchIndex}.matchWinners`,
+  });
 
   console.log("game stats: ", gameStats);
 
@@ -121,7 +132,7 @@ const PlayerStatManager = (props: Props) => {
 
                 <label
                   htmlFor={curr}
-                  className="dark:text-white-500 absolute start-2.5 top-4 z-10 origin-[0] -translate-y-4 scale-75 transform pb-1 text-sm duration-300 peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-4 peer-focus:scale-75 peer-focus:text-purple-500 rtl:peer-focus:left-auto rtl:peer-focus:translate-x-1/4 peer-focus:dark:text-purple-700"
+                  className="dark:text-white-500 absolute start-2.5 top-4 z-10 origin-left -translate-y-4 scale-75 transform pb-1 text-sm duration-300 peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-4 peer-focus:scale-75 peer-focus:text-purple-500 rtl:peer-focus:left-auto rtl:peer-focus:translate-x-1/4 peer-focus:dark:text-purple-700"
                 >
                   {field.stat}
                 </label>
@@ -136,6 +147,16 @@ const PlayerStatManager = (props: Props) => {
 
   const renderToggleField = (field: (typeof fields)[number], index: number) => {
     const curr = `${curPlayerSession}.playerStats.${index}.statValue` as const;
+    const isMvpSvp =
+      field.stat === StatName.MR_MVP || field.stat === StatName.MR_SVP;
+
+    // Check if this player is a winner
+    const isWinner =
+      matchWinners?.some((w) => w.playerId === player.playerId) ?? false;
+
+    // Determine which stat should be active based on winner status
+    const shouldBeMvp = isMvpSvp && isWinner;
+    const shouldBeSvp = isMvpSvp && !isWinner;
 
     // Function to get icon for each stat
     const getStatIcon = (statName: string) => {
@@ -158,9 +179,20 @@ const PlayerStatManager = (props: Props) => {
           return <HandMetal className="h-4 w-4" />;
         case StatName.MR_MOST_KILLS:
           return <Swords className="h-4 w-4" />;
+        case StatName.MR_MVP:
+          return <Trophy className="h-4 w-4" />;
+        case StatName.MR_SVP:
+          return <Medal className="h-4 w-4" />;
         default:
           return null;
       }
+    };
+
+    // Get display label
+    const getDisplayLabel = (statName: string) => {
+      if (statName === StatName.MR_MVP) return shouldBeMvp ? "MVP" : "SVP";
+      if (statName === StatName.MR_SVP) return shouldBeSvp ? "SVP" : "MVP";
+      return statName.replace("MR_", "").replace(/_/g, " ");
     };
 
     return (
@@ -168,35 +200,69 @@ const PlayerStatManager = (props: Props) => {
         key={field.id}
         control={control}
         name={curr}
-        render={({ field: formField }) => (
-          <FormItem>
-            <Button
-              type="button"
-              variant={
-                formField.value === "1" || formField.value === "true"
-                  ? "default"
-                  : "outline"
-              }
-              size="sm"
-              onClick={() => {
-                const isActive =
-                  formField.value === "1" || formField.value === "true";
-                formField.onChange(isActive ? "0" : "1");
-              }}
-              className={cn(
-                "flex items-center justify-start gap-2",
-                formField.value === "1" ||
-                  (formField.value === "true" &&
-                    "bg-primary text-primary-foreground"),
-              )}
-            >
-              {getStatIcon(field.stat)}
-              <span className="text-[8px]">
-                {field.stat.replace("MR_", "").replace(/_/g, " ")}
-              </span>
-            </Button>
-          </FormItem>
-        )}
+        render={({ field: formField }) => {
+          const isActive =
+            formField.value === "1" || formField.value === "true";
+
+          return (
+            <FormItem>
+              <Button
+                type="button"
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  if (isMvpSvp) {
+                    // Auto-populate MVP/SVP based on winner status
+                    if (!isActive) {
+                      // Clear all other MVP/SVP stats in this match
+                      const allPlayerSessions = getValues(
+                        `sets.${setIndex}.matches.${matchIndex}.playerSessions`,
+                      );
+                      allPlayerSessions.forEach((ps, psIndex) => {
+                        ps.playerStats.forEach((stat, statIndex) => {
+                          if (
+                            stat.stat === StatName.MR_MVP ||
+                            stat.stat === StatName.MR_SVP
+                          ) {
+                            setValue(
+                              `sets.${setIndex}.matches.${matchIndex}.playerSessions.${psIndex}.playerStats.${statIndex}.statValue`,
+                              "0",
+                            );
+                          }
+                        });
+                      });
+
+                      // Set the appropriate stat for this player
+                      formField.onChange("1");
+                    } else {
+                      formField.onChange("0");
+                    }
+                  } else {
+                    // Regular toggle behavior for non-MVP/SVP stats
+                    formField.onChange(isActive ? "0" : "1");
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-start gap-2",
+                  isActive && "bg-primary text-primary-foreground",
+                  isMvpSvp &&
+                    shouldBeMvp &&
+                    isActive &&
+                    "bg-yellow-500 hover:bg-yellow-600",
+                  isMvpSvp &&
+                    shouldBeSvp &&
+                    isActive &&
+                    "bg-gray-500 hover:bg-gray-600",
+                )}
+              >
+                {getStatIcon(field.stat)}
+                <span className="text-[8px]">
+                  {getDisplayLabel(field.stat)}
+                </span>
+              </Button>
+            </FormItem>
+          );
+        }}
       />
     );
   };
