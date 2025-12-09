@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/ui/sonner";
+import { DbSwitchNotifier } from "@/components/DbSwitchNotifier";
 import { CSPostHogProvider } from "@/posthog/client-init";
 import { SessionProvider } from "next-auth/react";
 import PostHogIdentify from "@/posthog/PosthogIdentify";
@@ -52,6 +53,9 @@ export default function RootLayout({
               <Navbar />
               <main>{children}</main>
               <Toaster />
+              {process.env.NODE_ENV === "development" && (
+                <DbSwitchNotifier />
+              )}
               <Footer />
             </CSPostHogProvider>
           </SessionProvider>
