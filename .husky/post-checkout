@@ -1,3 +1,4 @@
+#!/bin/sh
 # Neon branch auto-switch hook
 # Only run on branch checkout (not file checkout)
 # $3 is 1 for branch checkout, 0 for file checkout

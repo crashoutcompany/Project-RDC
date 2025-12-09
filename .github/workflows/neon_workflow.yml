@@ -1,4 +1,4 @@
-name: Create/Delete Branch for Pull Request
+name: Actions CI
 
 on:
   pull_request:
@@ -29,6 +29,7 @@ jobs:
       db_url_with_pooler: ${{ steps.create_neon_branch_encode.outputs.db_url_with_pooler }}
     needs: setup
     if: |
+      contains(fromJSON('["crashoutcompany", "tydolla00", "Shargrove09"]'), github.actor) &&
       github.event_name == 'pull_request' && (
       github.event.action == 'synchronize'
       || github.event.action == 'opened'
@@ -86,7 +87,9 @@ jobs:
   delete_neon_branch:
     name: Delete Neon Branch
     needs: setup
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: |
+      contains(fromJSON('["crashoutcompany", "tydolla00", "Shargrove09"]'), github.actor) &&
+      github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Delete Neon Branch

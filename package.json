@@ -13,7 +13,7 @@
     "dbcrashout": "npx prisma db push --force-reset && npx prisma db push && npx tsx prisma/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "prepare": "husky",
+    "prepare": "test -z \"$CI\" && husky || true",
     "update-neon-branch": "tsx scripts/update-neon-branch.ts"
   },
   "prisma": {
