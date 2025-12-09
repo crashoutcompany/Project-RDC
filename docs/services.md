@@ -23,6 +23,52 @@ This document provides an overview of all external services used in Project RDC,
 - Located in `prisma/db.ts`
 - Schema defined in `prisma/schema.prisma`
 
+#### Neon Branch Auto-Switching
+
+The project includes automatic database branch switching when you change git branches. This integrates with the GitHub workflow that creates Neon preview branches for each pull request.
+
+**How it works**:
+
+1. When you checkout a git branch, the `post-checkout` hook runs automatically
+2. The script looks for a matching Neon branch with the pattern `preview/pr-{number}-{branch_name}`
+3. If found, it updates `DATABASE_URL` and `DIRECT_URL` in `.env.development.local`
+4. If no matching branch exists, the current URLs are preserved
+
+**Requirements**:
+
+- `NEON_PROJECT_ID` - Your Neon project ID (or add `projectId` to `.neon` file)
+- `neonctl` authentication - Run `neonctl auth` once to authenticate
+
+**Setup**:
+
+1. Authenticate with Neon CLI (one-time):
+   ```bash
+   npx neonctl auth
+   ```
+2. Set the project ID via environment variable:
+   ```bash
+   export NEON_PROJECT_ID="your_project_id"
+   ```
+3. Or add `projectId` to your `.neon` config file:
+   ```json
+   {
+     "orgId": "your_org_id",
+     "projectId": "your_project_id"
+   }
+   ```
+
+**Manual Usage**:
+
+```bash
+npm run update-neon-branch
+```
+
+**Troubleshooting**:
+
+- If the hook doesn't run, ensure Husky is installed: `npm run prepare`
+- If authentication fails, run `npx neonctl auth` to re-authenticate
+- Verify the Neon branch exists in the [Neon Console](https://console.neon.tech)
+
 ---
 
 ## Hosting & Deployment

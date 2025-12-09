@@ -46,3 +46,6 @@ yarn-error.log*
 next-env.d.ts
 
 sessions_backup.json
+
+# neon branch switch log
+.neon-switch.log
