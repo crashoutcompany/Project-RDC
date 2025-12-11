@@ -27,18 +27,15 @@ export const logAuthError = async (
 ) => {
   try {
     const session = userSession ?? (await getSession());
-    posthog.capture({
-      event: PostHogEvents.AUTH_ERROR,
-      distinctId: session?.user?.email ?? "Unidentified Email",
-      properties: {
-        error: error.message,
-        stack: error.stack,
+    posthog.captureException(
+      error,
+      session?.user?.email ?? "Unidentified Email",
+      {
         cause: error.cause,
       },
-    });
-  } catch (error) {
-    posthog.captureException(`Authentication Error - ${error}`, undefined);
-    console.error("Error logging authentication error:", error);
+    );
+  } catch (err) {
+    console.error("Error logging authentication error:", err);
   }
 };
 
@@ -64,14 +61,11 @@ export const logNAN = async (
   userSession?: Session | null,
 ) => {
   const session = userSession ?? (await getSession());
-  posthog.capture({
-    event: PostHogEvents.NAN_ERROR,
-    distinctId: session?.user?.email || v4(),
-    properties: {
-      fnName,
-      statId,
-    },
-  });
+  posthog.captureException(
+    new Error(`NaN encountered in ${fnName} for statId ${statId}`),
+    session?.user?.email || v4(),
+    { fnName, statId },
+  );
 };
 
 export const logFormError = async (

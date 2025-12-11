@@ -3,35 +3,36 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "prisma/db";
 import config from "@/lib/config";
 import { nextCookies } from "better-auth/next-js";
+import posthog from "@/posthog/server-init";
+
+const baseURL = config.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
-    // Map models if needed, but we updated schema to match better-auth expectations mostly.
-    // We renamed Session to UserSession in Prisma.
-    // modelMap: {
-    //   Session: "UserSession",
-    //   User: "User",
-    //   Account: "Account",
-    //   Verification: "Verification",
-    // },
   }),
+  session: {
+    modelName: "UserSession", // Maps better-auth's session to Prisma's UserSession model
+  },
   onAPIError: {
     onError(error, ctx) {
       console.error(error);
+      posthog.captureException(error, "auth-error");
     },
   },
+  baseURL,
+  trustHost: config.AUTH_TRUST_HOST === "true",
   socialProviders: {
     github: {
       clientId: config.AUTH_GITHUB_ID!,
       clientSecret: config.AUTH_GITHUB_SECRET!,
-      redirectUri: "http://localhost:3000/api/auth/callback/github",
+      redirectUri: `${baseURL}/api/auth/callback/github`,
       // Map profile to user fields if needed
     },
     google: {
       clientId: config.AUTH_GOOGLE_ID!,
       clientSecret: config.AUTH_GOOGLE_SECRET!,
-      redirectUri: "http://localhost:3000/api/auth/callback/google",
+      redirectUri: `${baseURL}/api/auth/callback/google`,
       // display: "popup",
     },
   },

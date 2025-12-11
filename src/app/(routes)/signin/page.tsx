@@ -2,8 +2,6 @@ import { auth } from "@/lib/auth";
 import { H1 } from "@/components/headings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { domain } from "@/lib/utils";
-// import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
@@ -27,6 +25,7 @@ export default async function Page() {
 
             const provider = rawProvider.slice(13).toLowerCase();
             console.log(provider);
+            const requestHeaders = await headers();
 
             if (provider === "github" || provider === "google") {
               const data = await auth.api.signInSocial({
@@ -35,7 +34,7 @@ export default async function Page() {
                   callbackURL: "/",
                   errorCallbackURL: "/",
                 },
-                headers: await headers(),
+                headers: requestHeaders,
               });
               if (data?.url) {
                 redirect(data.url);
