@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 // import { cookies } from "next/headers";
 // import posthog from "./posthog/server-init";
 // import { v4 } from "uuid";

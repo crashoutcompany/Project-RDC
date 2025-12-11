@@ -114,7 +114,7 @@ type RechartsPayloadItem = {
 // Avoid strict Recharts typings by casting to a generic component type
 
 const ChartTooltip =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   RechartsPrimitive.Tooltip as unknown as React.ComponentType<any>;
 
 type ChartTooltipContentProps = {
@@ -305,7 +305,7 @@ function ChartTooltipContent({
 
 // Avoid strict Recharts typings by casting to a generic component type
 const ChartLegend =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   RechartsPrimitive.Legend as unknown as React.ComponentType<any>;
 
 type ChartLegendContentProps = {
