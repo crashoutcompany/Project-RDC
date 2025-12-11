@@ -6,11 +6,24 @@ import { initBotId } from "botid/client/core";
 posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
   api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well
-
-  loaded: () => {
-    // if (process.env.NODE_ENV === "development") posthog.debug(); // set false to disable
+  defaults: "2025-11-30",
+  capture_exceptions: true, // This enables capturing exceptions using Error Tracking
+  debug: process.env.NODE_ENV === "development",
+  // Session Replay configuration
+  disable_session_recording: false,
+  session_recording: {
+    maskAllInputs: false, // Set to true to mask all input fields
+    maskTextSelector: "[data-mask]", // Mask elements with this attribute
   },
 });
+
+/**
+ * Gets the current PostHog session ID for linking server-side events to session replays.
+ * @returns The current session ID or undefined if not available
+ */
+export const getPostHogSessionId = (): string | undefined => {
+  return posthog.get_session_id();
+};
 
 // Define the paths that need bot protection.
 // These are paths that are routed to by your app.
