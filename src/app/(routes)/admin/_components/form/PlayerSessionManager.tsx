@@ -26,7 +26,7 @@ const PlayerSessionManager = (props: Props) => {
     // Add new PlayerSession for each Player
     players.forEach((player) => {
       const playerExists = finalPlayerSessionValues.some(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (playerSession: any) => player.playerId === playerSession.playerId,
       );
       if (!playerExists) {
@@ -39,7 +39,7 @@ const PlayerSessionManager = (props: Props) => {
     });
 
     // Remove player sessions for players that are no longer in the players array
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     finalPlayerSessionValues.forEach((playerSession: any, index: number) => {
       const playerExists = players.some(
         (player) => player.playerId === playerSession.playerId,
@@ -50,7 +50,7 @@ const PlayerSessionManager = (props: Props) => {
     });
   }, [props.players, append, getValues, setIndex, matchIndex, players, remove]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const getPlayerNameFromField = (field: any): boolean => {
     return field?.playerSessionName ?? 0; // Discrepancy in what is being assigned to playerSessionName
   };

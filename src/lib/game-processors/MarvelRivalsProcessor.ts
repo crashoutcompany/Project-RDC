@@ -87,7 +87,7 @@ const validateResults = (
 
 const validateMarvelRivalsStatValue = (
   statValue: string | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   numPlayers: number | undefined,
 ) => {
   if (statValue === undefined) {
