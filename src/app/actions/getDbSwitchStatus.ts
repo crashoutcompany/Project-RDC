@@ -49,10 +49,8 @@ export async function getLatestDbSwitchEntry(): Promise<DbSwitchEntry | null> {
 
   const logPath = path.join(process.cwd(), LOG_FILE);
 
-  if (!fs.existsSync(logPath)) return null;
-
   try {
-    const content = fs.readFileSync(logPath, "utf8");
+    const content = await fs.promises.readFile(logPath, "utf8");
     const lines = content.split("\n").filter((line) => line.trim() !== "");
 
     if (lines.length === 0) return null;
@@ -60,8 +58,8 @@ export async function getLatestDbSwitchEntry(): Promise<DbSwitchEntry | null> {
     // Get the last (most recent) entry
     const lastLine = lines[lines.length - 1];
     return parseLogEntry(lastLine);
-  } catch {
-    console.error("Failed to read database switch log");
+  } catch (error) {
+    console.error("Failed to read database switch log", error);
     return null;
   }
 }
