@@ -2,7 +2,7 @@ import prisma from "prisma/db";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { EditStatus, Player } from "prisma/generated";
+import { EditStatus, Player } from "@/generated/prisma/client";
 import { ProposedData } from "@/app/actions/editSession";
 import { SessionChangesWrapper } from "../_components/Changes";
 import { Status } from "../_components/Status";

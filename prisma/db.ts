@@ -5,8 +5,8 @@ import {
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig, NeonDbError } from "@neondatabase/serverless";
 import ws from "ws";
-import { PrismaClient } from "./generated";
 import posthog from "@/posthog/server-init";
+import { PrismaClient } from "@/generated/prisma/client";
 
 neonConfig.webSocketConstructor = ws;
 

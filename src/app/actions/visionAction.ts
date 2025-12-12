@@ -4,7 +4,7 @@ import DocumentIntelligence, {
   AnalyzeOperationOutput,
   isUnexpected,
 } from "@azure-rest/ai-document-intelligence";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import { GameProcessor } from "@/lib/game-processors/game-processor-utils";
 import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
 import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcessor";

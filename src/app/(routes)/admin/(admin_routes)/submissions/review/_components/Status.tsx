@@ -1,4 +1,4 @@
-import { EditStatus } from "prisma/generated";
+import { EditStatus } from "@/generated/prisma/client";
 
 export const Status = ({ status }: { status: EditStatus }) => {
   let color = "";

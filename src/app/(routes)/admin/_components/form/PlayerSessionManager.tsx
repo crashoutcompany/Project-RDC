@@ -1,4 +1,4 @@
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import { useEffect } from "react";
 import { FieldValues, useFieldArray, useFormContext } from "react-hook-form";
 import PlayerStatManager from "./PlayerStatManager";
@@ -26,7 +26,6 @@ const PlayerSessionManager = (props: Props) => {
     // Add new PlayerSession for each Player
     players.forEach((player) => {
       const playerExists = finalPlayerSessionValues.some(
-         
         (playerSession: any) => player.playerId === playerSession.playerId,
       );
       if (!playerExists) {
@@ -39,7 +38,7 @@ const PlayerSessionManager = (props: Props) => {
     });
 
     // Remove player sessions for players that are no longer in the players array
-     
+
     finalPlayerSessionValues.forEach((playerSession: any, index: number) => {
       const playerExists = players.some(
         (player) => player.playerId === playerSession.playerId,
@@ -50,7 +49,6 @@ const PlayerSessionManager = (props: Props) => {
     });
   }, [props.players, append, getValues, setIndex, matchIndex, players, remove]);
 
-   
   const getPlayerNameFromField = (field: any): boolean => {
     return field?.playerSessionName ?? 0; // Discrepancy in what is being assigned to playerSessionName
   };
@@ -62,7 +60,7 @@ const PlayerSessionManager = (props: Props) => {
     <div className="@container grid grid-cols-2">
       {fields.map((field, sessionIndex) => {
         return (
-          <div className="@xs:col-span-1 col-span-2" key={field.id}>
+          <div className="col-span-2 @xs:col-span-1" key={field.id}>
             <Label className="font-bold">{getPlayerNameFromField(field)}</Label>
             <div className="flex flex-wrap gap-3">
               <PlayerStatManager

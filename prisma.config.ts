@@ -1,5 +1,6 @@
 import path from "node:path";
 import { defineConfig, env } from "prisma/config";
+import "dotenv/config";
 
 /**
  * Prisma 7 configuration file.
@@ -7,7 +8,7 @@ import { defineConfig, env } from "prisma/config";
  */
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  migrations: { path: "prisma/migrations", seed: "tsx prisma/seed.ts" },
 
   /**
    * Datasource configuration for TypedSQL and CLI operations.

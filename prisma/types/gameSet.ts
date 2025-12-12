@@ -1,6 +1,6 @@
-import { Prisma } from "../generated";
+import { Prisma } from "@/generated/prisma/client";
 
-const enrichedGameSet = Prisma.validator<Prisma.GameSetDefaultArgs>()({
+const enrichedGameSet = {
   include: {
     matches: {
       include: {
@@ -17,6 +17,6 @@ const enrichedGameSet = Prisma.validator<Prisma.GameSetDefaultArgs>()({
       },
     },
   },
-});
+} satisfies Prisma.GameSetDefaultArgs;
 
 export type EnrichedGameSet = Prisma.GameSetGetPayload<typeof enrichedGameSet>;
