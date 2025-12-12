@@ -158,7 +158,7 @@ const AuthSection = async () => {
   return (
     <>
       {session && <ListItem href="/admin">Admin</ListItem>}
-      <AuthButton hideOnSmallScreens={false} />
+      <AuthButton hideOnSmallScreens={false} hasSession={Boolean(session)} />
     </>
   );
 };
@@ -184,7 +184,7 @@ const ProfileSection = async () => {
           </TooltipProvider>
         )}
       </NavigationMenuItem>
-      <AuthButton hideOnSmallScreens />
+      <AuthButton hideOnSmallScreens hasSession={Boolean(session)} />
     </>
   );
 };

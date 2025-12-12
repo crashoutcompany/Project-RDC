@@ -12,20 +12,22 @@ import { ModeToggle } from "./modetoggle";
  * The button's visibility can be controlled based on screen size using the `hideOnSmallScreens` prop.
  *
  * @param {boolean} [hideOnSmallScreens] - If true, the button is hidden on small screens and visible on large screens. If false, the button is visible on small screens and hidden on large screens.
+ * @param {boolean} [hasSession] - Server-provided session existence used to avoid hydration mismatches.
  *
  * @returns {JSX.Element} The rendered authentication button component.
  */
 
 export const AuthButton = ({
   hideOnSmallScreens: hide,
+  hasSession,
 }: {
   hideOnSmallScreens?: boolean | undefined;
+  hasSession?: boolean | undefined;
 }) => {
-  const { data: session } = authClient.useSession();
   const router = useRouter();
 
   const handleAuth = async () => {
-    if (session) {
+    if (hasSession) {
       await authClient.signOut();
       router.push("/");
       router.refresh();
@@ -43,7 +45,7 @@ export const AuthButton = ({
       )}
       variant="ghost"
     >
-      {session ? "Sign Out" : "Sign In"}
+      {hasSession ? "Sign Out" : "Sign In"}
     </Button>
   );
 };
