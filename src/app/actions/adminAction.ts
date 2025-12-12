@@ -1,6 +1,6 @@
 "use server";
 
-import { GameStat } from "prisma/generated";
+import { GameStat } from "@/generated/prisma/client";
 import prisma, { handlePrismaOperation } from "prisma/db";
 import { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import { auth } from "@/lib/auth";
@@ -39,11 +39,7 @@ export async function approveSession(sessionId: number) {
     }
 
     after(() =>
-      logAdminAction(
-        PostHogEvents.SESSION_APPROVED,
-        { sessionId },
-        authUser,
-      ),
+      logAdminAction(PostHogEvents.SESSION_APPROVED, { sessionId }, authUser),
     );
     revalidateTag("getAllSessions", "max");
     return { error: null };
@@ -369,9 +365,7 @@ export async function addGame(
 
   if (!res.success) return { error: res.error || "Failed to add game." };
 
-  after(() =>
-    logAdminAction(PostHogEvents.GAME_ADDED, { gameName }, session),
-  );
+  after(() => logAdminAction(PostHogEvents.GAME_ADDED, { gameName }, session));
 
   revalidateTag("getAllGames", "max");
   return { error: null };

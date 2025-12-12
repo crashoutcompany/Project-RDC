@@ -12,7 +12,7 @@ import {
   WinnerConfig,
 } from "./game-processor-utils";
 import { VisionResultCodes } from "../constants";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import { getStatConfigByFieldKey } from "../stat-configs";
 
 // Helper function to rank players by COD_KILLS and set COD_POS
@@ -114,7 +114,7 @@ export const CoDGunGameProcessor: GameProcessor = {
   },
   validateStats: (
     statValue: string | undefined,
-     
+
     numPlayers: number | undefined,
   ) => {
     if (statValue === undefined) {

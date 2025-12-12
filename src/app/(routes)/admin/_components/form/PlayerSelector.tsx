@@ -1,5 +1,5 @@
 "use client";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import React, { useEffect, useState } from "react";
 import PlayerAvatar from "./PlayerAvatar";
 import { ControllerRenderProps, UseFormReturn } from "react-hook-form";

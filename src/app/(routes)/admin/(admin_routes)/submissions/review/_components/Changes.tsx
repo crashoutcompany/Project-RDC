@@ -4,7 +4,7 @@ import { Session } from "../[slug]/page";
 import { FormValues } from "@/app/(routes)/admin/_utils/form-helpers";
 import { ProposedData } from "@/app/actions/editSession";
 import { Separator } from "@/components/ui/separator";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 
 type ProposedChange = {
   player: string;

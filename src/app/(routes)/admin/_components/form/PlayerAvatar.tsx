@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import {
   Tooltip,
   TooltipContent,

@@ -1,15 +1,14 @@
-import { Prisma } from "../generated";
+import { Prisma } from "@/generated/prisma/client";
 
-export const playerStatWithStatName =
-  Prisma.validator<Prisma.PlayerStatDefaultArgs>()({
-    include: {
-      gameStat: {
-        select: {
-          statName: true,
-        },
+export const playerStatWithStatName = {
+  include: {
+    gameStat: {
+      select: {
+        statName: true,
       },
     },
-  });
+  },
+} satisfies Prisma.PlayerStatDefaultArgs;
 
 export type PlayerStatWithStatName = Prisma.PlayerStatGetPayload<
   typeof playerStatWithStatName

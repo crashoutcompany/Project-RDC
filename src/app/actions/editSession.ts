@@ -7,7 +7,7 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { UseFormReturn } from "react-hook-form";
 import { FormValues } from "../(routes)/admin/_utils/form-helpers";
-import { Prisma } from "prisma/generated";
+import { Prisma } from "@/generated/prisma/client";
 import { headers } from "next/headers";
 
 type CreateEditResult = { error: string | null };
