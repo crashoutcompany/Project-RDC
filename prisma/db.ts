@@ -12,7 +12,7 @@ neonConfig.webSocketConstructor = ws;
 
 // To work in edge environments (Cloudflare Workers, Vercel Edge, etc.), enable querying over fetch
 // ! Broken currently due to Cache Components
-// neonConfig.poolQueryViaFetch = true;
+neonConfig.poolQueryViaFetch = true;
 
 // Type definitions
 declare global {
