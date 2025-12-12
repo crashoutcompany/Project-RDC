@@ -1,7 +1,7 @@
 import {
   PrismaClientKnownRequestError,
   PrismaClientValidationError,
-} from "./generated/runtime/library";
+} from "@prisma/client/runtime/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig, NeonDbError } from "@neondatabase/serverless";
 import ws from "ws";
