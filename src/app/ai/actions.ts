@@ -43,7 +43,7 @@ export const analyzeMvp = async (
 
     const now = performance.now();
 
-    const model = withTracing(google("gemini-2.5-pro"), posthog, {
+    const model = withTracing(google("gemini-2.5-flash"), posthog, {
       posthogDistinctId: session.user?.email ?? "Unidentified User",
       posthogProperties: {
         sessionId,
