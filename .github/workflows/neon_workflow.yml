@@ -46,6 +46,7 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           expires_at: ${{ env.EXPIRES_AT }}
           database: ${{ secrets.NEON_DATABASE }}
+          role: ${{ secrets.NEON_ROLE }}
 
   # The step above creates a new Neon branch.
   # You may want to do something with the new branch, such as run migrations, run tests
