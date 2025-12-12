@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "prisma/generated";
+import { PrismaClient, Prisma } from "@/generated/prisma/client";
 import {
   describe,
   expect,

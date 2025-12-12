@@ -1,6 +1,6 @@
-import { Prisma } from "../generated";
+import { Prisma } from "@/generated/prisma/client";
 
-const enrichedMatch = Prisma.validator<Prisma.Match$matchWinnersArgs>()({
+const enrichedMatch = {
   include: {
     playerSessions: {
       include: {
@@ -9,6 +9,6 @@ const enrichedMatch = Prisma.validator<Prisma.Match$matchWinnersArgs>()({
       },
     },
   },
-});
+} satisfies Prisma.MatchDefaultArgs;
 
 export type EnrichedMatch = Prisma.MatchGetPayload<typeof enrichedMatch>;

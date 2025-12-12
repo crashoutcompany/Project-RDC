@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import SetManager from "./SetManager";
 import { insertNewSessionFromAdmin } from "@/app/actions/adminAction";
 import { Form } from "@/components/ui/form";

@@ -1,6 +1,6 @@
-import { Prisma } from "../generated";
+import { Prisma } from "@/generated/prisma/client";
 
-const enrichedSession = Prisma.validator<Prisma.SessionDefaultArgs>()({
+const enrichedSession = {
   include: {
     Game: true,
     mvp: true,
@@ -22,7 +22,7 @@ const enrichedSession = Prisma.validator<Prisma.SessionDefaultArgs>()({
       },
     },
   },
-});
+} satisfies Prisma.SessionDefaultArgs;
 
 export type EnrichedSession = Prisma.SessionGetPayload<typeof enrichedSession>;
 

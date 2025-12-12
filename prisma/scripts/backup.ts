@@ -1,9 +1,12 @@
-import { PrismaClient } from "../generated";
+import { PrismaClient } from "@/generated/prisma/client";
 import fs from "fs";
 import path from "path";
 import { EnrichedSession } from "../types/session";
+import { PrismaNeon } from "@prisma/adapter-neon";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaNeon({ connectionString: process.env.DATABASE_URL }),
+});
 
 async function backupSessions() {
   try {

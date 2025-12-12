@@ -1,18 +1,18 @@
 import {
   PrismaClientKnownRequestError,
   PrismaClientValidationError,
-} from "./generated/runtime/library";
+} from "@prisma/client/runtime/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig, NeonDbError } from "@neondatabase/serverless";
 import ws from "ws";
-import { PrismaClient } from "./generated";
 import posthog from "@/posthog/server-init";
+import { PrismaClient } from "@/generated/prisma/client";
 
 neonConfig.webSocketConstructor = ws;
 
 // To work in edge environments (Cloudflare Workers, Vercel Edge, etc.), enable querying over fetch
 // ! Broken currently due to Cache Components
-// neonConfig.poolQueryViaFetch = true;
+neonConfig.poolQueryViaFetch = true;
 
 // Type definitions
 declare global {

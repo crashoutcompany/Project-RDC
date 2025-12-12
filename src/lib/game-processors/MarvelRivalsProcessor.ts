@@ -2,7 +2,7 @@ import {
   AnalyzedPlayersObj,
   AnalyzedTeamData,
 } from "@/app/actions/visionAction";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import {
   GameProcessor,
   isAnalyzedTeamDataArray,
@@ -87,7 +87,7 @@ const validateResults = (
 
 const validateMarvelRivalsStatValue = (
   statValue: string | undefined,
-   
+
   numPlayers: number | undefined,
 ) => {
   if (statValue === undefined) {

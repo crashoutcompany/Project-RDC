@@ -14,7 +14,7 @@ import { useTransition } from "react";
 import { getRDCVideoDetails } from "@/app/actions/action";
 import { toast } from "sonner";
 import { errorCodes } from "@/lib/constants";
-import { Player } from "prisma/generated";
+import { Player } from "@/generated/prisma/client";
 import { FormValues } from "../../_utils/form-helpers";
 import { getVideoId } from "../../_utils/helper-functions";
 import { authClient } from "@/lib/auth-client";
