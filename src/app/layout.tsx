@@ -46,7 +46,6 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SessionProvider>
             <CSPostHogProvider>
               <PostHogIdentify />
               {/* Comment this out to see ssg */}
@@ -58,7 +57,6 @@ export default function RootLayout({
               )}
               <Footer />
             </CSPostHogProvider>
-          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>
