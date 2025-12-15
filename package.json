@@ -109,7 +109,7 @@
     "neonctl": "^2.18.1",
     "next-devtools-mcp": "^0.3.7",
     "postcss": "^8.5.4",
-    "prettier": "^3.5.3",
+    "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.6.12",
     "prisma": "^7.1.0",
     "prisma-json-types-generator": "^4.0.1",
