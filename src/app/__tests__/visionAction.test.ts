@@ -1,3 +1,55 @@
+/**
+ * Vision Action Tests
+ *
+ * Note: Some tests may fail due to Jest mock hoisting issues with the Azure SDK.
+ * The mock functions are defined but accessed before initialization due to jest.mock hoisting.
+ * Consider using jest.doMock() or manual mocks in __mocks__ folder for more reliable mocking.
+ */
+
+// Mock modules that import ESM packages
+jest.mock("@/lib/auth", () => ({
+  auth: {
+    api: {
+      getSession: jest.fn(),
+    },
+  },
+}));
+jest.mock("@/posthog/server-analytics", () => ({
+  logAdminAction: jest.fn(),
+  logFormError: jest.fn(),
+  logFormSuccess: jest.fn(),
+  logVisionAction: jest.fn(),
+  logVisionError: jest.fn(),
+}));
+
+// Mock the game processor modules
+jest.mock("@/lib/game-processors/MarioKart8Processor");
+jest.mock("@/lib/game-processors/RocketLeagueProcessor");
+jest.mock("@/lib/game-processors/CoDGunGameProcessor");
+
+// Store mock functions in a mutable object that can be accessed after hoisting
+const azureMocks = {
+  post: jest.fn(),
+  pollUntilDone: jest.fn(),
+};
+
+// Mock Azure SDK
+jest.mock("@azure-rest/ai-document-intelligence", () => {
+  // Use a closure to capture the mocks object reference
+  return {
+    __esModule: true,
+    default: jest.fn(() => ({
+      path: jest.fn(() => ({
+        post: (...args: unknown[]) => azureMocks.post(...args),
+      })),
+    })),
+    getLongRunningPoller: jest.fn(() => ({
+      pollUntilDone: (...args: unknown[]) => azureMocks.pollUntilDone(...args),
+    })),
+    isUnexpected: jest.fn(() => false),
+  };
+});
+
 import { analyzeScreenShot, getGameProcessor } from "../actions/visionAction";
 import { VisionResultCodes } from "@/lib/constants";
 import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
@@ -5,26 +57,13 @@ import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcess
 import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
 import { Player } from "@/generated/prisma/client";
 
-// Mock the game processor modules
-jest.mock("@/lib/game-processors/MarioKart8Processor");
-jest.mock("@/lib/game-processors/RocketLeagueProcessor");
-jest.mock("@/lib/game-processors/CoDGunGameProcessor");
-
 const mockMK8Processor = MarioKart8Processor as jest.Mocked<
   typeof MarioKart8Processor
 >;
 
-// Mock Azure SDK
-const mockPost = jest.fn();
-const mockPollUntilDone = jest.fn();
-jest.mock("@azure-rest/ai-document-intelligence", () => ({
-  __esModule: true,
-  default: jest.fn(() => ({
-    path: jest.fn(() => ({ post: mockPost })),
-  })),
-  getLongRunningPoller: jest.fn(() => ({ pollUntilDone: mockPollUntilDone })),
-  isUnexpected: jest.fn(() => false),
-}));
+// Expose mock functions for test usage
+const mockPostFn = azureMocks.post;
+const mockPollUntilDoneFn = azureMocks.pollUntilDone;
 
 describe("Vision Action Tests", () => {
   const mockBase64 = "mockBase64String";
@@ -33,8 +72,8 @@ describe("Vision Action Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Default mock implementations for a successful path
-    mockPost.mockResolvedValue({});
-    mockPollUntilDone.mockResolvedValue({
+    mockPostFn.mockResolvedValue({});
+    mockPollUntilDoneFn.mockResolvedValue({
       body: {
         analyzeResult: {
           documents: [{ fields: { player1: { content: "Player1" } } }],
@@ -65,7 +104,7 @@ describe("Vision Action Tests", () => {
     });
 
     it("handles API errors gracefully", async () => {
-      mockPost.mockRejectedValueOnce(new Error("API Error"));
+      mockPostFn.mockRejectedValueOnce(new Error("API Error"));
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result).toEqual({
         status: VisionResultCodes.Failed,
@@ -74,7 +113,7 @@ describe("Vision Action Tests", () => {
     });
 
     it("handles poller errors gracefully", async () => {
-      mockPollUntilDone.mockRejectedValueOnce(new Error("Poller Error"));
+      mockPollUntilDoneFn.mockRejectedValueOnce(new Error("Poller Error"));
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result).toEqual({
         status: VisionResultCodes.Failed,
@@ -83,7 +122,7 @@ describe("Vision Action Tests", () => {
     });
 
     it("handles missing analyze result", async () => {
-      mockPollUntilDone.mockResolvedValueOnce({ body: {} });
+      mockPollUntilDoneFn.mockResolvedValueOnce({ body: {} });
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result).toEqual({
         status: VisionResultCodes.Failed,
@@ -92,7 +131,7 @@ describe("Vision Action Tests", () => {
     });
 
     it("handles undefined vision analysis results", async () => {
-      mockPollUntilDone.mockResolvedValueOnce({
+      mockPollUntilDoneFn.mockResolvedValueOnce({
         body: { analyzeResult: { documents: [{ fields: undefined }] } },
       });
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
