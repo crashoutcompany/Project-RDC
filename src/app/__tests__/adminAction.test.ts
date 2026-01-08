@@ -1,10 +1,72 @@
+// All mocks must be defined inline because jest.mock is hoisted
+// Define mock prisma types to avoid self-referential type issues
+interface MockPrismaClient {
+  game: { findFirst: jest.Mock };
+  session: { findFirst: jest.Mock; create: jest.Mock };
+  gameSet: { create: jest.Mock; update: jest.Mock };
+  match: { create: jest.Mock };
+  playerSession: { create: jest.Mock };
+  playerStat: { create: jest.Mock; createMany: jest.Mock };
+  gameStat: { findMany: jest.Mock };
+  player: { findUnique: jest.Mock };
+  $transaction: jest.Mock;
+}
+
+jest.mock("prisma/db", () => {
+  const mockPrisma: MockPrismaClient = {
+    game: { findFirst: jest.fn() },
+    session: { findFirst: jest.fn(), create: jest.fn() },
+    gameSet: { create: jest.fn(), update: jest.fn() },
+    match: { create: jest.fn() },
+    playerSession: { create: jest.fn() },
+    playerStat: { create: jest.fn(), createMany: jest.fn() },
+    gameStat: { findMany: jest.fn() },
+    player: { findUnique: jest.fn() },
+    $transaction: jest.fn(
+      (callback: (tx: MockPrismaClient) => Promise<unknown>) =>
+        callback(mockPrisma),
+    ),
+  };
+  return {
+    __esModule: true,
+    default: mockPrisma,
+    handlePrismaOperation: jest.fn(
+      (callback: (prisma: MockPrismaClient) => Promise<unknown>) =>
+        callback(mockPrisma)
+          .then((data) => ({ success: true, data }))
+          .catch((error: Error) => ({ success: false, error: error.message })),
+    ),
+  };
+});
+
+jest.mock("@/lib/auth", () => ({
+  auth: {
+    api: {
+      getSession: jest.fn(),
+    },
+  },
+}));
+jest.mock("@/posthog/server-analytics", () => ({
+  logAdminAction: jest.fn(),
+  logFormError: jest.fn(),
+  logFormSuccess: jest.fn(),
+}));
+jest.mock("next/cache", () => ({
+  revalidateTag: jest.fn(),
+}));
+jest.mock("next/server", () => ({
+  after: jest.fn((fn: () => void) => fn()),
+}));
+jest.mock("next/headers", () => ({
+  headers: jest.fn().mockResolvedValue(new Headers()),
+}));
+
 import { insertNewSessionFromAdmin } from "../actions/adminAction";
+import { auth } from "@/lib/auth";
 import prisma from "prisma/db";
-import { auth } from "@/auth";
 import { errorCodes } from "@/lib/constants";
 
-jest.mock("prisma/db");
-jest.mock("@/auth");
+const mockGetSession = auth.api.getSession as unknown as jest.Mock;
 
 describe("adminAction tests", () => {
   beforeEach(() => {
@@ -13,16 +75,27 @@ describe("adminAction tests", () => {
 
   describe("insertNewSessionFromAdmin", () => {
     it("should insert a new session successfully", async () => {
-      (auth as jest.Mock).mockResolvedValue(true);
+      mockGetSession.mockResolvedValue({
+        user: { role: "admin", email: "test@test.com" },
+      });
       (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
       (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.session.create as jest.Mock).mockResolvedValue({ sessionId: 1 });
       (prisma.gameSet.create as jest.Mock).mockResolvedValue({ setId: 1 });
+      (prisma.gameSet.update as jest.Mock).mockResolvedValue({});
       (prisma.match.create as jest.Mock).mockResolvedValue({ matchId: 1 });
       (prisma.playerSession.create as jest.Mock).mockResolvedValue({
         playerSessionId: 1,
+        playerId: 1,
       });
-      (prisma.playerStat.create as jest.Mock).mockResolvedValue({});
+      (prisma.playerStat.createMany as jest.Mock).mockResolvedValue({});
+      (prisma.gameStat.findMany as jest.Mock).mockResolvedValue([
+        { statId: 1, statName: "COD_SCORE" },
+      ]);
+      (prisma.player.findUnique as jest.Mock).mockResolvedValue({
+        playerId: 1,
+        playerName: "Ben",
+      });
 
       const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
         game: "Call of Duty",
@@ -59,7 +132,7 @@ describe("adminAction tests", () => {
     });
 
     it("should return an error if not authenticated", async () => {
-      (auth as jest.Mock).mockResolvedValue(false);
+      mockGetSession.mockResolvedValue(null);
 
       const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
         game: "Call of Duty",
@@ -77,7 +150,7 @@ describe("adminAction tests", () => {
     });
 
     it("should return an error if game not found", async () => {
-      (auth as jest.Mock).mockResolvedValue(true);
+      mockGetSession.mockResolvedValue({ user: { role: "admin" } });
       (prisma.game.findFirst as jest.Mock).mockResolvedValue(null);
 
       const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
@@ -96,7 +169,7 @@ describe("adminAction tests", () => {
     });
 
     it("should return an error if video already exists", async () => {
-      (auth as jest.Mock).mockResolvedValue(true);
+      mockGetSession.mockResolvedValue({ user: { role: "admin" } });
       (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
       (prisma.session.findFirst as jest.Mock).mockResolvedValue({});
 
@@ -116,7 +189,7 @@ describe("adminAction tests", () => {
     });
 
     it("should return a generic error if an exception is thrown", async () => {
-      (auth as jest.Mock).mockResolvedValue(true);
+      mockGetSession.mockResolvedValue({ user: { role: "admin" } });
       (prisma.game.findFirst as jest.Mock).mockImplementation(() => {
         throw new Error("Unexpected error");
       });
