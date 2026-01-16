@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import MatchManager from "./MatchManager";
 import PlayerSelector from "./PlayerSelector";
@@ -52,23 +52,22 @@ const SetManager = () => {
         .fill(false)
         .map((_, i) => (i === newLength - 1 ? true : (prev[i] ?? false)));
     });
+
+    // Scroll to top when a new set is added
+    document.documentElement.scrollTop = 0;
   };
 
   const players = watch(`players`);
-
-  useEffect(() => {
-    document.documentElement.scrollTop = 0; // Scroll to top when a new set is added
-  }, []);
 
   return (
     <div className="col-span-2 w-full space-y-4">
       {/* Loop through set fields */}
       <div className="font-2xl m-2 text-center font-bold"> Sets </div>
-      {(fields.length === 0 && (
+      {fields.length === 0 ? (
         <div className="text-muted-foreground text-center">
           No Sets! Click Add Set to start!
         </div>
-      )) ||
+      ) : (
         fields.map((set, setIndex) => {
           // Get errors for this set
           const setError = errors.sets?.[setIndex];
@@ -129,7 +128,8 @@ const SetManager = () => {
               </Card>
             </Collapsible>
           );
-        })}
+        })
+      )}
       <div className="ml-auto w-fit">
         <Button
           type="button"

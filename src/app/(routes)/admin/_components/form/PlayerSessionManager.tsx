@@ -47,10 +47,10 @@ const PlayerSessionManager = (props: Props) => {
         remove(index);
       }
     });
-  }, [props.players, append, getValues, setIndex, matchIndex, players, remove]);
+  }, [players, append, getValues, setIndex, matchIndex, remove]);
 
-  const getPlayerNameFromField = (field: any): boolean => {
-    return field?.playerSessionName ?? 0; // Discrepancy in what is being assigned to playerSessionName
+  const getPlayerNameFromField = (field: any): string => {
+    return field?.playerSessionName ?? "";
   };
 
   console.log("PlayerSessionManager Fields: ", fields);
