@@ -17,6 +17,7 @@ const config: Config = {
     "^@/hooks/(.*)$": "<rootDir>/src/hooks/$1",
     "^@/(.*)$": "<rootDir>/src/$1",
     "^prisma/(.*)$": "<rootDir>/prisma/$1",
+    "prisma/db": "<rootDir>/src/app/__tests__/__mocks__/prisma.ts",
     // Mock ESM packages that Jest can't handle
     "^better-auth$": "<rootDir>/src/app/__tests__/__mocks__/better-auth.ts",
     "^better-auth/adapters/prisma$": "<rootDir>/src/app/__tests__/__mocks__/better-auth.ts",
