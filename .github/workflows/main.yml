@@ -63,6 +63,9 @@ jobs:
         run: vercel build --token ${{ secrets.VERCEL_TOKEN }} --prod
   test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
