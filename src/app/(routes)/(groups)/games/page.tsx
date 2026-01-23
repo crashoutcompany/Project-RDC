@@ -3,8 +3,10 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
 import Link from "next/link";
 import { getGamesNav } from "@/lib/constants";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function Page() {
+async function GamesContent() {
   const games = await getGamesNav();
   return (
     <div className="m-16">
@@ -49,5 +51,13 @@ export default async function Page() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+      <GamesContent />
+    </Suspense>
   );
 }
