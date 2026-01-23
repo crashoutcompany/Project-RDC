@@ -18,13 +18,14 @@ const config: Config = {
     "^@/(.*)$": "<rootDir>/src/$1",
     "^prisma/(.*)$": "<rootDir>/prisma/$1",
     // Mock ESM packages that Jest can't handle
-    "^better-auth$": "<rootDir>/src/__mocks__/better-auth.ts",
-    "^better-auth/adapters/prisma$": "<rootDir>/src/__mocks__/better-auth.ts",
-    "^better-auth/next-js$": "<rootDir>/src/__mocks__/better-auth.ts",
+    "^better-auth$": "<rootDir>/src/app/__tests__/__mocks__/better-auth.ts",
+    "^better-auth/adapters/prisma$": "<rootDir>/src/app/__tests__/__mocks__/better-auth.ts",
+    "^better-auth/next-js$": "<rootDir>/src/app/__tests__/__mocks__/better-auth.ts",
+    // Mock PostHog to avoid API key validation in tests
+    "^posthog-node$": "<rootDir>/src/app/__tests__/__mocks__/posthog-node.ts",
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/__tests__/**/*.test.tsx"],
-  // Add more setup options before each test is run
-  // setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
