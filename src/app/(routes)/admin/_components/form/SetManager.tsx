@@ -34,7 +34,7 @@ const SetManager = () => {
 
   const [openSets, setOpenSets] = useState<boolean[]>(fields.map(() => false));
   const [highestSetId, setHighestSetId] = useState(fields.length);
-  
+
   // Bulk upload state
   const [bulkResults, setBulkResults] = useState<BulkProcessingResult[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -61,6 +61,9 @@ const SetManager = () => {
         .fill(false)
         .map((_, i) => (i === newLength - 1 ? true : (prev[i] ?? false)));
     });
+
+    // Scroll to top when a new set is added
+    document.documentElement.scrollTop = 0;
   };
 
   const players = watch(`players`);
@@ -125,10 +128,7 @@ const SetManager = () => {
    * Creates new sets and adds matches to the appropriate sets
    */
   const handleBulkReviewConfirm = useCallback(
-    (
-      assignments: Map<number, BulkProcessingResult[]>,
-      newSetIds: number[],
-    ) => {
+    (assignments: Map<number, BulkProcessingResult[]>, newSetIds: number[]) => {
       console.log("handleBulkReviewConfirm called", {
         assignments: Array.from(assignments.entries()),
         newSetIds,
@@ -152,7 +152,9 @@ const SetManager = () => {
             .map(convertResultToMatch)
             .filter((m): m is Match => m !== null);
 
-          console.log(`Creating new set ${newSetId} with ${matchesForSet.length} matches`);
+          console.log(
+            `Creating new set ${newSetId} with ${matchesForSet.length} matches`,
+          );
 
           newSetsToAppend.push({
             setId: newSetId,
@@ -181,7 +183,9 @@ const SetManager = () => {
           .map(convertResultToMatch)
           .filter((m): m is Match => m !== null);
 
-        console.log(`Adding ${matches.length} matches to existing set ${setId} at index ${setIndex}`);
+        console.log(
+          `Adding ${matches.length} matches to existing set ${setId} at index ${setIndex}`,
+        );
 
         const currentMatches = getValues(`sets.${setIndex}.matches`) || [];
         setValue(`sets.${setIndex}.matches`, [...currentMatches, ...matches], {
@@ -216,7 +220,9 @@ const SetManager = () => {
             newOpenSets[existingIndex] = true;
           }
           // For new sets
-          const newSetIndex = newSetsToAppend.findIndex((s) => s.setId === setId);
+          const newSetIndex = newSetsToAppend.findIndex(
+            (s) => s.setId === setId,
+          );
           if (newSetIndex !== -1) {
             newOpenSets[currentSets.length + newSetIndex] = true;
           }
@@ -231,26 +237,22 @@ const SetManager = () => {
     [append, convertResultToMatch, getValues, highestSetId, setValue],
   );
 
-  useEffect(() => {
-    document.documentElement.scrollTop = 0; // Scroll to top when a new set is added
-  }, []);
-
   return (
     <div className="col-span-2 w-full space-y-4">
       {/* Loop through set fields */}
       <div className="font-2xl m-2 text-center font-bold"> Sets </div>
-      {(fields.length === 0 && (
+      {fields.length === 0 ? (
         <div className="text-muted-foreground text-center">
           No Sets! Click Add Set to start!
         </div>
-      )) ||
+      ) : (
         fields.map((set, setIndex) => {
           // Get errors for this set
           const setError = errors.sets?.[setIndex];
           return (
             <Collapsible open={openSets[setIndex]} key={set.setId}>
               <Card className="flex flex-col space-y-3 rounded-lg p-6 shadow-lg">
-                <CardHeader className="flex flex-row justify-between space-y-0 pb-0 pl-0 pr-0">
+                <CardHeader className="flex flex-row justify-between space-y-0 pr-0 pb-0 pl-0">
                   <div className="mb-2 text-lg font-semibold">
                     Set {setIndex + 1}
                   </div>
@@ -304,7 +306,8 @@ const SetManager = () => {
               </Card>
             </Collapsible>
           );
-        })}
+        })
+      )}
       <div className="flex justify-between">
         <BulkUploadModal
           onBulkProcessingComplete={handleBulkProcessingComplete}

@@ -149,23 +149,25 @@ export const insertNewSessionFromAdmin = async (
     });
 
     if (!sessionGame) return { error: "Game not found." };
-    else {
-      const videoAlreadyExists = await prisma.session.findFirst({
+
+    // Parallelize independent queries - both only depend on sessionGame.gameId
+    const [videoAlreadyExists, allGameStats] = await Promise.all([
+      prisma.session.findFirst({
         where: {
           gameId: sessionGame.gameId,
           AND: { videoId: session.videoId },
         },
-      });
+      }),
+      prisma.gameStat.findMany({
+        where: { gameId: sessionGame.gameId },
+      }),
+    ]);
 
-      console.log(videoAlreadyExists);
+    console.log(videoAlreadyExists);
 
-      if (videoAlreadyExists) return { error: "Video already exists." };
-    }
+    if (videoAlreadyExists) return { error: "Video already exists." };
 
-    // Pre-fetch all gameStats for this game and build a lookup map
-    const allGameStats = await prisma.gameStat.findMany({
-      where: { gameId: sessionGame.gameId },
-    });
+    // Build a lookup map for gameStats
     const gameStatMap = new Map(allGameStats.map((gs) => [gs.statName, gs]));
 
     await prisma.$transaction(async (prismaTx) => {
