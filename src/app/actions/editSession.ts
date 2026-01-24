@@ -298,9 +298,11 @@ export async function approveEditRequest(editId: number, note?: string) {
 
       const newJson = JSON.parse(edit.proposedData as string) as ProposedData;
 
-      // create revision and mark approved
-      await createRevision(tx, session, user.user?.email ?? null);
-      await markRequestApproved(tx, editId, user, note);
+      // create revision and mark approved - parallel within transaction for atomicity
+      await Promise.all([
+        createRevision(tx, session, user.user?.email ?? null),
+        markRequestApproved(tx, editId, user, note),
+      ]);
 
       // top-level updates
       await applyTopLevelUpdates(
