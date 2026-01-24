@@ -46,20 +46,28 @@ export default async function Page({
     (game) => game.gameName.replace(/\s/g, "").toLowerCase() === slug,
   )!;
 
-  const sessions = await getAllSessionsByGame(game.gameId); // Fetch sessions
-  if (!sessions.success || !sessions.data) sessions.data = [];
+  // Parallelize independent data fetches
+  const [sessionsResult, membersResult, winsResult] = await Promise.all([
+    getAllSessionsByGame(game.gameId),
+    getAllMembers(),
+    getWinsPerPlayer(game.gameId),
+  ]);
 
-  const gameName = slug as GamesEnum;
-  let component: React.ReactNode;
-
-  const members = await getAllMembers();
-  const wins = await getWinsPerPlayer(game.gameId);
-  if (!wins.success || !wins.data) wins.data = { sessions: [] };
-  const winsPerPlayer = calcWinsPerPlayer(wins.data);
+  const sessions = sessionsResult.success
+    ? sessionsResult
+    : { success: false, data: [] };
+  const members = membersResult;
+  const wins = winsResult.success
+    ? winsResult
+    : { success: false, data: { sessions: [] } };
+  const winsPerPlayer = calcWinsPerPlayer(wins.data!);
 
   if (!members.success || !members.data) {
     return <NoMembers />;
   }
+
+  const gameName = slug as GamesEnum;
+  let component: React.ReactNode;
 
   switch (gameName) {
     case GamesEnum.MarioKart8:
@@ -112,15 +120,16 @@ export default async function Page({
     //   break;
   }
 
+  // Extract inline object creation for better readability
+  const gameNameKey = game.gameName
+    .replace(/\s/g, "")
+    .toLowerCase() as keyof typeof gameImages;
+
   return (
     <div className="m-16">
       <H1 className="my-0">{game.gameName}</H1>
       <TimelineChart
-        gameName={
-          game.gameName
-            .replace(/\s/g, "")
-            .toLowerCase() as keyof typeof gameImages
-        }
+        gameName={gameNameKey}
         sessions={sessions.data}
         title={`${game.gameName} Videos`}
         desc="Use the keyboard to view specific data for a video"
