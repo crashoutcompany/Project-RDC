@@ -11,6 +11,7 @@ export class PostHog {
   identify = jest.fn();
   alias = jest.fn();
   groupIdentify = jest.fn();
+  captureException = jest.fn();
   featureFlags = jest.fn();
   getFeatureFlag = jest.fn();
   getAllFlags = jest.fn();
