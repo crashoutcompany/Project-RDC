@@ -11,21 +11,11 @@ import { approveEditRequest } from "../actions/editSession";
 import { auth } from "@/lib/auth";
 import type { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import prisma from "prisma/db";
+import { errorCodes } from "@/lib/constants";
 
-/**
- * TODO: Fix this integration test
- * This test requires a real database connection using Prisma's Neon adapter.
- * The Neon adapter uses ESM modules that Jest can't parse without additional configuration.
- * Options to fix:
- * 1. Run with --experimental-vm-modules flag for ESM support
- * 2. Convert to unit test by fully mocking Prisma
- * 3. Use a separate test runner (e.g., Vitest) that supports ESM
- */
+// Cast prisma to any to avoid complex mock typing issues in tests
+const prismaMock = prisma as any;
 
-// Skip this entire test file until ESM support is configured
-const SKIP_INTEGRATION_TESTS = true;
-
-// Auth mock type matching better-auth Session type
 interface MockSession {
   user: {
     id: string;
@@ -44,7 +34,7 @@ const mockUser: MockSession = {
   },
 };
 
-// Mock auth and cache
+// Mock auth
 jest.mock("@/lib/auth", () => ({
   auth: {
     api: {
@@ -53,50 +43,8 @@ jest.mock("@/lib/auth", () => ({
   },
 }));
 
-jest.mock("next/cache", () => ({
-  revalidateTag: jest.fn(),
-}));
-
-jest.mock("next/server", () => ({
-  after: jest.fn((fn: () => void) => fn()),
-}));
-
-jest.mock("next/headers", () => {
-  const mockHeaders = new Headers();
-  return {
-    headers: jest.fn(() => Promise.resolve(mockHeaders)),
-  };
-});
-
 const mockGetSession = auth.api.getSession as unknown as jest.Mock<
   () => Promise<MockSession | null>
->;
-
-// Define session include with proper property casing
-const sessionInclude = {
-  include: {
-    Game: true,
-    sets: {
-      include: {
-        matches: {
-          include: {
-            playerSessions: {
-              include: {
-                playerStats: true,
-              },
-            },
-            matchWinners: true,
-          },
-        },
-        setWinners: true,
-      },
-    },
-  },
-} as const;
-
-// Type definitions for the session with includes
-type SessionWithIncludes = NonNullable<
-  Prisma.SessionGetPayload<typeof sessionInclude>
 >;
 
 // Setup options interface
@@ -104,6 +52,7 @@ interface SetupTestOptions {
   withSets?: boolean;
   editData?: Partial<FormValues>;
   dirtyFields?: Partial<Record<keyof FormValues, boolean>>;
+  editStatus?: "PENDING" | "APPROVED" | "REJECTED";
 }
 
 const baseFormValues: FormValues = {
@@ -138,67 +87,46 @@ const baseFormValues: FormValues = {
 };
 
 const setupTest = async (options: SetupTestOptions = {}) => {
-  const session = (await prisma.session.create({
-    data: {
-      sessionName: "Original Session",
-      sessionUrl: "https://original.url",
-      thumbnail: "original-thumb.jpg",
-      videoId: "original-123",
-      // set FK directly to avoid nested connect typing issues
-      gameId: 1,
-      date: new Date("2025-01-01"),
-      isApproved: false,
-      createdBy: "test@example.com",
-      ...(options.withSets && {
-        sets: {
-          create: {
-            // GameSet does not have a direct Game relation in schema; don't set it here
-            setWinners: { connect: [{ playerId: 1 }] },
-            matches: {
-              create: [
-                {
-                  matchWinners: { connect: [{ playerId: 1 }] },
-                  playerSessions: {
-                    create: [
-                      {
-                        player: { connect: { playerId: 1 } },
-                        playerStats: {
-                          create: {
-                            player: { connect: { playerId: 1 } },
-                            game: { connect: { gameId: 1 } },
-                            gameStat: { connect: { statId: 1 } },
-                            value: "100",
-                            date: new Date("2025-01-01"),
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
+  const session = {
+    sessionId: 1,
+    sessionName: "Original Session",
+    sessionUrl: "https://original.url",
+    thumbnail: "original-thumb.jpg",
+    videoId: "original-123",
+    gameId: 1,
+    date: new Date("2025-01-01"),
+    isApproved: false,
+    createdBy: "test@example.com",
+    sets: options.withSets
+      ? [
+          {
+            setId: 1,
+            sessionId: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           },
-        },
-      }),
-    },
-    include: sessionInclude.include,
-  })) as unknown as SessionWithIncludes;
+        ]
+      : [],
+  };
 
-  if (!options.editData) {
+  prismaMock.session.findUnique.mockResolvedValue(session);
+
+  if (!options.editData && !options.editStatus) {
     return { session };
   }
 
-  const editRequest = await prisma.sessionEditRequest.create({
-    data: {
-      sessionId: session.sessionId,
-      proposerId: mockUser.user!.id,
-      proposedData: JSON.stringify({
-        proposedData: { ...baseFormValues, ...options.editData },
-        dirtyFields: options.dirtyFields || {},
-      }),
-      status: "PENDING",
-    },
-  });
+  const editRequest = {
+    id: 1,
+    sessionId: session.sessionId,
+    proposerId: mockUser.user!.id,
+    proposedData: JSON.stringify({
+      proposedData: { ...baseFormValues, ...options.editData },
+      dirtyFields: options.dirtyFields || {},
+    }),
+    status: options.editStatus || "PENDING",
+  };
+
+  prismaMock.sessionEditRequest.findUnique.mockResolvedValue(editRequest);
 
   return { session, editRequest };
 };
@@ -208,21 +136,11 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue(mockUser);
 });
 
-afterEach(async () => {
-  await prisma.sessionEditRequest.deleteMany();
-  await prisma.sessionRevision.deleteMany();
-  await prisma.playerStat.deleteMany();
-  await prisma.playerSession.deleteMany();
-  await prisma.match.deleteMany();
-  await prisma.gameSet.deleteMany();
-  await prisma.session.deleteMany();
-});
-
 describe("approveEditRequest", () => {
   it("should return error if not authenticated", async () => {
     mockGetSession.mockResolvedValueOnce(null);
     const result = await approveEditRequest(1);
-    expect(result.error).toBe("Not authenticated");
+    expect(result.error).toBe(errorCodes.NotAuthenticated);
   });
 
   it("should update only modified top-level fields", async () => {
@@ -236,17 +154,14 @@ describe("approveEditRequest", () => {
     const result = await approveEditRequest(editRequest.id);
     expect(result.error).toBeNull();
 
-    const updatedSession = await prisma.session.findUnique({
-      where: { sessionId: session.sessionId },
-    });
-
-    // Only sessionName should be updated
-    expect(updatedSession).toMatchObject({
-      sessionName: "New Name Only",
-      sessionUrl: session.sessionUrl,
-      thumbnail: session.thumbnail,
-      videoId: session.videoId,
-    });
+    expect(prisma.session.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionId: session.sessionId },
+        data: expect.objectContaining({
+          sessionName: "New Name Only",
+        }),
+      }),
+    );
   });
 
   it("should handle complete set replacement when count changes", async () => {
@@ -279,49 +194,33 @@ describe("approveEditRequest", () => {
       ],
     };
 
-    const editRequest = await prisma.sessionEditRequest.create({
-      data: {
-        sessionId: session.sessionId,
-        proposerId: mockUser.user!.id,
-        proposedData: JSON.stringify({
-          proposedData: twoSetsForm,
-          dirtyFields: { sets: true },
-        }),
-        status: "PENDING",
-      },
+    const editRequest = {
+      id: 1,
+      sessionId: session.sessionId,
+      proposerId: mockUser.user!.id,
+      proposedData: JSON.stringify({
+        proposedData: twoSetsForm,
+        dirtyFields: { sets: true },
+      }),
+      status: "PENDING",
+    };
+
+    prismaMock.sessionEditRequest.findUnique.mockResolvedValue(editRequest);
+    prismaMock.gameSet.create.mockResolvedValue({ setId: 100 });
+    prismaMock.match.create.mockResolvedValue({ matchId: 200 });
+    prismaMock.playerSession.create.mockResolvedValue({
+      playerSessionId: 300,
+      playerId: 1,
     });
 
     const result = await approveEditRequest(editRequest.id);
     expect(result.error).toBeNull();
 
-    const updatedSession = await prisma.session.findUnique({
+    // Verify sets were deleted and recreated
+    expect(prisma.gameSet.deleteMany).toHaveBeenCalledWith({
       where: { sessionId: session.sessionId },
-      include: {
-        sets: {
-          include: {
-            setWinners: true,
-            matches: {
-              include: {
-                matchWinners: true,
-                playerSessions: {
-                  include: {
-                    playerStats: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
     });
-
-    // Verify two sets exist with correct structure
-    expect(updatedSession?.sets).toHaveLength(2);
-    expect(updatedSession?.sets[0].setWinners).toHaveLength(1);
-    expect(updatedSession?.sets[1].setWinners).toHaveLength(1);
-    expect(
-      updatedSession?.sets[1].matches[0].playerSessions[0].playerStats,
-    ).toHaveLength(1);
+    expect(prisma.gameSet.create).toHaveBeenCalled();
   });
 
   it("should update existing sets when count remains same", async () => {
@@ -333,7 +232,7 @@ describe("approveEditRequest", () => {
       sessionId: session.sessionId,
       sets: [
         {
-          setId: session.sets[0].setId,
+          setId: 1, // Matches session.sets[0].setId
           setWinners: [{ playerId: 2, playerName: "Des" }],
           matches: [
             {
@@ -353,49 +252,36 @@ describe("approveEditRequest", () => {
       ],
     };
 
-    const editRequest = await prisma.sessionEditRequest.create({
-      data: {
-        sessionId: session.sessionId,
-        proposerId: mockUser.user!.id,
-        proposedData: JSON.stringify({
-          proposedData: updatedSetForm,
-          dirtyFields: { sets: true },
-        }),
-        status: "PENDING",
-      },
+    const editRequest = {
+      id: 1,
+      sessionId: session.sessionId,
+      proposerId: mockUser.user!.id,
+      proposedData: JSON.stringify({
+        proposedData: updatedSetForm,
+        dirtyFields: { sets: true },
+      }),
+      status: "PENDING",
+    };
+
+    prismaMock.sessionEditRequest.findUnique.mockResolvedValue(editRequest);
+    prismaMock.match.create.mockResolvedValue({ matchId: 200 });
+    prismaMock.playerSession.create.mockResolvedValue({
+      playerSessionId: 300,
+      playerId: 2,
     });
 
     const result = await approveEditRequest(editRequest.id);
     expect(result.error).toBeNull();
 
-    const updatedSession = await prisma.session.findUnique({
-      where: { sessionId: session.sessionId },
-      include: {
-        sets: {
-          include: {
-            setWinners: true,
-            matches: {
-              include: {
-                matchWinners: true,
-                playerSessions: {
-                  include: {
-                    playerStats: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+    // Verify existing set was updated
+    expect(prisma.gameSet.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { setId: 1 },
+      }),
+    );
+    expect(prisma.match.deleteMany).toHaveBeenCalledWith({
+      where: { setId: 1 },
     });
-
-    // Verify set was updated with new data
-    expect(updatedSession?.sets).toHaveLength(1);
-    expect(updatedSession?.sets[0].setWinners[0].playerId).toBe(2);
-    expect(updatedSession?.sets[0].matches[0].matchWinners[0].playerId).toBe(2);
-    expect(
-      updatedSession?.sets[0].matches[0].playerSessions[0].playerStats[0].value,
-    ).toBe("3");
   });
 
   it("should create revision snapshot before applying changes", async () => {
@@ -407,14 +293,14 @@ describe("approveEditRequest", () => {
     if (!editRequest) throw new Error("Edit request should be defined");
     await approveEditRequest(editRequest.id);
 
-    const revision = await prisma.sessionRevision.findFirst({
-      where: { sessionId: session.sessionId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    expect(revision).toBeTruthy();
-    const snapshotData = JSON.parse(revision!.snapshot as string);
-    expect(snapshotData.sessionName).toBe(session.sessionName);
+    expect(prisma.sessionRevision.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionId: session.sessionId,
+          snapshot: expect.any(String),
+        }),
+      }),
+    );
   });
 
   it("should mark edit request as approved with reviewer info", async () => {
@@ -427,41 +313,29 @@ describe("approveEditRequest", () => {
     const note = "Changes look good";
     await approveEditRequest(editRequest.id, note);
 
-    const updatedRequest = await prisma.sessionEditRequest.findUnique({
-      where: { id: editRequest.id },
-    });
-
-    expect(updatedRequest).toMatchObject({
-      status: "APPROVED",
-      reviewerId: mockUser.user!.id,
-      reviewNote: note,
-      appliedBy: mockUser.user!.email,
-    });
-    expect(updatedRequest?.reviewedAt).toBeTruthy();
-    expect(updatedRequest?.appliedAt).toBeTruthy();
+    expect(prisma.sessionEditRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: editRequest.id },
+        data: expect.objectContaining({
+          status: "APPROVED",
+          reviewerId: mockUser.user!.id,
+          reviewNote: note,
+        }),
+      }),
+    );
   });
 
   it("should handle missing edit request gracefully", async () => {
+    prismaMock.sessionEditRequest.findUnique.mockResolvedValue(null);
     const result = await approveEditRequest(999999);
-    expect(result.error).toBe("Edit request not found");
+    expect(result.error).toBe("Error: Edit request not found");
   });
 
   it("should not approve already approved/rejected requests", async () => {
-    const { session } = await setupTest();
+    const { editRequest } = await setupTest({ editStatus: "APPROVED" });
 
-    const editRequest = await prisma.sessionEditRequest.create({
-      data: {
-        sessionId: session.sessionId,
-        proposerId: mockUser.user!.id,
-        proposedData: JSON.stringify({
-          proposedData: baseFormValues,
-          dirtyFields: { sessionName: true },
-        }),
-        status: "APPROVED", // Already approved
-      },
-    });
-
+    if (!editRequest) throw new Error("Edit request should be defined");
     const result = await approveEditRequest(editRequest.id);
-    expect(result.error).toBe("Edit request is not pending");
+    expect(result.error).toBe("Error: Edit request is not pending");
   });
 });

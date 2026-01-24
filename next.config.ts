@@ -4,6 +4,9 @@ import { withBotId } from "botid/next/config";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   reactCompiler: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "recharts"],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "i.ytimg.com" },

@@ -46,20 +46,6 @@ jest.mock("@/lib/auth", () => ({
     },
   },
 }));
-jest.mock("@/posthog/server-analytics", () => ({
-  logAdminAction: jest.fn(),
-  logFormError: jest.fn(),
-  logFormSuccess: jest.fn(),
-}));
-jest.mock("next/cache", () => ({
-  revalidateTag: jest.fn(),
-}));
-jest.mock("next/server", () => ({
-  after: jest.fn((fn: () => void) => fn()),
-}));
-jest.mock("next/headers", () => ({
-  headers: jest.fn().mockResolvedValue(new Headers()),
-}));
 
 import { insertNewSessionFromAdmin } from "../actions/adminAction";
 import { auth } from "@/lib/auth";

@@ -14,13 +14,6 @@ jest.mock("@/lib/auth", () => ({
     },
   },
 }));
-jest.mock("@/posthog/server-analytics", () => ({
-  logAdminAction: jest.fn(),
-  logFormError: jest.fn(),
-  logFormSuccess: jest.fn(),
-  logVisionAction: jest.fn(),
-  logVisionError: jest.fn(),
-}));
 
 // Mock the game processor modules
 jest.mock("@/lib/game-processors/MarioKart8Processor");
@@ -44,6 +37,9 @@ jest.mock("@azure-rest/ai-document-intelligence", () => {
       })),
     })),
     getLongRunningPoller: jest.fn(() => ({
+      get body() {
+        return azureMocks.pollUntilDone().then((res: any) => res.body);
+      },
       pollUntilDone: (...args: unknown[]) => azureMocks.pollUntilDone(...args),
     })),
     isUnexpected: jest.fn(() => false),

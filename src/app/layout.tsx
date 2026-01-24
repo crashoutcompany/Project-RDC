@@ -12,9 +12,6 @@ import { DbSwitchNotifier } from "@/components/DbSwitchNotifier";
 import { CSPostHogProvider } from "@/posthog/client-init";
 // import { SessionProvider } from "next-auth/react";
 import PostHogIdentify from "@/posthog/PosthogIdentify";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ReactScan } from "@/components/ReactScan";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -46,17 +43,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-            <CSPostHogProvider>
-              <PostHogIdentify />
-              {/* Comment this out to see ssg */}
-              <Navbar />
-              <main>{children}</main>
-              <Toaster />
-              {process.env.NODE_ENV === "development" && (
-                <DbSwitchNotifier />
-              )}
-              <Footer />
-            </CSPostHogProvider>
+          <CSPostHogProvider>
+            <PostHogIdentify />
+            {/* Comment this out to see ssg */}
+            <Navbar />
+            <main>{children}</main>
+            <Toaster />
+            {process.env.NODE_ENV === "development" && <DbSwitchNotifier />}
+            <Footer />
+          </CSPostHogProvider>
         </ThemeProvider>
       </body>
     </html>
