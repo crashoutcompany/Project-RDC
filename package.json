@@ -2,6 +2,9 @@
   "name": "projectrdc",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "postinstall": "prisma generate --sql",
@@ -20,8 +23,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^2.0.23",
     "@ai-sdk/react": "^2.0.114",
+    "@ai-sdk/google": "^2.0.46",
     "@ai-sdk/rsc": "^1.0.77",
     "@auth/prisma-adapter": "^2.11.1",
     "@azure-rest/ai-document-intelligence": "^1.0.0-beta.3",
@@ -66,10 +69,10 @@
     "googleapis": "^159.0.0",
     "lucide-react": "^0.560.0",
     "motion": "^12.5.0",
-    "next": "16.0.7",
+    "next": "16.0.10",
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",
-    "posthog-js": "^1.305.0",
+    "posthog-js": "^1.306.1",
     "posthog-node": "^5.17.2",
     "react": "19.2.0",
     "react-day-picker": "^9.7.0",
@@ -107,9 +110,9 @@
     "jest-environment-jsdom": "^30.1.2",
     "jest-fixed-jsdom": "^0.0.11",
     "neonctl": "^2.18.1",
-    "next-devtools-mcp": "^0.3.4",
+    "next-devtools-mcp": "^0.3.7",
     "postcss": "^8.5.4",
-    "prettier": "^3.5.3",
+    "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.6.12",
     "prisma": "^7.1.0",
     "prisma-json-types-generator": "^4.0.1",

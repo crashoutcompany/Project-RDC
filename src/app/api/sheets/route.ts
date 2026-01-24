@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       const lastVideoId = getVideoId(items.at(-1)?.videoId || "");
       let summary: string | null = null;
       try {
-        const model = withTracing(aiGoogle("gemini-2.5-pro"), posthog, {
+        const model = withTracing(aiGoogle("gemini-2.5-flash"), posthog, {
           posthogDistinctId: "cron-job",
           posthogProperties: {
             source: "google-drive-sync",
@@ -112,11 +112,15 @@ export async function GET(req: NextRequest) {
         });
 
         summary = text;
-        logAiGenSuccess(PostHogEvents.GOOGLE_DRIVE_SUMMARY_GENERATION_SUCCESS, "cron-job", {
-          summary,
-          newLastRow,
-          lastVideoId,
-        });
+        logAiGenSuccess(
+          PostHogEvents.GOOGLE_DRIVE_SUMMARY_GENERATION_SUCCESS,
+          "cron-job",
+          {
+            summary,
+            newLastRow,
+            lastVideoId,
+          },
+        );
       } catch (aiErr) {
         logAiGenFailure(aiErr, "cron-job");
         summary = null;
