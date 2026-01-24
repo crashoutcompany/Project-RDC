@@ -28,6 +28,7 @@ reviews:
   path_filters:
     - "prisma/migrations/**"
     - "package-lock.json"
+    - ".agents/**"
   path_instructions: []
   abort_on_close: true
   disable_cache: false

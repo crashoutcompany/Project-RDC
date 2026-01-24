@@ -91,11 +91,9 @@ export const Navbar = async () => {
             </ul>
           </NavigationMenuContent>
         </NavigationMenuItem>
-        <NavigationMenuItem className="hidden md:block">
-          <Link className={navigationMenuTriggerStyle()} href="/admin">
-            <FillText className="text-chart-4" text="Admin" />
-          </Link>
-        </NavigationMenuItem>
+        <Suspense fallback={<Skeleton className="h-full w-9" />}>
+          <AdminSection />
+        </Suspense>
 
         {/* MOBILE */}
         <NavigationMenuItem className="md:hidden">
@@ -186,5 +184,15 @@ const ProfileSection = async () => {
       </NavigationMenuItem>
       <AuthButton hideOnSmallScreens hasSession={Boolean(session)} />
     </>
+  );
+};
+
+const AdminSection = async () => {
+  return (
+    <NavigationMenuItem className="hidden md:block">
+      <Link className={navigationMenuTriggerStyle()} href="/admin">
+        <FillText className="text-chart-4" text="Admin" />
+      </Link>
+    </NavigationMenuItem>
   );
 };
