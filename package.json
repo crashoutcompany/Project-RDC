@@ -25,7 +25,7 @@
   "dependencies": {
     "@ai-sdk/google": "^2.0.46",
     "@ai-sdk/react": "^2.0.100",
-    "@ai-sdk/rsc": "^1.0.77",
+    "@ai-sdk/rsc": "^2.0.53",
     "@auth/prisma-adapter": "^2.11.1",
     "@azure-rest/ai-document-intelligence": "^1.0.0-beta.3",
     "@azure-rest/ai-vision-image-analysis": "^1.0.0-beta.3",
