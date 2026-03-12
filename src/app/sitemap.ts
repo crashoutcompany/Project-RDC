@@ -15,7 +15,7 @@ import { getAllMembers } from "prisma/lib/members";
  * console.log(sitemap);
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const BASE_URL = "https://project-rdc.vercel.app";
+  const BASE_URL = "https://rdcstats.com";
   const [games, members] = await Promise.all([getAllGames(), getAllMembers()]);
 
   if (!games.success || !games.data) games.data = [];
