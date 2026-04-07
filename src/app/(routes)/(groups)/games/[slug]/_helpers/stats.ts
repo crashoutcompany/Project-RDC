@@ -141,7 +141,7 @@ export const calcMostPerPlacing = async (
           member[pos as keyof MembersPerPosition] += 1;
           race.push({ player: ps.player.playerName, pos });
         }
-        const sorted = race.sort((a, b) => a.pos - b.pos);
+        const sorted = race.toSorted((a, b) => a.pos - b.pos);
         const firstPlace = sorted[0].player;
         const secondPlace = sorted[1].player;
         const thirdPlace = sorted[2].player;

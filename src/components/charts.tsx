@@ -1,6 +1,15 @@
 "use client";
 
-import { Pie, PieChart } from "recharts";
+import dynamic from "next/dynamic";
+
+const Pie = dynamic(
+  () => import("recharts").then((mod) => mod.Pie),
+  { ssr: false }
+);
+const PieChart = dynamic(
+  () => import("recharts").then((mod) => mod.PieChart),
+  { ssr: false }
+);
 import {
   Card,
   CardHeader,

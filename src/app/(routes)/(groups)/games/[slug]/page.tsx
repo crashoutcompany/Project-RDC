@@ -56,10 +56,6 @@ export default async function Page({
     (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
   )!;
 
-  const sessions = await getAllSessionsByGame(game.gameId);
-  if (!sessions.success || !sessions.data) sessions.data = [];
-
-  const gameName = slug as GamesEnum;
   const gameImage = `/images/${gameImages[gameName] || ""}`;
 
   const dashboardData = assembleDashboardData(
@@ -68,15 +64,28 @@ export default async function Page({
     slug,
     gameImage,
   );
+  // Parallelize independent data fetches
+  const [sessionsResult, membersResult, winsResult] = await Promise.all([
+    getAllSessionsByGame(game.gameId),
+    getAllMembers(),
+    getWinsPerPlayer(game.gameId),
+  ]);
 
-  const members = await getAllMembers();
-  const wins = await getWinsPerPlayer(game.gameId);
-  if (!wins.success || !wins.data) wins.data = { sessions: [] };
-  const winsPerPlayer = calcWinsPerPlayer(wins.data);
+  const sessions = sessionsResult.success
+    ? sessionsResult
+    : { success: false, data: [] };
+  const members = membersResult;
+  const wins = winsResult.success
+    ? winsResult
+    : { success: false, data: { sessions: [] } };
+  const winsPerPlayer = calcWinsPerPlayer(wins.data!);
 
   if (!members.success || !members.data) return <NoMembers />;
 
   let gameComponent: React.ReactNode;
+
+  const gameName = slug as GamesEnum;
+  let component: React.ReactNode;
 
   switch (gameName) {
     case GamesEnum.MarioKart8:
@@ -125,6 +134,11 @@ export default async function Page({
       );
       break;
   }
+
+  // Extract inline object creation for better readability
+  const gameNameKey = game.gameName
+    .replace(/\s/g, "")
+    .toLowerCase() as keyof typeof gameImages;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

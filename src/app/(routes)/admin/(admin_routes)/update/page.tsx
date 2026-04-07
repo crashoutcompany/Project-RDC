@@ -57,9 +57,11 @@ function DbTable<T extends Record<string, unknown>>({
 }
 
 export default async function Page() {
-  const statsQuery = await getAllGameStats();
-  const gamesQuery = await getAllGames();
-  const playersQuery = await getAllMembers();
+  const [statsQuery, gamesQuery, playersQuery] = await Promise.all([
+    getAllGameStats(),
+    getAllGames(),
+    getAllMembers(),
+  ]);
 
   const stats = statsQuery.success ? statsQuery.data : [];
   const games = gamesQuery.success ? gamesQuery.data : [];
