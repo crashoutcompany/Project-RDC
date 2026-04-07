@@ -56,6 +56,7 @@ export default async function Page({
     (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
   )!;
 
+  const gameName = slug as GamesEnum;
   const gameImage = `/images/${gameImages[gameName] || ""}`;
 
   const dashboardData = assembleDashboardData(
@@ -84,7 +85,6 @@ export default async function Page({
 
   let gameComponent: React.ReactNode;
 
-  const gameName = slug as GamesEnum;
   let component: React.ReactNode;
 
   switch (gameName) {
