@@ -1,36 +1,46 @@
 "use cache";
-import { H1 } from "@/components/headings";
 import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
-import { getAllSessionsByGame } from "prisma/lib/admin"; // Import getAllSessions
+import { getAllSessionsByGame } from "prisma/lib/admin";
 import Mariokart from "./_components/games/mariokart";
 import CallOfDuty from "./_components/games/callofduty";
 import RocketLeague from "./_components/games/rocketleague";
 import Speedrunners from "./_components/games/speedrunners";
 import LethalCompany from "./_components/games/lethalcompany";
-// import GolfWithFriends from "./_components/golfwithfriends";
 import { gameImages, GamesEnum } from "@/lib/constants";
-import { TimelineChart } from "./_components/timeline/timeline-chart";
-import { Separator } from "@/components/ui/separator";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
 import { calcWinsPerPlayer } from "./_helpers/stats";
+import { GameDashboard } from "./_components/dashboard/game-dashboard";
+import { assembleDashboardData } from "./_helpers/dashboard";
 
 export type Members = NonNullable<
   Awaited<ReturnType<typeof getAllMembers>>["data"]
 >;
 
+/**
+ * Generates static params for all games for SSG.
+ *
+ * @returns Array of slug objects for each game.
+ */
 export async function generateStaticParams() {
   const games = await getAllGames();
 
-  if (!games.success || !games.data || games.data.length === 0) {
+  if (!games.success || !games.data || games.data.length === 0)
     return [{ slug: "__placeholder__" }];
-  }
-  const params = games.data.map((game) => ({
+
+  return games.data.map((game) => ({
     slug: game.gameName.replace(/\s/g, "").toLowerCase(),
   }));
-  return params;
 }
 
+/**
+ * Renders the game dashboard page with banner stats, MVP profile,
+ * leaderboard, replay library, replay viewer, recent matches,
+ * and game-specific stat charts.
+ *
+ * @param props - Contains route params with the game slug.
+ * @returns The game dashboard page JSX element.
+ */
 export default async function Page({
   params,
 }: {
@@ -43,9 +53,18 @@ export default async function Page({
     return <NoGames />;
 
   const game = games.data.find(
-    (game) => game.gameName.replace(/\s/g, "").toLowerCase() === slug,
+    (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
   )!;
 
+  const gameName = slug as GamesEnum;
+  const gameImage = `/images/${gameImages[gameName] || ""}`;
+
+  const dashboardData = assembleDashboardData(
+    sessions.data,
+    game.gameName,
+    slug,
+    gameImage,
+  );
   // Parallelize independent data fetches
   const [sessionsResult, membersResult, winsResult] = await Promise.all([
     getAllSessionsByGame(game.gameId),
@@ -62,16 +81,15 @@ export default async function Page({
     : { success: false, data: { sessions: [] } };
   const winsPerPlayer = calcWinsPerPlayer(wins.data!);
 
-  if (!members.success || !members.data) {
-    return <NoMembers />;
-  }
+  if (!members.success || !members.data) return <NoMembers />;
 
-  const gameName = slug as GamesEnum;
+  let gameComponent: React.ReactNode;
+
   let component: React.ReactNode;
 
   switch (gameName) {
     case GamesEnum.MarioKart8:
-      component = (
+      gameComponent = (
         <Mariokart
           game={game}
           members={members.data}
@@ -80,7 +98,7 @@ export default async function Page({
       );
       break;
     case GamesEnum.CallOfDuty:
-      component = (
+      gameComponent = (
         <CallOfDuty
           game={game}
           members={members.data}
@@ -89,7 +107,7 @@ export default async function Page({
       );
       break;
     case GamesEnum.RocketLeague:
-      component = (
+      gameComponent = (
         <RocketLeague
           game={game}
           members={members.data}
@@ -98,7 +116,7 @@ export default async function Page({
       );
       break;
     case GamesEnum.SpeedRunners:
-      component = (
+      gameComponent = (
         <Speedrunners
           game={game}
           members={members.data}
@@ -107,7 +125,7 @@ export default async function Page({
       );
       break;
     case GamesEnum.LethalCompany:
-      component = (
+      gameComponent = (
         <LethalCompany
           game={game}
           members={members.data}
@@ -115,9 +133,6 @@ export default async function Page({
         />
       );
       break;
-    // case "golfwithfriends":
-    //   component = <GolfWithFriends game={game} />;
-    //   break;
   }
 
   // Extract inline object creation for better readability
@@ -126,23 +141,22 @@ export default async function Page({
     .toLowerCase() as keyof typeof gameImages;
 
   return (
-    <div className="m-16">
-      <H1 className="my-0">{game.gameName}</H1>
-      <TimelineChart
-        gameName={gameNameKey}
-        sessions={sessions.data}
-        title={`${game.gameName} Videos`}
-        desc="Use the keyboard to view specific data for a video"
-      />
-      <Separator className="my-4" />
-      {component}
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <GameDashboard data={dashboardData}>
+        {gameComponent}
+      </GameDashboard>
     </div>
   );
 }
 
+/**
+ * Fallback component when no games are found.
+ *
+ * @returns JSX element showing a "no games found" message.
+ */
 const NoGames = () => (
   <div className="m-16">
-    <H1 className="my-0">No games found</H1>
+    <h1 className="text-3xl font-bold">No games found</h1>
     <p className="text-muted-foreground">
       No games found. Please check back later.
     </p>
