@@ -1,4 +1,5 @@
 "use cache";
+import type { Metadata } from "next";
 import { H1 } from "@/components/headings";
 import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
 import { getAllSessionsByGame } from "prisma/lib/admin"; // Import getAllSessions
@@ -19,6 +20,35 @@ export type Members = NonNullable<
   Awaited<ReturnType<typeof getAllMembers>>["data"]
 >;
 
+/**
+ * @param params - Route params with game slug
+ * @returns Page metadata for the game stats view
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  if (slug === "__placeholder__")
+    return { title: "Games | RDC Stats Tracker" };
+
+  const games = await getAllGames();
+  if (!games.success || !games.data)
+    return { title: "Games | RDC Stats Tracker" };
+
+  const game = games.data.find(
+    (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
+  );
+  if (!game)
+    return { title: "Game not found | RDC Stats Tracker" };
+
+  return {
+    title: `${game.gameName} | RDC Stats Tracker`,
+    description: `Session stats, wins, and timelines for ${game.gameName}.`,
+  };
+}
+
 export async function generateStaticParams() {
   const games = await getAllGames();
 
@@ -36,8 +66,7 @@ export default async function Page({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
-  const games = await getAllGames();
+  const [{ slug }, games] = await Promise.all([params, getAllGames()]);
 
   if (!games.success || !games.data || slug === "__placeholder__")
     return <NoGames />;
