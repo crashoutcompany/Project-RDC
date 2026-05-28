@@ -2,7 +2,7 @@
 
 A local-first pipeline that scans a long video (YouTube or local file) and emits one PNG per detected end-of-match scoreboard. Built game-agnostic — Rocket League ships out of the box, more games are a config file away.
 
-```
+```text
 Video → ffmpeg sample → pHash filter (optional) → Apple Vision OCR → dedup → match-NN.png(s) + manifest.json
 ```
 
@@ -46,7 +46,7 @@ Currently registered:
 
 ## CLI reference
 
-```
+```text
 extract     Default. Harvest scoreboards.
 bootstrap   Set the pHash reference image for the active --game.
 
@@ -82,7 +82,7 @@ Most games have a hard floor on how long a match takes. RL is at least ~3 min in
 
 State machine:
 
-```
+```text
 After we exit a run (= dedup-gap frames since last confirm):
     skipToFrameId = lastConfirmedFrameId + skipAheadFrames
     next frames whose ID < skipToFrameId are not OCR'd

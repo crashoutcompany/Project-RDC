@@ -34,7 +34,13 @@ export function resolveProfile(id: string): GameProfile {
   return profile;
 }
 
-/** Returns the list of registered game IDs. */
+/**
+ * Lists the slug IDs of every registered game. Used by the CLI to print a
+ * helpful list when --game is missing or unknown.
+ *
+ * @returns An array of registered game ID strings, derived from the keys of
+ *   PROFILES_BY_ID (e.g. `["rocket-league"]`).
+ */
 export function listGameIds(): string[] {
   return [...PROFILES_BY_ID.keys()];
 }

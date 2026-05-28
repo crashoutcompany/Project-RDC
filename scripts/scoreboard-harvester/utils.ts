@@ -58,6 +58,13 @@ export function fmtTime(sec: number): string {
   return `${pad(h)}-${pad(m)}-${pad(s)}`;
 }
 
+/**
+ * Zero-pads a non-negative single-digit number to two characters via
+ * String.prototype.padStart. Used to render the H/M/S components of fmtTime.
+ *
+ * @param n - Number to pad (caller is expected to pass a non-negative integer).
+ * @returns A two-character string (or longer if `n` is already two-plus digits).
+ */
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -125,8 +132,19 @@ export function parseFiniteNumber(args: {
   max?: number;
 }): number | undefined {
   const { name, raw, kind, min, max } = args;
-  if (raw === undefined || raw === "") return undefined;
-  const v = kind === "int" ? parseInt(raw, 10) : parseFloat(raw);
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === "") return undefined;
+  // parseInt/parseFloat both happily eat trailing junk ("12abc" → 12), which
+  // can let typos slip silently into ffmpeg args or comparison operators.
+  // Require the whole string to match a numeric shape before parsing.
+  const pattern =
+    kind === "int" ? /^-?\d+$/ : /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+  if (!pattern.test(trimmed)) {
+    console.error(`Invalid --${name}: must be a number, got "${raw}"`);
+    process.exit(1);
+  }
+  const v = kind === "int" ? parseInt(trimmed, 10) : parseFloat(trimmed);
   if (!Number.isFinite(v)) {
     console.error(`Invalid --${name}: must be a number, got "${raw}"`);
     process.exit(1);

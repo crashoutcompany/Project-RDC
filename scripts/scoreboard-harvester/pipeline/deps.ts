@@ -63,9 +63,20 @@ export function checkDeps(
   }
 
   const visionOcrPath = path.join(harvesterRoot, "bin", "vision-ocr");
-  if (!fs.existsSync(visionOcrPath)) {
+  // existsSync alone lets non-executable files slip through and fail at
+  // spawn-time with a noisy EACCES. Probe with X_OK so we fail fast here
+  // with a remediation hint.
+  let visionOcrUsable = false;
+  try {
+    fs.accessSync(visionOcrPath, fs.constants.X_OK);
+    visionOcrUsable = true;
+  } catch {
+    visionOcrUsable = false;
+  }
+  if (!visionOcrUsable) {
     errors.push(
-      `vision-ocr binary not built. Run: cd scripts/scoreboard-harvester/ocr-tool && ./build.sh`,
+      `vision-ocr binary not built or not executable at ${visionOcrPath}. ` +
+        `Run: cd scripts/scoreboard-harvester/ocr-tool && ./build.sh`,
     );
   }
 
