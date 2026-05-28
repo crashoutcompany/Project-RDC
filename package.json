@@ -62,7 +62,7 @@
     "@tanstack/react-table": "^8.21.3",
     "ai": "^5.0.102",
     "babel-plugin-react-compiler": "^1.0.0",
-    "better-auth": "^1.4.1",
+    "better-auth": "^1.6.2",
     "botid": "^1.5.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
