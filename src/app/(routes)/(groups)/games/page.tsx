@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { H1 } from "@/components/headings";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
@@ -5,6 +6,12 @@ import Link from "next/link";
 import { getGamesNav } from "@/lib/constants";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+export const metadata: Metadata = {
+  title: "RDC Games",
+  description:
+    "Browse RDC game statistics, player rankings, and session data across Mario Kart, Rocket League, and more.",
+};
 
 async function GamesContent() {
   const games = await getGamesNav();
