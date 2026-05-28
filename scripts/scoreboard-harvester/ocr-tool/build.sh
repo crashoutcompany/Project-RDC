@@ -21,12 +21,15 @@ echo "Built: $(cd .. && pwd)/bin/vision-ocr"
 
 # Smoke check: invoke with no args, expect exit code 2 + usage message.
 # `set -e` would treat vision-ocr's expected non-zero exit as a failure, so we
-# capture the output and check separately.
-smoke_out="$(../bin/vision-ocr 2>&1 || true)"
-if echo "$smoke_out" | grep -q "usage:"; then
+# capture the output and exit code separately and assert on both.
+set +e
+smoke_out="$(../bin/vision-ocr 2>&1)"
+rc=$?
+set -e
+if [ "$rc" -eq 2 ] && echo "$smoke_out" | grep -q "usage:"; then
     echo "Smoke check passed."
 else
-    echo "WARN: smoke test failed — built binary did not print usage" >&2
+    echo "WARN: smoke test failed — expected exit 2 + usage message, got exit $rc" >&2
     echo "Got: $smoke_out" >&2
     exit 1
 fi

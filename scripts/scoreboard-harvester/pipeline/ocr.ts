@@ -90,10 +90,16 @@ export async function ocrFrames(
     );
 
     const passesKeywordCount = matched.length >= opts.minKeywords;
+    // Sentinel can be detected either via the keyword-match list OR by
+    // scanning OCR lines directly. The latter handles game profiles that
+    // declare an endScreenSentinel that is NOT also in `keywords` — without
+    // the line-scan, those profiles would always fail when requireEndScreen
+    // is on, even with a perfect OCR result.
     const passesSentinelRule =
       !opts.requireEndScreen ||
       sentinel === undefined ||
-      matched.some((k) => k.toUpperCase() === sentinel);
+      matched.some((k) => k.toUpperCase() === sentinel) ||
+      upperLines.some((line) => line.includes(sentinel));
 
     if (passesKeywordCount && passesSentinelRule) {
       out.push({

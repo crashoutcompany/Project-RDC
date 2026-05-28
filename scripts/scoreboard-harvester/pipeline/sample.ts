@@ -51,7 +51,18 @@ export async function sampleFrames(args: {
     ];
     if (start !== undefined) ffArgs.push("-ss", String(start));
     ffArgs.push("-i", videoPath);
-    if (end !== undefined) ffArgs.push("-t", String(end - (start ?? 0)));
+    if (end !== undefined) {
+      const duration = end - (start ?? 0);
+      // ffmpeg silently produces zero output for `-t 0` or negative durations;
+      // fail loudly so users notice swapped --start/--end immediately.
+      if (!(duration > 0)) {
+        throw new Error(
+          `Invalid slice: --end (${end}) must be greater than --start ` +
+            `(${start ?? 0}). Got duration=${duration}.`,
+        );
+      }
+      ffArgs.push("-t", String(duration));
+    }
     ffArgs.push("-vf", `fps=${fps},scale=1280:-2`);
     ffArgs.push("-q:v", "3");
     ffArgs.push(path.join(framesDir, "%06d.jpg"));

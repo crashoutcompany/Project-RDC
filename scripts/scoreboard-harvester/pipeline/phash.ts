@@ -4,13 +4,15 @@ import { FrameRecord, PHashRecord } from "../types";
 
 /**
  * Computes a 64-bit dHash (difference hash) for an image. The image is cropped
- * to a centered 16:9 inner region first to strip YouTube letterboxing and
- * typical webcam/face-cam overlays, then resized to 9x8 grayscale. Each output
- * bit encodes "is this pixel brighter than its right neighbor?".
+ * to a centered 16:9 region first to strip letterboxing/pillarboxing, then
+ * resized to 9x8 grayscale. Each output bit encodes "is this pixel brighter
+ * than its right neighbor?".
  *
  * dHash is robust to brightness changes, small shifts, and JPEG noise — well
  * suited for matching a UI screen against a reference even when small overlays
- * or compression artifacts vary frame to frame.
+ * or compression artifacts vary frame to frame. Note that pHash still
+ * struggles on stream captures with face-cam overlays; pass --no-phash for
+ * those (see README).
  *
  * @param imagePath - Absolute path to the image to hash.
  * @returns 64-bit hash as a BigInt.
@@ -19,8 +21,22 @@ async function dHash(imagePath: string): Promise<bigint> {
   const meta = await sharp(imagePath).metadata();
   const w = meta.width ?? 1280;
   const h = meta.height ?? 720;
-  const cropW = Math.floor(w * 0.9);
-  const cropH = Math.floor(h * 0.8);
+
+  // Take the largest centered 16:9 rectangle that fits inside the frame.
+  // For pillarboxed sources (taller than 16:9) we shrink width; for
+  // letterboxed sources (wider than 16:9) we shrink height. This keeps the
+  // dHash input consistent across sources with different black bars and
+  // matches what the JSDoc above promises.
+  const targetAspect = 16 / 9;
+  let cropW: number;
+  let cropH: number;
+  if (w / h >= targetAspect) {
+    cropW = Math.floor(h * targetAspect);
+    cropH = h;
+  } else {
+    cropW = w;
+    cropH = Math.floor(w / targetAspect);
+  }
   const cropX = Math.floor((w - cropW) / 2);
   const cropY = Math.floor((h - cropH) / 2);
 
@@ -88,6 +104,11 @@ export async function filterByPHash(args: {
   threshold: number;
 }): Promise<PHashRecord[]> {
   const { frames, refHash, threshold } = args;
+  if (!Number.isInteger(threshold) || threshold < 0 || threshold > 64) {
+    throw new RangeError(
+      `filterByPHash: threshold must be an integer in [0, 64], got ${threshold}`,
+    );
+  }
   const out: PHashRecord[] = [];
   const total = frames.length;
 
@@ -96,18 +117,16 @@ export async function filterByPHash(args: {
     try {
       const h = await dHash(f.filePath);
       const d = hamming(h, refHash);
-      if (d <= threshold) {
+      if (d <= threshold)
         out.push({ ...f, hashHex: h.toString(16), distance: d });
-      }
     } catch (err) {
       console.warn(
         `[phash] frame ${f.frameId} hash failed: ${err instanceof Error ? err.message : err}`,
       );
     }
 
-    if ((i + 1) % 500 === 0 || i === total - 1) {
+    if ((i + 1) % 500 === 0 || i === total - 1)
       console.log(`[phash] ${i + 1}/${total} candidates=${out.length}`);
-    }
   }
 
   return out;
