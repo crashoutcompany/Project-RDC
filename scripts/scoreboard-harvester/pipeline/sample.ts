@@ -8,7 +8,8 @@ import { FrameRecord } from "../types";
  * Uses VideoToolbox hardware acceleration on Apple Silicon for ~3x speedup.
  * Frames are normalized to 1280px wide so downstream pHash + OCR see a
  * consistent scale. If the directory already has frames, extraction is
- * skipped (resumability).
+ * skipped (resumability) — but the frame count is sanity-checked against
+ * the expected duration to detect a previously-interrupted extraction.
  *
  * @param args.ffmpegPath - Resolved path to ffmpeg binary.
  * @param args.videoPath - Absolute path to the input video.
@@ -16,6 +17,8 @@ import { FrameRecord } from "../types";
  * @param args.fps - Sampling rate (frames per second). 1 is plenty for end-game scoreboards.
  * @param args.start - Optional start time in seconds (for testing on a slice).
  * @param args.end - Optional end time in seconds.
+ * @param args.durationSec - Optional source duration; used to sanity-check
+ *   reused frame counts on resume. Skipped when undefined.
  * @returns Array of FrameRecord, one per extracted frame.
  */
 export async function sampleFrames(args: {
@@ -25,8 +28,10 @@ export async function sampleFrames(args: {
   fps: number;
   start?: number;
   end?: number;
+  durationSec?: number;
 }): Promise<FrameRecord[]> {
-  const { ffmpegPath, videoPath, framesDir, fps, start, end } = args;
+  const { ffmpegPath, videoPath, framesDir, fps, start, end, durationSec } =
+    args;
   fs.mkdirSync(framesDir, { recursive: true });
 
   const existing = fs
@@ -52,6 +57,28 @@ export async function sampleFrames(args: {
     ffArgs.push(path.join(framesDir, "%06d.jpg"));
     await runSpawn(ffmpegPath, ffArgs);
   } else {
+    // Detect previously-interrupted extractions. We don't auto-delete because
+    // the user might be running with an intentional --end slice change; warn
+    // loudly and tell them how to recover.
+    if (durationSec !== undefined && durationSec > 0) {
+      const sliceSec = (end ?? durationSec) - (start ?? 0);
+      const expected = Math.floor(sliceSec * fps);
+      const lower = Math.floor(expected * 0.9);
+      const upper = Math.ceil(expected * 1.1);
+      if (existing.length < lower || existing.length > upper) {
+        console.warn(
+          `[sample] WARNING: reusing ${existing.length} frames but expected ~${expected} ` +
+            `for a ${Math.round(sliceSec)}s slice at ${fps} fps.`,
+        );
+        console.warn(
+          `[sample] A previous extraction was likely interrupted. To re-extract, run:`,
+        );
+        console.warn(`[sample]   rm -rf ${framesDir}`);
+        console.warn(
+          `[sample] (or pass a different --start/--end if this is intentional).`,
+        );
+      }
+    }
     console.log(`[sample] reusing ${existing.length} frames`);
   }
 

@@ -1,4 +1,5 @@
 import { spawn, SpawnOptions } from "child_process";
+import { createHash } from "crypto";
 
 /**
  * Runs a command with inherited stdio and resolves on clean exit. Used for
@@ -87,4 +88,56 @@ export function sanitizeUrl(url: string): string {
   // Only strip backslashes that precede known URL metacharacters. Keeps any
   // backslashes that are intentionally part of the URL path (extremely rare).
   return url.replace(/\\([?&=#])/g, "$1");
+}
+
+/**
+ * Stable slug derived from a video URL, used as the per-video output dir.
+ * Falls back to a SHA-1 prefix for non-YouTube URLs so two different Twitch
+ * / Vimeo / arbitrary URLs don't collide on the literal string "video".
+ *
+ * @param url - Source URL (already sanitized).
+ * @returns 11-character slug suitable for use as a directory name.
+ */
+export function urlToSlug(url: string): string {
+  const ytId = extractYoutubeId(url);
+  if (ytId) return ytId;
+  return createHash("sha1").update(url).digest("hex").slice(0, 11);
+}
+
+/**
+ * Parses a CLI string into a finite number, enforcing optional bounds.
+ * Exits the process with a clear error if the input is not a number or is
+ * out of range — much better UX than letting NaN silently propagate into
+ * ffmpeg filter strings or comparison operators downstream.
+ *
+ * @param args.name - Flag name (without `--`), used in error messages.
+ * @param args.raw - Raw string value from parseArgs (or undefined).
+ * @param args.kind - "int" uses parseInt(.,10); "float" uses parseFloat.
+ * @param args.min - Optional inclusive lower bound.
+ * @param args.max - Optional inclusive upper bound.
+ * @returns The parsed number, or undefined if `raw` was undefined/empty.
+ */
+export function parseFiniteNumber(args: {
+  name: string;
+  raw: string | undefined;
+  kind: "int" | "float";
+  min?: number;
+  max?: number;
+}): number | undefined {
+  const { name, raw, kind, min, max } = args;
+  if (raw === undefined || raw === "") return undefined;
+  const v = kind === "int" ? parseInt(raw, 10) : parseFloat(raw);
+  if (!Number.isFinite(v)) {
+    console.error(`Invalid --${name}: must be a number, got "${raw}"`);
+    process.exit(1);
+  }
+  if (min !== undefined && v < min) {
+    console.error(`Invalid --${name}: must be >= ${min}, got ${v}`);
+    process.exit(1);
+  }
+  if (max !== undefined && v > max) {
+    console.error(`Invalid --${name}: must be <= ${max}, got ${v}`);
+    process.exit(1);
+  }
+  return v;
 }

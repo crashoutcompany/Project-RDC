@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -12,18 +12,24 @@ export interface DepCheckResult {
 }
 
 /**
- * Locates a binary on PATH using `command -v`.
+ * Locates a binary on PATH using `command -v`. `cmd` is passed as a positional
+ * argument to /bin/sh, NOT interpolated into the script body, so shell
+ * metacharacters in `cmd` are not evaluated — safe even if a future caller
+ * forwards user input here.
  *
  * @param cmd - The binary name to resolve.
  * @returns The absolute path, or null if not found.
  */
 function which(cmd: string): string | null {
-  try {
-    const out = execSync(`command -v ${cmd}`, { encoding: "utf8" }).trim();
-    return out || null;
-  } catch {
-    return null;
+  const result = spawnSync(
+    "/bin/sh",
+    ["-c", 'command -v "$1"', "sh", cmd],
+    { encoding: "utf8" },
+  );
+  if (result.status === 0) {
+    return result.stdout.trim() || null;
   }
+  return null;
 }
 
 /**

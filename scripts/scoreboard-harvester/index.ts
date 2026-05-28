@@ -22,7 +22,7 @@ import { filterByPHash, loadReferenceHash } from "./pipeline/phash";
 import { ocrFrames } from "./pipeline/ocr";
 import { dedupAndSave } from "./pipeline/dedup";
 import { submitMatches } from "./pipeline/submit";
-import { extractYoutubeId, sanitizeUrl } from "./utils";
+import { parseFiniteNumber, sanitizeUrl, urlToSlug } from "./utils";
 import { FrameRecord, Manifest, ResolvedConfig } from "./types";
 import {
   DEFAULT_GAME_ID,
@@ -110,39 +110,97 @@ function parseInputs(): ParsedArgs {
     process.exit(1);
   }
 
-  // Per-game defaults; CLI flags override when provided.
-  const fps = values.fps ? parseFloat(values.fps) : profile.defaults.fps;
-  const ocrMinKeywords = values["ocr-min-keywords"]
-    ? parseInt(values["ocr-min-keywords"] as string, 10)
-    : profile.defaults.minKeywords;
-  const dedupGap = values["dedup-gap"]
-    ? parseInt(values["dedup-gap"] as string, 10)
-    : profile.defaults.dedupGap;
-  const skipAheadSec = values["skip-ahead-sec"]
-    ? parseFloat(values["skip-ahead-sec"] as string)
-    : profile.defaults.minMatchIntervalSec;
+  // Per-game defaults; CLI flags override when provided. All numeric flags go
+  // through parseFiniteNumber which fail-fast on NaN/out-of-range instead of
+  // letting bad values silently propagate into ffmpeg or comparison operators.
+  const fps =
+    parseFiniteNumber({
+      name: "fps",
+      raw: values.fps,
+      kind: "float",
+      min: 0.01,
+      max: 60,
+    }) ?? profile.defaults.fps;
+  const ocrMinKeywords =
+    parseFiniteNumber({
+      name: "ocr-min-keywords",
+      raw: values["ocr-min-keywords"],
+      kind: "int",
+      min: 1,
+    }) ?? profile.defaults.minKeywords;
+  const dedupGap =
+    parseFiniteNumber({
+      name: "dedup-gap",
+      raw: values["dedup-gap"],
+      kind: "int",
+      min: 0,
+    }) ?? profile.defaults.dedupGap;
+  const skipAheadSec =
+    parseFiniteNumber({
+      name: "skip-ahead-sec",
+      raw: values["skip-ahead-sec"],
+      kind: "float",
+      min: 0,
+    }) ?? profile.defaults.minMatchIntervalSec;
   const skipAheadFrames = values["no-skip-ahead"]
     ? 0
     : Math.max(0, Math.floor(skipAheadSec * fps));
+  const phashThreshold = parseFiniteNumber({
+    name: "phash-threshold",
+    raw: values["phash-threshold"],
+    kind: "int",
+    min: 0,
+    max: 64,
+  })!;
+  const quality = parseFiniteNumber({
+    name: "quality",
+    raw: values.quality,
+    kind: "int",
+    min: 144,
+    max: 4320,
+  })!;
+  const start = parseFiniteNumber({
+    name: "start",
+    raw: values.start,
+    kind: "float",
+    min: 0,
+  });
+  const end = parseFiniteNumber({
+    name: "end",
+    raw: values.end,
+    kind: "float",
+    min: 0,
+  });
+  const sessionId = parseFiniteNumber({
+    name: "session-id",
+    raw: values["session-id"],
+    kind: "int",
+    min: 1,
+  });
+
+  if (start !== undefined && end !== undefined && end <= start) {
+    console.error(
+      `Invalid --end: must be greater than --start (got start=${start}, end=${end})`,
+    );
+    process.exit(1);
+  }
 
   const config: ResolvedConfig = {
     gameId: profile.id,
     out: path.resolve(values.out as string),
     fps,
     noPhash: Boolean(values["no-phash"]),
-    phashThreshold: parseInt(values["phash-threshold"] as string, 10),
+    phashThreshold,
     ocrMinKeywords,
     requireEndScreen: Boolean(values["require-end-screen"]),
     dedupGap,
     skipAheadFrames,
-    quality: parseInt(values.quality as string, 10),
+    quality,
     keepFrames: Boolean(values["keep-frames"]),
-    start: values.start ? parseFloat(values.start) : undefined,
-    end: values.end ? parseFloat(values.end) : undefined,
+    start,
+    end,
     submit: Boolean(values.submit),
-    sessionId: values["session-id"]
-      ? parseInt(values["session-id"], 10)
-      : undefined,
+    sessionId,
     referencePath: values.reference
       ? path.resolve(values.reference)
       : path.join(
@@ -314,7 +372,9 @@ async function acquireVideo(args: {
   let durationSec: number;
 
   if (url) {
-    videoId = extractYoutubeId(url) ?? "video";
+    // YouTube URLs use their 11-char watch ID; other URLs get a SHA-1 prefix
+    // so two different non-YouTube URLs don't collide on the literal "video".
+    videoId = urlToSlug(url);
     // Nested: out/<game-id>/<video-id>/ — keeps games separated when the same
     // video is processed with different profiles.
     const workDir = path.join(config.out, config.gameId, videoId);
@@ -486,6 +546,7 @@ async function main(): Promise<void> {
     fps: config.fps,
     start: config.start,
     end: config.end,
+    durationSec,
   });
   console.log(`[sample] ${frames.length} frames ready`);
 
