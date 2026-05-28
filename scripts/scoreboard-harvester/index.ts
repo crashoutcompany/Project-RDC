@@ -24,15 +24,14 @@ import { dedupAndSave } from "./pipeline/dedup";
 import { submitMatches } from "./pipeline/submit";
 import { parseFiniteNumber, sanitizeUrl, urlToSlug } from "./utils";
 import { FrameRecord, Manifest, ResolvedConfig } from "./types";
-import {
-  DEFAULT_GAME_ID,
-  listGameIds,
-  resolveProfile,
-} from "./games/registry";
+import { DEFAULT_GAME_ID, listGameIds, resolveProfile } from "./games/registry";
 import type { GameProfile } from "./games/types";
 
 const HARVESTER_ROOT = __dirname;
 const COMMANDS = ["extract", "bootstrap"] as const;
+const DEFAULT_SAMPLE_WIDTH = 1280;
+const DEFAULT_JPEG_QUALITY = 3;
+const DEFAULT_OCR_CONCURRENCY = 2;
 type Command = (typeof COMMANDS)[number];
 
 interface ParsedArgs {
@@ -68,6 +67,12 @@ function parseInputs(): ParsedArgs {
       "skip-ahead-sec": { type: "string" },
       "no-skip-ahead": { type: "boolean", default: false },
       quality: { type: "string", default: "720" },
+      "sample-width": { type: "string", default: String(DEFAULT_SAMPLE_WIDTH) },
+      "jpeg-quality": { type: "string", default: String(DEFAULT_JPEG_QUALITY) },
+      "ocr-concurrency": {
+        type: "string",
+        default: String(DEFAULT_OCR_CONCURRENCY),
+      },
       "keep-frames": { type: "boolean", default: false },
       start: { type: "string" },
       end: { type: "string" },
@@ -159,6 +164,27 @@ function parseInputs(): ParsedArgs {
     min: 144,
     max: 4320,
   })!;
+  const sampleWidth = parseFiniteNumber({
+    name: "sample-width",
+    raw: values["sample-width"],
+    kind: "int",
+    min: 320,
+    max: 4320,
+  })!;
+  const jpegQuality = parseFiniteNumber({
+    name: "jpeg-quality",
+    raw: values["jpeg-quality"],
+    kind: "int",
+    min: 1,
+    max: 31,
+  })!;
+  const ocrConcurrency = parseFiniteNumber({
+    name: "ocr-concurrency",
+    raw: values["ocr-concurrency"],
+    kind: "int",
+    min: 1,
+    max: 8,
+  })!;
   const start = parseFiniteNumber({
     name: "start",
     raw: values.start,
@@ -196,6 +222,9 @@ function parseInputs(): ParsedArgs {
     dedupGap,
     skipAheadFrames,
     quality,
+    sampleWidth,
+    jpegQuality,
+    ocrConcurrency,
     keepFrames: Boolean(values["keep-frames"]),
     start,
     end,
@@ -332,6 +361,9 @@ I/O:
   --out <dir>             Output root (default: ./out → out/<game>/<video>/)
   --fps <n>               Frames per second to sample (game-default if omitted)
   --quality <px>          Max download height (default: 720)
+  --sample-width <px>     Extracted frame width (default: ${DEFAULT_SAMPLE_WIDTH}; try 960)
+  --jpeg-quality <n>      ffmpeg JPEG q value, lower is better (default: ${DEFAULT_JPEG_QUALITY}; try 5)
+  --ocr-concurrency <n>   Persistent OCR workers (default: ${DEFAULT_OCR_CONCURRENCY})
   --start <sec>           Start time slice (debugging)
   --end <sec>             End time slice (debugging)
   --reference <path>      Override pHash reference image
@@ -399,7 +431,9 @@ async function acquireVideo(args: {
   const workDir = path.join(config.out, config.gameId, videoId);
   fs.mkdirSync(workDir, { recursive: true });
   durationSec = await probeDuration(ffprobePath, filePath);
-  console.log(`[input] using local video, duration=${Math.round(durationSec)}s`);
+  console.log(
+    `[input] using local video, duration=${Math.round(durationSec)}s`,
+  );
   return { filePath, videoId, workDir, durationSec };
 }
 
@@ -544,6 +578,8 @@ async function main(): Promise<void> {
     videoPath: filePath,
     framesDir,
     fps: config.fps,
+    sampleWidth: config.sampleWidth,
+    jpegQuality: config.jpegQuality,
     start: config.start,
     end: config.end,
     durationSec,
@@ -560,6 +596,7 @@ async function main(): Promise<void> {
     requireEndScreen: config.requireEndScreen,
     dedupGap: config.dedupGap,
     skipAheadFrames: config.skipAheadFrames,
+    concurrency: config.ocrConcurrency,
   });
   console.log(
     `[ocr] ${confirmed.length} confirmed scoreboard frames` +

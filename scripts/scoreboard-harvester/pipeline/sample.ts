@@ -6,7 +6,7 @@ import { FrameRecord } from "../types";
 /**
  * Extracts frames from a video at the given fps into `framesDir` as JPEGs.
  * Uses VideoToolbox hardware acceleration on Apple Silicon for ~3x speedup.
- * Frames are normalized to 1280px wide so downstream pHash + OCR see a
+ * Frames are normalized to a fixed width so downstream pHash + OCR see a
  * consistent scale. If the directory already has frames, extraction is
  * skipped (resumability) — but the frame count is sanity-checked against
  * the expected duration to detect a previously-interrupted extraction.
@@ -15,6 +15,8 @@ import { FrameRecord } from "../types";
  * @param args.videoPath - Absolute path to the input video.
  * @param args.framesDir - Where to write the JPEG sequence.
  * @param args.fps - Sampling rate (frames per second). 1 is plenty for end-game scoreboards.
+ * @param args.sampleWidth - Output JPEG width in pixels.
+ * @param args.jpegQuality - ffmpeg JPEG quality. Lower is higher quality.
  * @param args.start - Optional start time in seconds (for testing on a slice).
  * @param args.end - Optional end time in seconds.
  * @param args.durationSec - Optional source duration; used to sanity-check
@@ -26,12 +28,23 @@ export async function sampleFrames(args: {
   videoPath: string;
   framesDir: string;
   fps: number;
+  sampleWidth: number;
+  jpegQuality: number;
   start?: number;
   end?: number;
   durationSec?: number;
 }): Promise<FrameRecord[]> {
-  const { ffmpegPath, videoPath, framesDir, fps, start, end, durationSec } =
-    args;
+  const {
+    ffmpegPath,
+    videoPath,
+    framesDir,
+    fps,
+    sampleWidth,
+    jpegQuality,
+    start,
+    end,
+    durationSec,
+  } = args;
   fs.mkdirSync(framesDir, { recursive: true });
 
   const existing = fs
@@ -40,7 +53,9 @@ export async function sampleFrames(args: {
     .sort();
 
   if (existing.length === 0) {
-    console.log(`[sample] extracting frames at ${fps} fps`);
+    console.log(
+      `[sample] extracting frames at ${fps} fps, width=${sampleWidth}, q=${jpegQuality}`,
+    );
     const ffArgs: string[] = [
       "-hide_banner",
       "-loglevel",
@@ -51,6 +66,7 @@ export async function sampleFrames(args: {
     ];
     if (start !== undefined) ffArgs.push("-ss", String(start));
     ffArgs.push("-i", videoPath);
+    ffArgs.push("-map", "0:v:0", "-an", "-sn", "-dn");
     if (end !== undefined) {
       const duration = end - (start ?? 0);
       // ffmpeg silently produces zero output for `-t 0` or negative durations;
@@ -63,8 +79,8 @@ export async function sampleFrames(args: {
       }
       ffArgs.push("-t", String(duration));
     }
-    ffArgs.push("-vf", `fps=${fps},scale=1280:-2`);
-    ffArgs.push("-q:v", "3");
+    ffArgs.push("-vf", `fps=${fps},scale=${sampleWidth}:-2`);
+    ffArgs.push("-q:v", String(jpegQuality));
     ffArgs.push(path.join(framesDir, "%06d.jpg"));
     await runSpawn(ffmpegPath, ffArgs);
   } else {

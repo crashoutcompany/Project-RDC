@@ -29,7 +29,7 @@ Output goes to `out/<game-id>/<video-id>/`. For YouTube the `<video-id>` is the 
 
 1. **Sample** the video at 1 fps (configurable) into `out/<game>/<video>/frames/*.jpg` via ffmpeg with VideoToolbox hwaccel.
 2. **pHash filter** (optional, when a reference exists for the active game): drop frames whose dHash differs from the reference by more than `--phash-threshold`. Massively speeds things up for clean game captures.
-3. **Vision OCR** each surviving frame with the compiled Swift binary. A frame is *confirmed* when its OCR text contains at least `--ocr-min-keywords` of the active game's keyword list.
+3. **Vision OCR** each surviving frame with the compiled Swift binary. A frame is _confirmed_ when its OCR text contains at least `--ocr-min-keywords` of the active game's keyword list.
 4. **Skip-ahead**: once a confirmed run ends, jump forward `--skip-ahead-sec` seconds before resuming OCR. Per-game default; tied to the shortest possible interval between two consecutive matches.
 5. **Dedup**: cluster confirmed frames whose frame-IDs are within `--dedup-gap` of each other into a single match, pick the sharpest frame from the middle of the run, save as `match-NN_t=<hh-mm-ss>.png`.
 6. **Manifest**: write `manifest.json` with the game, source, config, runtime, and per-match metadata.
@@ -68,6 +68,9 @@ bootstrap   Set the pHash reference image for the active --game.
 --out <dir>             Output root (default: ./out)
 --fps <n>               Sample rate (game-default if omitted)
 --quality <px>          Max download height (default: 720)
+--sample-width <px>     Extracted frame width (default: 1280; try 960)
+--jpeg-quality <n>      ffmpeg JPEG q value, lower is better (default: 3; try 5)
+--ocr-concurrency <n>   Persistent OCR workers (default: 2; benchmark 1, 2, 4)
 --start <sec>           Start time slice (debugging)
 --end <sec>             End time slice (debugging)
 --reference <path>      Override pHash reference image
@@ -92,12 +95,38 @@ Tuning live in the GameProfile (`defaults.minMatchIntervalSec`). Overridable per
 
 Real-world impact on RDC RL videos:
 
-| Video | Without skip | With skip-180 | Savings |
-|---|---|---|---|
-| 2 hr, 17 matches | 7,200 frames | ~4,140 frames | ~42% |
-| 1 hr 8 min, 10 matches | 4,103 frames | ~2,300 frames | ~44% |
+| Video                  | Without skip | With skip-180 | Savings |
+| ---------------------- | ------------ | ------------- | ------- |
+| 2 hr, 17 matches       | 7,200 frames | ~4,140 frames | ~42%    |
+| 1 hr 8 min, 10 matches | 4,103 frames | ~2,300 frames | ~44%    |
 
-Trade-off: a noisy mid-match HUD that briefly hits the keyword threshold *and* survives the `dedup-gap` window could cause the loop to skip past a real match. The defaults are tuned to make this very unlikely (≥ 4 unique keywords, run must end naturally), but `--no-skip-ahead` is the escape hatch.
+Trade-off: a noisy mid-match HUD that briefly hits the keyword threshold _and_ survives the `dedup-gap` window could cause the loop to skip past a real match. The defaults are tuned to make this very unlikely (≥ 4 unique keywords, run must end naturally), but `--no-skip-ahead` is the escape hatch.
+
+## Performance tuning
+
+OCR runs through persistent `vision-ocr --daemon` workers. This avoids paying Swift/Vision process startup for every frame, and `--ocr-concurrency` controls how many workers run at once. Results are still applied in frame order so skip-ahead and dedup behave like the old sequential loop.
+
+Frame extraction now exposes the pixel and JPEG quality knobs that usually matter most for throughput. The default stays conservative (`--sample-width 1280 --jpeg-quality 3`), but Rocket League videos are good candidates for benchmarking `--sample-width 960 --jpeg-quality 5`.
+
+Recommended slice benchmark:
+
+```bash
+npm run harvest:build-ocr
+
+npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+  --out ./out/bench-c1 --start 600 --end 900 --keep-frames \
+  --no-phash --ocr-concurrency 1
+
+npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+  --out ./out/bench-c2 --start 600 --end 900 --keep-frames \
+  --no-phash --ocr-concurrency 2
+
+npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+  --out ./out/bench-c4-960 --start 600 --end 900 --keep-frames \
+  --no-phash --ocr-concurrency 4 --sample-width 960 --jpeg-quality 5
+```
+
+Compare runtime plus `confirmed` and saved match counts before changing defaults for a game profile or workflow.
 
 ## Resumability
 
@@ -114,7 +143,9 @@ Interrupt with ^C, restart with the same args, and it picks up where it left off
 {
   "game": "rocket-league",
   "source": { "url": "...", "filePath": "...", "durationSec": 4103, "fps": 1 },
-  "config": { /* resolved flags incl. gameId, skipAheadFrames, etc. */ },
+  "config": {
+    /* resolved flags incl. gameId, skipAheadFrames, etc. */
+  },
   "runtimeMs": 1837886,
   "matches": [
     {
@@ -143,18 +174,18 @@ When wired, the harvester will pass `GameProfile.azureGameId` automatically. For
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| `yt-dlp not found` | `brew install yt-dlp` |
-| `ffmpeg not found` | `brew install ffmpeg` |
-| `vision-ocr binary not built` | `npm run harvest:build-ocr` |
-| `[phash] 0 frames survived filter` | Stream overlays make pHash unreliable. Use `--no-phash` (see below). |
-| No matches detected | Lower `--ocr-min-keywords` (try 3) or `--quality 1080` |
-| Reference image missing | Run `bootstrap --game <id>` once, or drop your own at `reference/<id>/scoreboard.png` |
-| Too many false positives | Raise `--ocr-min-keywords` (try 5), add `--require-end-screen`, or lower `--phash-threshold` |
-| Duplicate detections close in time | Raise `--dedup-gap` (e.g. 20); per-game default is in the profile |
-| Skip-ahead missed a match | Use `--no-skip-ahead` or lower `--skip-ahead-sec` |
-| Vision OCR fails to load | Run from a normal terminal — sandboxed shells block `~/Library/Caches` access |
+| Symptom                            | Fix                                                                                          |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `yt-dlp not found`                 | `brew install yt-dlp`                                                                        |
+| `ffmpeg not found`                 | `brew install ffmpeg`                                                                        |
+| `vision-ocr binary not built`      | `npm run harvest:build-ocr`                                                                  |
+| `[phash] 0 frames survived filter` | Stream overlays make pHash unreliable. Use `--no-phash` (see below).                         |
+| No matches detected                | Lower `--ocr-min-keywords` (try 3) or `--quality 1080`                                       |
+| Reference image missing            | Run `bootstrap --game <id>` once, or drop your own at `reference/<id>/scoreboard.png`        |
+| Too many false positives           | Raise `--ocr-min-keywords` (try 5), add `--require-end-screen`, or lower `--phash-threshold` |
+| Duplicate detections close in time | Raise `--dedup-gap` (e.g. 20); per-game default is in the profile                            |
+| Skip-ahead missed a match          | Use `--no-skip-ahead` or lower `--skip-ahead-sec`                                            |
+| Vision OCR fails to load           | Run from a normal terminal — sandboxed shells block `~/Library/Caches` access                |
 
 ### `--no-phash`: when to use it
 
