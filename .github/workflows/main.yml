@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://ci:ci@127.0.0.1:5432/ci?schema=public' }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://ci:ci@127.0.0.1:5432/ci?schema=public' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
         run: npm run lint
 
   build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -70,8 +70,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://ci:ci@127.0.0.1:5432/ci?schema=public' }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://ci:ci@127.0.0.1:5432/ci?schema=public' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
