@@ -5,11 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const domain =
-  process.env.NODE_ENV === "production"
-    ? "https://project-rdc.vercel.app"
-    : "http://localhost:3000";
-
 /**
  * Capitalizes the first letter of each word in a given text.
  *
