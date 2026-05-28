@@ -17,13 +17,15 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "prepare": "test -z \"$CI\" && husky || true",
-    "update-neon-branch": "tsx scripts/update-neon-branch.ts"
+    "update-neon-branch": "tsx scripts/update-neon-branch.ts",
+    "harvest": "tsx scripts/scoreboard-harvester/index.ts",
+    "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^2.0.23",
+    "@ai-sdk/google": "^2.0.46",
     "@ai-sdk/react": "^2.0.100",
     "@ai-sdk/rsc": "^1.0.77",
     "@auth/prisma-adapter": "^2.11.1",
@@ -102,7 +104,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/ws": "^8.18.1",
-    "eslint": "^9.32.0",
+    "eslint": "^9.39.2",
     "eslint-config-next": "16.0.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -112,7 +114,7 @@
     "neonctl": "^2.18.1",
     "next-devtools-mcp": "^0.3.7",
     "postcss": "^8.5.4",
-    "prettier": "^3.5.3",
+    "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.6.12",
     "prisma": "^7.1.0",
     "prisma-json-types-generator": "^4.0.1",
