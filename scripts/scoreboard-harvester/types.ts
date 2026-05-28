@@ -25,6 +25,12 @@ export interface ResolvedConfig {
    */
   skipAheadFrames: number;
   quality: number;
+  /** Width used when normalizing sampled frame JPEGs for pHash/OCR. */
+  sampleWidth: number;
+  /** ffmpeg JPEG quality for sampled frames. Lower is higher quality. */
+  jpegQuality: number;
+  /** Number of persistent OCR workers to run concurrently. */
+  ocrConcurrency: number;
   keepFrames: boolean;
   start?: number;
   end?: number;
