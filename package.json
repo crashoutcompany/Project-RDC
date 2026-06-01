@@ -37,7 +37,7 @@
     "@better-auth/cli": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.1",
-    "@posthog/ai": "^7.2.1",
+    "@posthog/ai": "^7.20.2",
     "@prisma/adapter-neon": "^7.1.0",
     "@prisma/client": "^7.8.0",
     "@radix-ui/react-avatar": "^1.1.10",
