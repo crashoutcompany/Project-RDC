@@ -57,42 +57,40 @@ export default async function Page({
   )!;
 
   const gameName = slug as GamesEnum;
-  const gameImage = `/images/${gameImages[gameName] || ""}`;
+  const gameImagePath = gameImages[gameName];
+  const gameImage = gameImagePath ? `/images/${gameImagePath}` : "";
 
-  const dashboardData = assembleDashboardData(
-    sessions.data,
-    game.gameName,
-    slug,
-    gameImage,
-  );
-  // Parallelize independent data fetches
   const [sessionsResult, membersResult, winsResult] = await Promise.all([
     getAllSessionsByGame(game.gameId),
     getAllMembers(),
     getWinsPerPlayer(game.gameId),
   ]);
 
-  const sessions = sessionsResult.success
-    ? sessionsResult
-    : { success: false, data: [] };
-  const members = membersResult;
-  const wins = winsResult.success
-    ? winsResult
-    : { success: false, data: { sessions: [] } };
-  const winsPerPlayer = calcWinsPerPlayer(wins.data!);
+  const sessionsData =
+    sessionsResult.success && sessionsResult.data ? sessionsResult.data : [];
+  const winsData =
+    winsResult.success && winsResult.data
+      ? winsResult.data
+      : { sessions: [] };
+  const winsPerPlayer = calcWinsPerPlayer(winsData);
 
-  if (!members.success || !members.data) return <NoMembers />;
+  if (!membersResult.success || !membersResult.data) return <NoMembers />;
+
+  const dashboardData = assembleDashboardData(
+    sessionsData,
+    game.gameName,
+    slug,
+    gameImage,
+  );
 
   let gameComponent: React.ReactNode;
-
-  let component: React.ReactNode;
 
   switch (gameName) {
     case GamesEnum.MarioKart8:
       gameComponent = (
         <Mariokart
           game={game}
-          members={members.data}
+          members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
         />
       );
@@ -101,7 +99,7 @@ export default async function Page({
       gameComponent = (
         <CallOfDuty
           game={game}
-          members={members.data}
+          members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
         />
       );
@@ -110,7 +108,7 @@ export default async function Page({
       gameComponent = (
         <RocketLeague
           game={game}
-          members={members.data}
+          members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
         />
       );
@@ -119,7 +117,7 @@ export default async function Page({
       gameComponent = (
         <Speedrunners
           game={game}
-          members={members.data}
+          members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
         />
       );
@@ -128,23 +126,16 @@ export default async function Page({
       gameComponent = (
         <LethalCompany
           game={game}
-          members={members.data}
+          members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
         />
       );
       break;
   }
 
-  // Extract inline object creation for better readability
-  const gameNameKey = game.gameName
-    .replace(/\s/g, "")
-    .toLowerCase() as keyof typeof gameImages;
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <GameDashboard data={dashboardData}>
-        {gameComponent}
-      </GameDashboard>
+      <GameDashboard data={dashboardData}>{gameComponent}</GameDashboard>
     </div>
   );
 }

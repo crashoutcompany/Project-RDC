@@ -16,15 +16,17 @@ type GameBannerProps = {
  */
 export function GameBanner({ gameName, gameImage, stats }: GameBannerProps) {
   return (
-    <div className="relative h-56 w-full overflow-hidden rounded-xl sm:h-64 md:h-72">
-      <Image
-        src={gameImage}
-        alt={gameName}
-        fill
-        className="object-cover"
-        sizes="100vw"
-        priority
-      />
+    <div className="relative h-56 w-full overflow-hidden rounded-xl bg-muted sm:h-64 md:h-72">
+      {gameImage ? (
+        <Image
+          src={gameImage}
+          alt={gameName}
+          fill
+          className="object-cover"
+          sizes="100vw"
+          priority
+        />
+      ) : null}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
       <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-8">
         <h1 className="mb-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl">
