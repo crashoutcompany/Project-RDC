@@ -85,7 +85,7 @@
     "recharts": "^3.3.0",
     "resend": "^6.5.2",
     "server-only": "^0.0.1",
-    "sharp": "^0.34.3",
+    "sharp": "^0.35.3",
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.11",
