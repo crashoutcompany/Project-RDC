@@ -34,7 +34,7 @@
     "@azure/cognitiveservices-computervision": "^8.2.0",
     "@azure/core-auth": "^1.9.0",
     "@azure/ms-rest-azure-js": "^2.1.0",
-    "@better-auth/cli": "^1.4.1",
+    "@better-auth/cli": "^1.4.21",
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.1",
     "@posthog/ai": "^7.20.2",
