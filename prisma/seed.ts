@@ -2,8 +2,19 @@ import { StatName } from "@/lib/stat-names";
 import * as fs from "fs";
 import prisma from "./db";
 import { capitalizeFirst } from "@/lib/utils";
-import { MembersEnum } from "@/lib/constants";
 import { EnrichedSession } from "./types/session";
+
+/** Local copy so seed does not import `@/lib/constants` (pulls Next `"use server"` helpers). */
+enum MembersEnum {
+  Mark = "mark",
+  Ipi = "ipi",
+  John = "john",
+  Aff = "aff",
+  Lee = "lee",
+  Dylan = "dylan",
+  Ben = "ben",
+  Des = "des",
+}
 
 async function main() {
   console.group("Begin seeding database");

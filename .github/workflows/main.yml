@@ -139,14 +139,7 @@ jobs:
           DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
         run: npm install
 
-      - name: Migrate and seed Neon branch
-        env:
-          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
-          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
-        run: |
-          npx prisma migrate deploy
-          npx tsx prisma/seed.ts
-
+      # Neon branches copy parent schema + data; no migrate/seed needed for public fixtures.
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
