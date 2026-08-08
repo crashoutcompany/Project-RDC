@@ -3,21 +3,6 @@
 // import posthog from "./posthog/server-init";
 // import { v4 } from "uuid";
 
-/**
- * Handles errors that occur during Next.js requests.
- *
- * @description
- * Logs details about errors that occur during request processing, including:
- * - Error digest and message
- * - Request path and method
- * - Router context (Pages vs App router)
- * - Route information and rendering context
- * - Revalidation status
- *
- * @param error - The error object containing digest and error details
- * @param request - Request context including path, method and headers
- * @param context - Next.js runtime context including router and rendering information
- */
 export async function onRequestError(
   error: { digest: string } & Error,
   request: {

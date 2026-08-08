@@ -11,23 +11,6 @@ export type FeatureFlagName = keyof typeof FEATURE_FLAGS;
 
 type Roles = "admin" | "user" | "tester";
 
-/**
- * Component for feature access control based on user roles and environment.
- *
- * Checks user roles against required roles for each feature, supports development-only features,
- * and can redirect unauthorized users. Uses FEATURE_FLAGS for configuration.
- *
- * @param children - Content to render if feature is enabled
- * @param devOnly - If true, feature is only available in development
- * @param shouldRedirect - If true, redirects unauthorized users
- * @param flagName - The feature flag to check
- * @param user - Current user session
- *
- * @example
- * <FeatureFlag flagName="ADMIN_FORM" shouldRedirect user={session}>
- *   <AdminPanel />
- * </FeatureFlag>
- */
 export const FeatureFlag = ({
   children,
   devOnly = false,

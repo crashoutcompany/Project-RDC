@@ -2,14 +2,6 @@ import { H2 } from "@/components/headings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Suspense } from "react";
 
-/**
- * A React component that renders a "Not Found" page with a custom message and an embedded YouTube video.
- * The message can be customized based on the presence of an error in the search parameters.
- *
- * @param {Object} props - The component props.
- * @param {Promise<{ [key: string]: string | string[] | undefined }>} props.searchParams - A promise that resolves to an object containing search parameters.
- * @returns {JSX.Element} The rendered "Not Found" page.
- */
 export default async function NotFound({
   searchParams,
 }: {

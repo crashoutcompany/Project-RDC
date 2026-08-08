@@ -11,15 +11,6 @@ import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
 import { revalidatePath } from "next/cache";
 
-/**
- * Updates the authentication status based on the provided session.
- *
- * If a session is provided, it signs out the user and redirects to the home page.
- * If no session is provided, it redirects the user to the sign-in page.
- *
- * @param {Session | null} session - The current user session.
- * @returns {Promise<void>} A promise that resolves when the operation is complete.
- */
 export const updateAuthStatus = async (session: Session | null) => {
   if (session) {
     revalidatePath("/", "layout");
@@ -28,29 +19,6 @@ export const updateAuthStatus = async (session: Session | null) => {
   } else redirect("/signin");
 };
 
-/**
- * Fetches and validates YouTube video details for RDC sessions
- *
- * @description
- * This server action:
- * 1. Validates that the video ID isn't already in use
- * 2. Fetches video metadata from YouTube API
- * 3. Formats video data for session storage
- * 4. Handles errors including authentication failures
- * 5. Revalidates cached data on successful fetch
- *
- * @param videoId - The YouTube video ID to fetch details for
- * @returns Object containing video details or error information
- * @throws Returns error object if video fetch fails or authentication is invalid
- *
- * @example
- * const { video, error } = await getRDCVideoDetails('dQw4w9WgXcQ', 'Rocket League', 'distinct-id-123');
- * if (error) {
- *   // Handle error case
- * } else {
- *   // Use video details
- * }
- */
 export const getRDCVideoDetails = async (
   videoId: string,
   gameName: string,

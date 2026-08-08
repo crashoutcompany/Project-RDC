@@ -21,10 +21,7 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
   },
 });
 
-/**
- * Gets the current PostHog session ID for linking server-side events to session replays.
- * @returns The current session ID or undefined if not available
- */
+/** PostHog session id for linking server events to replay. */
 export const getPostHogSessionId = (): string | undefined => {
   return posthog.get_session_id();
 };

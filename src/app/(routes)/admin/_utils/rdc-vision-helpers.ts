@@ -6,19 +6,6 @@ import { analyzeScreenShot } from "@/app/actions/visionAction";
 import { getGameIdFromName } from "@/app/actions/adminAction";
 import { VisionResult } from "@/lib/visionTypes";
 
-/**x
- * Handles the analysis of a screenshot using vision recognition
- *
- * @description
- * This function orchestrates the vision analysis process:
- * 1. Converts selected file to base64 format
- * 2. Sends image for vision analysis
- * 3. Returns results for the client to handle
- *
- * @param state - Current state of the vision analysis UI
- * @param sessionPlayers - Array of players in the current session for validation
- * @returns Promise that resolves with the vision analysis results
- */
 export const handleAnalyzeBtnClick = async (
   base64FileContent: string,
   sessionPlayers: Player[],

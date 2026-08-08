@@ -15,35 +15,32 @@ import {
 } from "@/components/ui/dialog";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-
-// import { Session } from "next-auth";
 import prisma from "prisma/db";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { headers } from "next/headers";
 
-export default async function Page() {
+export default function Page() {
   return (
-    <Suspense fallback={<Skeleton className="h-72 w-full" />}>
-      <Component />
-    </Suspense>
+    <div className="mx-auto mt-16 max-w-3xl p-8">
+      <H1 data-testid="profile-shell-marker" className="text-chart-4 mb-6">
+        Profile
+      </H1>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <ProfileContent />
+      </Suspense>
+    </div>
   );
 }
 
-const Component = async () => {
+async function ProfileContent() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/");
-  
-  // ... session.user.email ...
 
-  if (!session) redirect("/");
-
-  // Mask email for privacy
   const maskedEmail = session?.user?.email
     ? session.user.email.replace(/(.{2}).+(@.+)/, "$1***$2")
     : "";
 
-  // Query all sessions submitted by the current user (by email)
   const userSessions = await prisma.session.findMany({
     where: { createdBy: session.user?.email || "" },
     select: {
@@ -56,7 +53,10 @@ const Component = async () => {
   });
 
   return (
-    <div className="mx-auto mt-16 max-w-3xl rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-200 p-8 shadow-xl dark:border-[#23232a] dark:from-[#18181b] dark:to-[#23232a]">
+    <div
+      className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-200 p-8 shadow-xl dark:border-[#23232a] dark:from-[#18181b] dark:to-[#23232a]"
+      data-testid="profile-content"
+    >
       <div className="flex flex-col items-center gap-8 md:flex-row">
         <Avatar className="ring-chart-4 h-40 w-40 shadow-lg ring-4">
           <AvatarImage src={session?.user?.image || Icon.src} />
@@ -81,7 +81,7 @@ const Component = async () => {
       </div>
     </div>
   );
-};
+}
 
 function ProfileTabs({
   userSessions,

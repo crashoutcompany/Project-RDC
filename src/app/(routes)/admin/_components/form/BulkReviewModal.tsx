@@ -52,22 +52,7 @@ interface Props {
   highestSetId: number;
 }
 
-/**
- * BulkReviewModal component for reviewing and assigning matches to sets
- *
- * @description
- * This component allows users to:
- * 1. Review all successfully processed screenshots with detailed match data
- * 2. Assign each match to an existing or new set
- * 3. Create new sets as needed
- * 4. Confirm assignments and update the form state
- *
- * @param props - Component props
- */
-/**
- * Inner component that handles the actual modal content
- * This is remounted when the modal opens with new data via the key prop
- */
+/** Remounted via `key` when the modal opens with new data. */
 const BulkReviewModalContent = (props: Props) => {
   const { onClose, results, existingSets, onConfirm, highestSetId } = props;
 
@@ -98,9 +83,6 @@ const BulkReviewModalContent = (props: Props) => {
     () => new Set(results.map((r) => r.id)),
   );
 
-  /**
-   * Toggles match expansion
-   */
   const toggleMatchExpanded = useCallback((resultId: string) => {
     setExpandedMatches((prev) => {
       const newSet = new Set(prev);
@@ -110,9 +92,6 @@ const BulkReviewModalContent = (props: Props) => {
     });
   }, []);
 
-  /**
-   * Adds a new set option
-   */
   const handleAddSet = useCallback(() => {
     const newSetId = nextNewSetId;
     setSetOptions((prev) => [
@@ -126,9 +105,6 @@ const BulkReviewModalContent = (props: Props) => {
     setNextNewSetId((prev) => prev + 1);
   }, [nextNewSetId]);
 
-  /**
-   * Updates a match assignment
-   */
   const handleAssignmentChange = useCallback(
     (resultId: string, setId: number | null) => {
       setAssignments((prev) =>
@@ -138,9 +114,6 @@ const BulkReviewModalContent = (props: Props) => {
     [],
   );
 
-  /**
-   * Validates and confirms the assignments
-   */
   const handleConfirm = useCallback(() => {
     // Check if all matches are assigned
     const unassignedCount = assignments.filter((a) => a.setId === null).length;
@@ -167,17 +140,11 @@ const BulkReviewModalContent = (props: Props) => {
     onConfirm(groupedAssignments, newSetIds);
   }, [assignments, results, setOptions, onConfirm]);
 
-  /**
-   * Gets winner names from vision data
-   */
   const getWinnerNames = (winners?: VisionPlayer[]): string => {
     if (!winners || winners.length === 0) return "No winner detected";
     return winners.map((w) => w.name).join(", ");
   };
 
-  /**
-   * Formats stats for display
-   */
   const formatStats = (stats: Stat[]): string => {
     if (!stats || stats.length === 0) return "No stats";
     return stats.map((s) => `${s.stat}: ${s.statValue}`).join(", ");
@@ -441,10 +408,7 @@ const BulkReviewModalContent = (props: Props) => {
   );
 };
 
-/**
- * BulkReviewModal wrapper component
- * Uses a key to remount the inner content when the modal opens with new data
- */
+/** Wrapper that remounts content via `key` when results change. */
 const BulkReviewModal = (props: Props) => {
   const { open, onClose, results } = props;
 
