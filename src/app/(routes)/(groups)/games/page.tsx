@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getGamesNav } from "@/lib/constants";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { connection } from "next/server";
 
 export const metadata: Metadata = {
   title: "RDC Games",
@@ -13,9 +14,6 @@ export const metadata: Metadata = {
     "Browse RDC game statistics, player rankings, and session data across Mario Kart, Rocket League, and more.",
 };
 
-/**
- * Games index: H1 commits in the static shell; game cards stream in.
- */
 export default function Page() {
   return (
     <div className="m-16">
@@ -39,11 +37,8 @@ export default function Page() {
   );
 }
 
-/**
- * Cached game card grid for the games index.
- */
 async function GamesGrid() {
-  "use cache";
+  await connection();
   const games = await getGamesNav();
   return (
     <div
@@ -56,7 +51,7 @@ async function GamesGrid() {
             <Card className="group relative aspect-square h-52 w-full min-w-24 overflow-hidden transition-transform duration-700 sm:w-52">
               <Link href={game.url} className="relative block h-full w-full">
                 <Image
-                  className="object-cover transition-transform duration-500 group-hover:scale-125"
+                  className="object-cover transition-transform duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-125"
                   fill
                   sizes="(max-width: 639px) 100vw, 208px"
                   alt=""
@@ -76,9 +71,6 @@ async function GamesGrid() {
   );
 }
 
-/**
- * Matches the loaded games grid footprint (reuses card-sized skeletons).
- */
 function GamesGridSkeleton() {
   return (
     <div className="flex flex-wrap justify-center gap-10">

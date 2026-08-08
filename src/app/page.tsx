@@ -8,10 +8,8 @@ import { getGamesNav } from "@/lib/constants";
 import Image from "next/image";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { connection } from "next/server";
 
-/**
- * Home page: static brand shell + streamed game cards.
- */
 export default function Home() {
   return (
     <div className="m-16">
@@ -71,11 +69,8 @@ export default function Home() {
   );
 }
 
-/**
- * Cached game card grid for the home page.
- */
 async function HomeGames() {
-  "use cache";
+  await connection();
   const games = await getGamesNav();
   return (
     <div
@@ -88,7 +83,7 @@ async function HomeGames() {
             <Card className="group relative aspect-square h-52 w-full min-w-24 overflow-hidden transition-transform duration-700 sm:w-52">
               <Link href={game.url} className="relative block h-full w-full">
                 <Image
-                  className="object-cover transition-transform duration-500 group-hover:scale-125"
+                  className="object-cover transition-transform duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-125"
                   fill
                   sizes="(max-width: 639px) 100vw, 208px"
                   alt=""
@@ -108,9 +103,6 @@ async function HomeGames() {
   );
 }
 
-/**
- * Reuses the same card-grid footprint as the loaded home games section.
- */
 function HomeGamesSkeleton() {
   return (
     <div className="flex flex-wrap justify-center gap-10">

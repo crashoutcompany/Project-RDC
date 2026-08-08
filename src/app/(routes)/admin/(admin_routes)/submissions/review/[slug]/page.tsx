@@ -11,9 +11,6 @@ import { ApproveButton, DeclineButton } from "../_components/ActionButtons";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/**
- * Review edits page: static shell title; session details stream in.
- */
 export default function Page({
   params,
 }: {
@@ -29,9 +26,6 @@ export default function Page({
   );
 }
 
-/**
- * Loads session + edit requests for the review UI.
- */
 async function ReviewContent({
   params,
 }: {

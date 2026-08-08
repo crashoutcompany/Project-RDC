@@ -13,19 +13,26 @@ import { AdminSidebar } from "@/components/admin-sidebar";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/**
- * Admin layout: auth gate is deferred so child page shells can prerender.
- * Sidebar open state uses a static default (cookie sync is not needed for shell).
- */
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
+    <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+      <AuthenticatedAdminShell>{children}</AuthenticatedAdminShell>
+    </Suspense>
+  );
+}
+
+/** Confirms admin session before rendering admin chrome; pages/actions must still enforce auth. */
+async function AuthenticatedAdminShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.role !== "admin") redirect("/");
+
+  return (
     <SidebarProvider defaultOpen>
-      <Suspense fallback={null}>
-        <AuthGate />
-      </Suspense>
-      <Suspense fallback={<Skeleton className="h-screen w-64" />}>
-        <AdminSidebar />
-      </Suspense>
+      <AdminSidebar />
       <SidebarInset className="m-16">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
@@ -41,13 +48,4 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </SidebarInset>
     </SidebarProvider>
   );
-}
-
-/**
- * Request-time auth check. Suspends during prerender so redirect only runs on request.
- */
-async function AuthGate() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/");
-  return null;
 }

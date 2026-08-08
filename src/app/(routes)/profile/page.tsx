@@ -20,9 +20,6 @@ import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { headers } from "next/headers";
 
-/**
- * Profile page: static shell title; session/submissions stream behind Suspense.
- */
 export default function Page() {
   return (
     <div className="mx-auto mt-16 max-w-3xl p-8">
@@ -36,9 +33,6 @@ export default function Page() {
   );
 }
 
-/**
- * Auth-gated profile body with submissions.
- */
 async function ProfileContent() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/");
@@ -89,9 +83,6 @@ async function ProfileContent() {
   );
 }
 
-/**
- * Profile tabs for submissions / settings / favorites.
- */
 function ProfileTabs({
   userSessions,
 }: {
@@ -155,9 +146,6 @@ function ProfileTabs({
   );
 }
 
-/**
- * Settings dialog placeholder.
- */
 function DialogDemo() {
   return (
     <Dialog>

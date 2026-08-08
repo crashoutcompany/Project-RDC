@@ -128,11 +128,6 @@ export async function ocrFrames(
     }
   }
 
-  /**
-   * Logs progress at the same cadence as the old sequential loop.
-   *
-   * @param index - Zero-based frame index that was just resolved.
-   */
   function logProgress(index: number): void {
     if ((index + 1) % 50 === 0 || index === frames.length - 1) {
       console.log(

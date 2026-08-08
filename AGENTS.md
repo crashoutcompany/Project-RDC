@@ -24,7 +24,7 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Code Style
 
-- **JSDoc Comments**: All functions must have JSDoc comments detailing purpose, parameters, and return type
+- **JSDoc Comments**: Only document **meaningful** functions — non-obvious behavior, non-trivial contracts, security/auth boundaries, or tricky data transforms. Skip trivial pages, thin wrappers, skeletons, and anything the name + types already make clear. Prefer a short purpose note over exhaustive `@param` / `@returns` lists.
 - **Conditionals**: Use single-statement if/else/loops without brackets for brevity:
   ```tsx
   if (bool) num = 10;
@@ -132,7 +132,7 @@ When making changes:
 
 1. **Follow existing patterns** - Look at similar files for structure and conventions
 2. **Maintain type safety** - Ensure TypeScript types are correct
-3. **Add JSDoc** - Document all new functions
+3. **Add JSDoc only when it earns its keep** - Document meaningful/non-obvious functions, not every export
 4. **Handle errors** - Use existing error handling patterns
 5. **Invalidate cache** - Revalidate tags after data mutations
 6. **Test authentication** - Verify auth checks for admin operations

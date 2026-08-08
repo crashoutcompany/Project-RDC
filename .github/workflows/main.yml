@@ -1,6 +1,9 @@
 # Fork PRs do not receive repository secrets. Lint/test use inline DB URL fallbacks for prisma generate.
-# Build runs only for push to main and same-repo PRs (Vercel + secrets). Fork PRs: lint + test only;
+# Build + e2e-instant run only for push to main and same-repo PRs (need secrets). Fork PRs: lint + test only;
 # use Vercel preview deployments for full compile/deploy signal on external contributions.
+#
+# e2e-instant uses a Neon preview/ephemeral branch (not secrets.DATABASE_URL) so CI never
+# points Playwright at production. Instant-nav testing API must stay off Vercel (VERCEL=1).
 name: Actions CI
 
 on:
@@ -87,3 +90,76 @@ jobs:
       - name: Run tests
         run: npm run test
         continue-on-error: false
+
+  # Instant-nav Playwright e2e against a Neon PR/ephemeral branch (never prod DATABASE_URL).
+  # INSTANT_NAV_TEST_BUILD=1 is set by npm run test:instant; do not set VERCEL=1 here.
+  e2e-instant:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
+      NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+
+      - name: Resolve Neon branch name
+        id: neon_branch
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "name=preview/pr-${{ github.event.number }}-${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+            echo "ephemeral=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=ci/e2e-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "ephemeral=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or reuse Neon branch
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ${{ steps.neon_branch.outputs.name }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: ${{ secrets.NEON_DATABASE }}
+          role: ${{ secrets.NEON_ROLE }}
+          prisma: true
+
+      - name: Install dependencies
+        env:
+          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
+          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
+        run: npm install
+
+      - name: Migrate and seed Neon branch
+        env:
+          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
+          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
+        run: |
+          npx prisma migrate deploy
+          npx tsx prisma/seed.ts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run instant-nav e2e
+        env:
+          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
+          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
+        run: npm run test:instant
+
+      - name: Delete ephemeral Neon branch
+        if: always() && steps.neon_branch.outputs.ephemeral == 'true' && steps.create_neon_branch.outcome == 'success'
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ steps.neon_branch.outputs.name }}
+          api_key: ${{ secrets.NEON_API_KEY }}

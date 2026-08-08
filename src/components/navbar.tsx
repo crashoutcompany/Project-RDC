@@ -29,9 +29,6 @@ import { AuthButton, ToggleThemeButton } from "./client-buttons";
 import { Skeleton } from "./ui/skeleton";
 import { headers } from "next/headers";
 
-/**
- * Site navbar. Static chrome commits in the shell; games/members/auth stream.
- */
 export const Navbar = async () => {
   return (
     <NavigationMenu
@@ -113,9 +110,6 @@ export const Navbar = async () => {
   );
 };
 
-/**
- * Cached games dropdown links.
- */
 async function GamesNavItems() {
   "use cache";
   const games = await getGamesNav();
@@ -130,16 +124,13 @@ async function GamesNavItems() {
   );
 }
 
-/**
- * Cached members dropdown links.
- */
 async function MembersNavItems() {
   "use cache";
   const members = await getMembersNav();
   return (
     <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
       {members.map((rdc) => (
-        <div key={rdc.url} className="flex gap-5">
+        <li key={rdc.url} className="flex grow gap-5">
           <Avatar>
             <Image
               alt={rdc.alt}
@@ -148,12 +139,18 @@ async function MembersNavItems() {
               width={60}
             />
           </Avatar>
-          <ListItem
-            className="shrink-0"
-            href={rdc.url}
-            title={rdc.navName}
-          />
-        </div>
+          <NavigationMenuLink asChild>
+            <Link
+              prefetch={true}
+              href={rdc.url}
+              className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block shrink-0 space-y-1 rounded-md p-3 leading-none no-underline outline-hidden transition-colors select-none"
+            >
+              <div className="text-sm leading-none font-medium">
+                {rdc.navName}
+              </div>
+            </Link>
+          </NavigationMenuLink>
+        </li>
       ))}
       <ListItem
         className="col-span-full"
@@ -192,9 +189,6 @@ const ListItem = React.forwardRef<
 });
 ListItem.displayName = "ListItem";
 
-/**
- * Mobile auth actions (session-gated).
- */
 const AuthSection = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
   return (
@@ -205,9 +199,6 @@ const AuthSection = async () => {
   );
 };
 
-/**
- * Desktop profile avatar (session-gated).
- */
 const ProfileSection = async () => {
   const session = await auth.api.getSession({ headers: await headers() });
   return (
@@ -234,9 +225,6 @@ const ProfileSection = async () => {
   );
 };
 
-/**
- * Always-visible Admin nav link (auth enforced by admin layout).
- */
 const AdminSection = async () => {
   return (
     <NavigationMenuItem className="hidden md:block">

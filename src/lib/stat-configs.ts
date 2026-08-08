@@ -1,8 +1,5 @@
 import { StatName } from "./stat-names";
 
-/**
- * Interface describing a stat configuration for a game.
- */
 export interface StatConfig {
   id: number;
   name: StatName;
@@ -19,9 +16,6 @@ export interface StatConfig {
   };
 }
 
-/**
- * All stat configurations for supported games, keyed by fieldKey.
- */
 export const STAT_CONFIGS: Record<string, StatConfig> = {
   // Mario Kart 8 Stats
   mk8_place: {
@@ -413,31 +407,16 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
 };
 
 // Utility functions to work with stat configs
-/**
- * Returns the stat config for a given field key.
- * @param fieldKey - The field key to look up.
- * @returns StatConfig or undefined.
- */
 export const getStatConfigByFieldKey = (
   fieldKey: string,
 ): StatConfig | undefined => {
   return STAT_CONFIGS[fieldKey];
 };
 
-/**
- * Returns all stat configs for a given game ID.
- * @param gameId - The game ID.
- * @returns Array of StatConfig.
- */
 export const getStatConfigsByGame = (gameId: number): StatConfig[] => {
   return Object.values(STAT_CONFIGS).filter((stat) => stat.gameId === gameId);
 };
 
-/**
- * Returns all stat configs for a given category.
- * @param category - The stat category.
- * @returns Array of StatConfig.
- */
 export const getStatConfigsByCategory = (
   category: StatConfig["category"],
 ): StatConfig[] => {

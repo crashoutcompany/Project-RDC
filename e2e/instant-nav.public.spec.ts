@@ -1,11 +1,22 @@
 import { test, expect } from "@playwright/test";
 import { instant } from "@next/playwright";
 
+/** Suite origin; keeps initial-load `instant()` aligned with Playwright `baseURL`. */
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
+
+/** Known seeded game slug from generateStaticParams / production data. */
+const GAME_FIXTURE_PATH = "/games/mariokart8";
+
+/** Known seeded member slug from generateStaticParams / production data. */
+const MEMBER_FIXTURE_PATH = "/members/mark";
+
 /**
  * Soft-navigation instant() guards for public routes.
- * Run against a production build with EXPOSE_TESTING_API=1 (see instant-nav.rig.md).
+ * Run via `npm run test:instant` (see instant-nav.rig.md).
  */
 test.describe("instant nav: public soft navigations", () => {
+  test.describe.configure({ retries: 0 });
+
   test("About shell commits under instant()", async ({ page }) => {
     await page.goto("/");
     const trigger = page.getByTestId("nav-about-link");
@@ -25,7 +36,9 @@ test.describe("instant nav: public soft navigations", () => {
     await instant(page, async () => {
       await trigger.click();
       await expect(page.getByTestId("games-shell-marker")).toBeVisible();
+      await expect(page.getByTestId("games-content")).toHaveCount(0);
     });
+    await expect(page.getByTestId("games-content")).toBeVisible();
   });
 
   test("Members shell commits under instant()", async ({ page }) => {
@@ -36,18 +49,19 @@ test.describe("instant nav: public soft navigations", () => {
     await instant(page, async () => {
       await trigger.click();
       await expect(page.getByTestId("members-shell-marker")).toBeVisible();
+      await expect(page.getByTestId("members-content")).toHaveCount(0);
     });
+    await expect(page.getByTestId("members-content")).toBeVisible();
   });
 
   test("Sign-in shell commits under instant()", async ({ page }) => {
-    await page.goto("/");
     await instant(
       page,
       async () => {
         await page.goto("/signin");
         await expect(page.getByTestId("signin-shell-marker")).toBeVisible();
       },
-      { baseURL: "http://localhost:3000" },
+      { baseURL: BASE_URL },
     );
   });
 
@@ -58,7 +72,7 @@ test.describe("instant nav: public soft navigations", () => {
         await page.goto("/feedback");
         await expect(page.getByTestId("feedback-shell-marker")).toBeVisible();
       },
-      { baseURL: "http://localhost:3000" },
+      { baseURL: BASE_URL },
     );
   });
 
@@ -70,9 +84,13 @@ test.describe("instant nav: public soft navigations", () => {
       async () => {
         await page.goto("/");
         await expect(page.getByTestId("home-shell-marker")).toBeVisible();
+        await expect(page.getByTestId("home-games-content")).toHaveCount(0);
       },
-      { baseURL: "http://localhost:3000" },
+      { baseURL: BASE_URL },
     );
+    // Initial-load: reload unlocked document to assert streamed content
+    await page.reload();
+    await expect(page.getByTestId("home-games-content")).toBeVisible();
   });
 
   test("Game detail shell commits under instant()", async ({ page }) => {
@@ -80,14 +98,15 @@ test.describe("instant nav: public soft navigations", () => {
     await expect(page.getByTestId("games-shell-marker")).toBeVisible({
       timeout: 20000,
     });
-    // Prefer a real game card link once content is present; fall back to known slug
-    const gameLink = page.locator('a[href^="/games/"]').first();
+    const gameLink = page.locator(`a[href="${GAME_FIXTURE_PATH}"]`);
     await expect(gameLink).toBeVisible({ timeout: 20000 });
 
     await instant(page, async () => {
       await gameLink.click();
       await expect(page.getByTestId("game-detail-shell-marker")).toBeVisible();
+      await expect(page.getByTestId("game-detail-content")).toHaveCount(0);
     });
+    await expect(page.getByTestId("game-detail-content")).toBeVisible();
   });
 
   test("Member detail shell commits under instant()", async ({ page }) => {
@@ -95,7 +114,7 @@ test.describe("instant nav: public soft navigations", () => {
     await expect(page.getByTestId("members-shell-marker")).toBeVisible({
       timeout: 20000,
     });
-    const memberLink = page.locator('a[href^="/members/"]').first();
+    const memberLink = page.locator(`a[href="${MEMBER_FIXTURE_PATH}"]`);
     await expect(memberLink).toBeVisible({ timeout: 20000 });
 
     await instant(page, async () => {
@@ -103,6 +122,8 @@ test.describe("instant nav: public soft navigations", () => {
       await expect(
         page.getByTestId("member-detail-shell-marker"),
       ).toBeVisible();
+      await expect(page.getByTestId("member-detail-content")).toHaveCount(0);
     });
+    await expect(page.getByTestId("member-detail-content")).toBeVisible();
   });
 });

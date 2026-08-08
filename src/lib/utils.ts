@@ -5,13 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Capitalizes the first letter of each word in a given text.
- *
- * @template T - The type of the input text.
- * @param {T} text - The text to be transformed.
- * @returns {T} - The transformed text with each word's first letter capitalized.
- */
 export const capitalizeFirst = <T>(text: T) => {
   const newText = String(text)
     .split(" ")

@@ -5,11 +5,6 @@ import { capitalizeFirst } from "@/lib/utils";
 import { MembersEnum } from "@/lib/constants";
 import { EnrichedSession } from "./types/session";
 
-/**
- * Seeds the database with RDC members, games, and sessions.
- *
- * Runs all seeding steps and logs progress and errors.
- */
 async function main() {
   console.group("Begin seeding database");
   console.time("Seeding Time");
@@ -29,9 +24,6 @@ async function main() {
 
 // Seed RDC Members
 async function seedRDCMembers() {
-  /**
-   * Seeds RDC members into the database.
-   */
   console.log("--- Seeding RDC Members ---");
 
   await prisma.player.upsert({
@@ -111,9 +103,6 @@ async function seedRDCMembers() {
 
 // Seed Games
 async function seedGames() {
-  /**
-   * Seeds games and their stats into the database.
-   */
   console.log("--- Seeding Games ---");
 
   await prisma.game.upsert({
@@ -224,11 +213,6 @@ async function seedGames() {
 
 // Import and Process Sessions
 async function importSessions() {
-  /**
-   * Imports sessions from a JSON file and populates the database.
-   *
-   * Reads sessions.json, processes each session, and logs progress/errors.
-   */
 
   // Read the sessions.json file
   // ! Add File Path Here

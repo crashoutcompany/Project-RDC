@@ -4,7 +4,7 @@ const baseURL = process.env.BASE_URL ?? "http://localhost:3000";
 
 /**
  * Playwright config for instant-navigation regression tests.
- * Requires a production build with EXPOSE_TESTING_API=1 (see instant-nav.rig.md).
+ * Requires a production build with INSTANT_NAV_TEST_BUILD=1 (see instant-nav.rig.md).
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -22,5 +22,15 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 5"] },
+    },
   ],
+  webServer: {
+    command: "INSTANT_NAV_TEST_BUILD=1 npm run start",
+    url: baseURL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });

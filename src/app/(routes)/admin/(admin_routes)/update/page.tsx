@@ -27,9 +27,6 @@ type DbTableProps<T extends Record<string, unknown>> = {
   columns: (keyof T)[];
 };
 
-/**
- * Simple admin DB preview table.
- */
 function DbTable<T extends Record<string, unknown>>({
   data,
   columns,
@@ -61,9 +58,6 @@ function DbTable<T extends Record<string, unknown>>({
   );
 }
 
-/**
- * Update DB page: H1 in shell; tables stream behind Suspense.
- */
 export default function Page() {
   return (
     <div className="space-y-4">
@@ -75,9 +69,6 @@ export default function Page() {
   );
 }
 
-/**
- * Loads cached games/players/stats for the update forms.
- */
 async function UpdateDatabaseContent() {
   const [statsQuery, gamesQuery, playersQuery] = await Promise.all([
     getAllGameStats(),

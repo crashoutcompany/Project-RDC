@@ -1,6 +1,3 @@
-/**
- * Mock implementation of Prisma for Jest tests.
- */
 const mockPrisma = {
   game: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
   session: { 

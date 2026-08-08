@@ -5,9 +5,6 @@ import { FormValues } from "../../../../_utils/form-helpers";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/**
- * Edit session page: static shell title; form streams with session data.
- */
 export default function Page({
   params,
 }: {
@@ -28,9 +25,6 @@ export default function Page({
   );
 }
 
-/**
- * Loads session data and renders the edit form.
- */
 async function EditSessionContent({
   params,
 }: {

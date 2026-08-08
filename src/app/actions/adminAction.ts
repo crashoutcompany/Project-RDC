@@ -49,15 +49,6 @@ export async function approveSession(sessionId: number) {
   }
 }
 
-/**
- * Retrieves the statistics for a specified game.
- *
- * @param {string} gameName - The name of the game to retrieve statistics for.
- * @returns {Promise<GameStat[]>} A promise that resolves to an array of game statistics.
- * @throws {Error} If the game with the specified name is not found.
- * @returns {Promise<GameStat[]>} Returns an empty array if the game is not found.
- * @throws {Error} If the game statistics cannot be retrieved.
- */
 export async function getGameStats(gameName: string): Promise<GameStat[]> {
   console.log("Looking for gameStats for ", gameName);
   const game = await handlePrismaOperation((prisma) =>
@@ -95,40 +86,6 @@ export async function getGameIdFromName(gameName: string) {
   return game.gameId;
 }
 
-/**
- * Inserts a new session from the admin form.
- *
- * @param {FormValues} session - The session details to be inserted.
- * @returns {Promise<{ error: null | string }>}
- *
- * @example
- * const session = {
- *   game: "Game Name",
- *   sessionName: "Session Name",
- *   sessionUrl: "http://example.com",
- *   thumbnail: "http://example.com/thumbnail.jpg",
- *   date: "2023-10-01",
- *   sets: [
- *     {
- *       setWinners: [{ playerId: 1 }],
- *       matches: [
- *         {
- *           matchWinners: [{ playerId: 1 }],
- *           playerSessions: [
- *             {
- *               playerId: 1,
- *               playerStats: [{ stat: "RL_SCORE", statValue: 100 }],
- *             },
- *           ],
- *         },
- *       ],
- *     },
- *   ],
- * };
- * const result = await insertNewSessionFromAdmin(session);
- * console.log(result); // { error: null }
- *
- */
 export const insertNewSessionFromAdmin = async (
   session: FormValues,
 ): Promise<{ error: null | string }> => {

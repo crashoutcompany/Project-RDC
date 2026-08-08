@@ -69,9 +69,6 @@ const SetManager = () => {
   const players = watch(`players`);
   const gameName = watch(`game`);
 
-  /**
-   * Processes vision players into form-compatible player sessions
-   */
   const processTeamPlayers = useCallback((teamPlayers: VisionPlayer[]) => {
     return teamPlayers.map((player) => {
       const formattedStats = player.stats.map((stat: Stat) => ({
@@ -88,9 +85,6 @@ const SetManager = () => {
     });
   }, []);
 
-  /**
-   * Converts a BulkProcessingResult to a form-compatible Match object
-   */
   const convertResultToMatch = useCallback(
     (result: BulkProcessingResult): Match | null => {
       if (!result.data) return null;
@@ -112,9 +106,6 @@ const SetManager = () => {
     [processTeamPlayers],
   );
 
-  /**
-   * Handles bulk processing completion from BulkUploadModal
-   */
   const handleBulkProcessingComplete = useCallback(
     (results: BulkProcessingResult[]) => {
       setBulkResults(results);
@@ -123,10 +114,6 @@ const SetManager = () => {
     [],
   );
 
-  /**
-   * Handles confirmation from BulkReviewModal
-   * Creates new sets and adds matches to the appropriate sets
-   */
   const handleBulkReviewConfirm = useCallback(
     (assignments: Map<number, BulkProcessingResult[]>, newSetIds: number[]) => {
       console.log("handleBulkReviewConfirm called", {

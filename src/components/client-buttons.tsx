@@ -6,17 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { ModeToggle } from "./modetoggle";
 
-/**
- * `AuthButton` is a React component that renders a button for authentication actions.
- * It displays "Sign In" if there is no session and "Sign Out" if a session exists.
- * The button's visibility can be controlled based on screen size using the `hideOnSmallScreens` prop.
- *
- * @param {boolean} [hideOnSmallScreens] - If true, the button is hidden on small screens and visible on large screens. If false, the button is visible on small screens and hidden on large screens.
- * @param {boolean} [hasSession] - Server-provided session existence used to avoid hydration mismatches.
- *
- * @returns {JSX.Element} The rendered authentication button component.
- */
-
+/** `hasSession` is server-provided to avoid auth UI hydration mismatch. */
 export const AuthButton = ({
   hideOnSmallScreens: hide,
   hasSession,

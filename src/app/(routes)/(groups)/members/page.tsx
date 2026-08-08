@@ -3,10 +3,8 @@ import { MembersClient } from "./_components/MembersClient";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { H1 } from "@/components/headings";
+import { connection } from "next/server";
 
-/**
- * Members index: H1 commits in the static shell; member grid streams in.
- */
 export default function Page() {
   return (
     <div className="m-16">
@@ -18,11 +16,8 @@ export default function Page() {
   );
 }
 
-/**
- * Loads member nav data for the client grid.
- */
 async function MembersContent() {
-  "use cache";
+  await connection();
   const members = await getMembersNav();
   return (
     <div data-testid="members-content">
@@ -31,9 +26,6 @@ async function MembersContent() {
   );
 }
 
-/**
- * Matches the member avatar grid footprint from MembersClient / (groups)/loading.
- */
 function MembersGridSkeleton() {
   return (
     <div className="flex flex-wrap justify-center gap-10">

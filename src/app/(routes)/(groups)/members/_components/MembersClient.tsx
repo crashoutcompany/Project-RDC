@@ -20,13 +20,10 @@ type Member = Awaited<ReturnType<typeof getMembersNav>>[0];
 
 interface MembersClientProps {
   members: Member[];
-  /** When false, the parent owns the page H1 (instant-nav shell). */
+  
   showHeading?: boolean;
 }
 
-/**
- * Client members grid with optional battle mode toggle.
- */
 export function MembersClient({
   members,
   showHeading = true,
@@ -52,7 +49,7 @@ export function MembersClient({
                   >
                     <Avatar className="h-32 w-32">
                       <Image
-                        className="transition-transform duration-500 group-hover/fill:scale-125"
+                        className="transition-transform duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:group-hover/fill:scale-125"
                         alt={rdc.alt}
                         src={rdc.src || Icon}
                         height={128}
