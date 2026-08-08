@@ -113,13 +113,18 @@ jobs:
 
       - name: Resolve Neon branch name
         id: neon_branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          GIT_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "name=preview/pr-${{ github.event.number }}-${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
-            echo "ephemeral=false" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            printf 'name=preview/pr-%s-%s\n' "$PR_NUMBER" "$HEAD_REF" >> "$GITHUB_OUTPUT"
+            printf 'ephemeral=false\n' >> "$GITHUB_OUTPUT"
           else
-            echo "name=ci/e2e-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "ephemeral=true" >> "$GITHUB_OUTPUT"
+            printf 'name=ci/e2e-%s\n' "$GIT_SHA" >> "$GITHUB_OUTPUT"
+            printf 'ephemeral=true\n' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create or reuse Neon branch
