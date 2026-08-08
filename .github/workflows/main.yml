@@ -93,6 +93,7 @@ jobs:
 
   # Instant-nav Playwright e2e against a Neon PR/ephemeral branch (never prod DATABASE_URL).
   # INSTANT_NAV_TEST_BUILD=1 is set by npm run test:instant; do not set VERCEL=1 here.
+  # Auth secret is required for next build/start (navbar/proxy import better-auth); CI fallback is e2e-only.
   e2e-instant:
     if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
@@ -102,6 +103,13 @@ jobs:
       NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      AUTH_TRUST_HOST: "true"
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET || secrets.BETTER_AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || secrets.AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
+      AUTH_GITHUB_ID: ${{ secrets.AUTH_GITHUB_ID || 'ci-placeholder' }}
+      AUTH_GITHUB_SECRET: ${{ secrets.AUTH_GITHUB_SECRET || 'ci-placeholder' }}
+      AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID || 'ci-placeholder' }}
+      AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET || 'ci-placeholder' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

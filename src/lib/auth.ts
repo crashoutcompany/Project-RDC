@@ -11,6 +11,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  secret: config.AUTH_SECRET || process.env.BETTER_AUTH_SECRET,
   session: {
     modelName: "UserSession", // Maps better-auth's session to Prisma's UserSession model
   },
