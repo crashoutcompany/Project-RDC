@@ -103,13 +103,16 @@ test.describe("instant nav: public soft navigations", () => {
       .locator(`a[href="${GAME_FIXTURE_PATH}"]`);
     await expect(gameLink).toBeVisible({ timeout: 20000 });
 
-    // Warm Partial Prefetch without a full unlocked navigation (keeps dynamic content out of the router cache).
+    // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     await gameLink.scrollIntoViewIfNeeded();
-    await gameLink.hover({ force: true });
-    await page.waitForTimeout(1500);
+    await gameLink.focus();
+    await page.waitForTimeout(2000);
 
     await instant(page, async () => {
-      await gameLink.click();
+      await Promise.all([
+        page.waitForURL(`**${GAME_FIXTURE_PATH}`, { timeout: 15000 }),
+        gameLink.click(),
+      ]);
       await expect(page.getByTestId("game-detail-shell-marker")).toBeVisible({
         timeout: 10000,
       });
@@ -129,13 +132,16 @@ test.describe("instant nav: public soft navigations", () => {
     const memberLink = page.getByTestId("member-link-mark");
     await expect(memberLink).toBeVisible({ timeout: 20000 });
 
-    // Warm Partial Prefetch without a full unlocked navigation (keeps dynamic content out of the router cache).
+    // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     await memberLink.scrollIntoViewIfNeeded();
-    await memberLink.hover({ force: true });
-    await page.waitForTimeout(1500);
+    await memberLink.focus();
+    await page.waitForTimeout(2000);
 
     await instant(page, async () => {
-      await memberLink.click();
+      await Promise.all([
+        page.waitForURL(`**${MEMBER_FIXTURE_PATH}`, { timeout: 15000 }),
+        memberLink.click(),
+      ]);
       await expect(page.getByTestId("member-detail-shell-marker")).toBeVisible({
         timeout: 10000,
       });
