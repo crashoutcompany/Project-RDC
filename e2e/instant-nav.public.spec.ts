@@ -98,15 +98,26 @@ test.describe("instant nav: public soft navigations", () => {
     await expect(page.getByTestId("games-shell-marker")).toBeVisible({
       timeout: 20000,
     });
-    const gameLink = page.locator(`a[href="${GAME_FIXTURE_PATH}"]`);
+    const gameLink = page
+      .getByTestId("games-content")
+      .locator(`a[href="${GAME_FIXTURE_PATH}"]`);
     await expect(gameLink).toBeVisible({ timeout: 20000 });
+
+    // Warm Partial Prefetch without a full unlocked navigation (keeps dynamic content out of the router cache).
+    await gameLink.scrollIntoViewIfNeeded();
+    await gameLink.hover({ force: true });
+    await page.waitForTimeout(1500);
 
     await instant(page, async () => {
       await gameLink.click();
-      await expect(page.getByTestId("game-detail-shell-marker")).toBeVisible();
+      await expect(page.getByTestId("game-detail-shell-marker")).toBeVisible({
+        timeout: 10000,
+      });
       await expect(page.getByTestId("game-detail-content")).toHaveCount(0);
     });
-    await expect(page.getByTestId("game-detail-content")).toBeVisible();
+    await expect(page.getByTestId("game-detail-content")).toBeVisible({
+      timeout: 20000,
+    });
   });
 
   test("Member detail shell commits under instant()", async ({ page }) => {
@@ -114,16 +125,24 @@ test.describe("instant nav: public soft navigations", () => {
     await expect(page.getByTestId("members-shell-marker")).toBeVisible({
       timeout: 20000,
     });
-    const memberLink = page.locator(`a[href="${MEMBER_FIXTURE_PATH}"]`);
+    // Prefer the grid link test id — `a[href=…]` can also match navbar items.
+    const memberLink = page.getByTestId("member-link-mark");
     await expect(memberLink).toBeVisible({ timeout: 20000 });
+
+    // Warm Partial Prefetch without a full unlocked navigation (keeps dynamic content out of the router cache).
+    await memberLink.scrollIntoViewIfNeeded();
+    await memberLink.hover({ force: true });
+    await page.waitForTimeout(1500);
 
     await instant(page, async () => {
       await memberLink.click();
-      await expect(
-        page.getByTestId("member-detail-shell-marker"),
-      ).toBeVisible();
+      await expect(page.getByTestId("member-detail-shell-marker")).toBeVisible({
+        timeout: 10000,
+      });
       await expect(page.getByTestId("member-detail-content")).toHaveCount(0);
     });
-    await expect(page.getByTestId("member-detail-content")).toBeVisible();
+    await expect(page.getByTestId("member-detail-content")).toBeVisible({
+      timeout: 20000,
+    });
   });
 });
