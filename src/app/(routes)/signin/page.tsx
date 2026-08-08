@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 export default async function Page() {
   return (
     <div className="m-10">
-      <H1>Sign in Page</H1>
+      <H1 data-testid="signin-shell-marker">Sign in Page</H1>
       <div className="text-center">
         In order to submit scores you must be logged in. Please login with one
         of the providers below.

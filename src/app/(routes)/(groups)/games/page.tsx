@@ -13,38 +13,16 @@ export const metadata: Metadata = {
     "Browse RDC game statistics, player rankings, and session data across Mario Kart, Rocket League, and more.",
 };
 
-async function GamesContent() {
-  const games = await getGamesNav();
+/**
+ * Games index: H1 commits in the static shell; game cards stream in.
+ */
+export default function Page() {
   return (
     <div className="m-16">
-      <H1>Games</H1>
-      <div className="flex flex-wrap justify-center gap-10">
-        {games.map((game) => (
-          <div key={game.url}>
-            {game.src && (
-              <Card className="group relative aspect-square h-52 w-full min-w-24 overflow-hidden transition-transform duration-700 sm:w-52">
-                <Link
-                  href={game.url}
-                  className="relative block h-full w-full"
-                >
-                  <Image
-                    className="object-cover transition-transform duration-500 group-hover:scale-125"
-                    fill
-                    sizes="(max-width: 639px) 100vw, 208px"
-                    alt=""
-                    src={game.src || ""}
-                  />
-                  <CardHeader className="relative h-1/4 bg-black/50">
-                    <CardTitle className="absolute font-extrabold text-white opacity-100">
-                      {game.name}
-                    </CardTitle>
-                  </CardHeader>
-                </Link>
-              </Card>
-            )}
-          </div>
-        ))}
-      </div>
+      <H1 data-testid="games-shell-marker">Games</H1>
+      <Suspense fallback={<GamesGridSkeleton />}>
+        <GamesGrid />
+      </Suspense>
       <div className="mt-10 flex gap-10">
         <Card className="h-64 flex-1">
           <CardHeader>
@@ -61,10 +39,53 @@ async function GamesContent() {
   );
 }
 
-export default function Page() {
+/**
+ * Cached game card grid for the games index.
+ */
+async function GamesGrid() {
+  "use cache";
+  const games = await getGamesNav();
   return (
-    <Suspense fallback={<Skeleton className="h-72 w-full" />}>
-      <GamesContent />
-    </Suspense>
+    <div
+      className="flex flex-wrap justify-center gap-10"
+      data-testid="games-content"
+    >
+      {games.map((game) => (
+        <div key={game.url}>
+          {game.src && (
+            <Card className="group relative aspect-square h-52 w-full min-w-24 overflow-hidden transition-transform duration-700 sm:w-52">
+              <Link href={game.url} className="relative block h-full w-full">
+                <Image
+                  className="object-cover transition-transform duration-500 group-hover:scale-125"
+                  fill
+                  sizes="(max-width: 639px) 100vw, 208px"
+                  alt=""
+                  src={game.src || ""}
+                />
+                <CardHeader className="relative h-1/4 bg-black/50">
+                  <CardTitle className="absolute font-extrabold text-white opacity-100">
+                    {game.name}
+                  </CardTitle>
+                </CardHeader>
+              </Link>
+            </Card>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Matches the loaded games grid footprint (reuses card-sized skeletons).
+ */
+function GamesGridSkeleton() {
+  return (
+    <div className="flex flex-wrap justify-center gap-10">
+      <Skeleton className="h-52 w-52" />
+      <Skeleton className="h-52 w-52" />
+      <Skeleton className="h-52 w-52" />
+      <Skeleton className="h-52 w-52" />
+    </div>
   );
 }

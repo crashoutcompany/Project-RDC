@@ -8,8 +8,31 @@ import { SessionChangesWrapper } from "../_components/Changes";
 import { Status } from "../_components/Status";
 import { H1, H2 } from "@/components/headings";
 import { ApproveButton, DeclineButton } from "../_components/ActionButtons";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function Page({
+/**
+ * Review edits page: static shell title; session details stream in.
+ */
+export default function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  return (
+    <div className="container mx-auto py-8">
+      <H1 data-testid="admin-review-shell-marker">Review Session</H1>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <ReviewContent params={params} />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * Loads session + edit requests for the review UI.
+ */
+async function ReviewContent({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -22,10 +45,9 @@ export default async function Page({
   if (!session) notFound();
 
   return (
-    <div className="container mx-auto py-8">
-      <H1>Review Session: {session.sessionName}</H1>
+    <div data-testid="admin-review-content">
       <H2 className="text-muted-foreground mt-2 text-sm">
-        Game: {session.Game?.gameName}
+        {session.sessionName} · Game: {session.Game?.gameName}
       </H2>
       <Card className="my-2">
         <CardContent className="p-6">

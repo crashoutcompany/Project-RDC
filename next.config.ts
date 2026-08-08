@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
+    // Instant-nav e2e only — never set EXPOSE_TESTING_API in real production
+    exposeTestingApiInProductionBuild:
+      process.env.EXPOSE_TESTING_API === "1",
   },
   images: {
     remotePatterns: [

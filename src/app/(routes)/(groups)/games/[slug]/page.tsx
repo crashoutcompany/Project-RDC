@@ -156,15 +156,19 @@ export default async function Page({
 
   return (
     <div className="m-16">
-      <H1 className="my-0">{game.gameName}</H1>
-      <TimelineChart
-        gameName={gameNameKey}
-        sessions={sessions.data}
-        title={`${game.gameName} Videos`}
-        desc="Use the keyboard to view specific data for a video"
-      />
-      <Separator className="my-4" />
-      {component}
+      <H1 className="my-0" data-testid="game-detail-shell-marker">
+        {game.gameName}
+      </H1>
+      <div data-testid="game-detail-content">
+        <TimelineChart
+          gameName={gameNameKey}
+          sessions={sessions.data}
+          title={`${game.gameName} Videos`}
+          desc="Use the keyboard to view specific data for a video"
+        />
+        <Separator className="my-4" />
+        {component}
+      </div>
     </div>
   );
 }

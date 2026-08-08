@@ -49,14 +49,17 @@ export default async function Page({
               className="rounded-full"
             />
             <div>
-              <CardTitle className="text-4xl">
+              <CardTitle
+                className="text-4xl"
+                data-testid="member-detail-shell-marker"
+              >
                 {member.data.playerName}
               </CardTitle>
               <CardDescription>Member of RDC</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent data-testid="member-detail-content">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
