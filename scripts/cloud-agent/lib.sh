@@ -21,6 +21,29 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 log() { printf '\n\033[1;34m[cloud-agent]\033[0m %s\n' "$*"; }
 
+# Pinned Neon wsproxy version (matches what the environment was validated with).
+WSPROXY_REF="${WSPROXY_REF:-github.com/neondatabase/wsproxy@v0.0.0-20241104134926-99ed92dd75ba}"
+
+# Install system dependencies (PostgreSQL + Neon wsproxy) if they are missing.
+# Idempotent: on a snapshot/base image that already has them, this is a no-op.
+ensure_system_deps() {
+  if ! command -v pg_lsclusters >/dev/null 2>&1; then
+    log "Installing PostgreSQL ${PG_VERSION}..."
+    sudo apt-get update -y
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-contrib
+  fi
+
+  if ! command -v wsproxy >/dev/null 2>&1; then
+    log "Building Neon wsproxy (${WSPROXY_REF})..."
+    if ! command -v go >/dev/null 2>&1; then
+      sudo apt-get update -y
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y golang-go
+    fi
+    GOBIN=/tmp/gobin GOFLAGS=-mod=mod go install "${WSPROXY_REF}"
+    sudo install -m 0755 /tmp/gobin/wsproxy /usr/local/bin/wsproxy
+  fi
+}
+
 # Start the local PostgreSQL cluster if it is not already online. Idempotent.
 ensure_postgres() {
   if sudo pg_lsclusters -h 2>/dev/null | awk '{print $4}' | grep -q '^online$'; then

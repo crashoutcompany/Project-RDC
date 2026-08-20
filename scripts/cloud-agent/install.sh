@@ -12,6 +12,7 @@ source "${SCRIPT_DIR}/lib.sh"
 
 cd "${REPO_ROOT}"
 
+ensure_system_deps
 ensure_postgres
 ensure_role_db
 write_env_files
