@@ -80,6 +80,21 @@ export async function handlePrismaOperation<T>(
 }
 const connectionString = process.env.DATABASE_URL;
 
+// Local development: when DATABASE_URL points at a local Postgres, route the
+// Neon serverless driver through a local wsproxy instead of Neon's cloud. This
+// keeps the app code path identical to production while allowing a plain local
+// database. In production DATABASE_URL is a Neon host, so this block is skipped.
+if (
+  connectionString?.includes("localhost") ||
+  connectionString?.includes("127.0.0.1")
+) {
+  neonConfig.wsProxy = (host) => `${host}:5433/v1`;
+  neonConfig.useSecureWebSocket = false;
+  neonConfig.pipelineTLS = false;
+  neonConfig.pipelineConnect = false;
+  neonConfig.poolQueryViaFetch = false;
+}
+
 const adapter = new PrismaNeon({ connectionString });
 
 const globalForPrisma = globalThis as unknown as {
