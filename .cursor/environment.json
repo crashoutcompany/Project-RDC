@@ -1,0 +1,15 @@
+{
+  "name": "Project RDC",
+  "install": "bash scripts/cloud-agent/install.sh",
+  "start": "bash scripts/cloud-agent/start-db.sh",
+  "terminals": [
+    {
+      "name": "wsproxy",
+      "command": "bash scripts/cloud-agent/wsproxy.sh"
+    },
+    {
+      "name": "dev",
+      "command": "npm run dev"
+    }
+  ]
+}
