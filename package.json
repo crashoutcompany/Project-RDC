@@ -60,7 +60,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/postcss": "^4.3.0",
     "@tanstack/react-table": "^8.21.3",
-    "ai": "^5.0.102",
+    "ai": "^7.0.78",
     "babel-plugin-react-compiler": "^1.0.0",
     "better-auth": "^1.6.22",
     "botid": "^1.5.11",
