@@ -17,15 +17,24 @@ import {
 import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { MvpOutput, mvpSchema } from "./types";
+import { errorCodes } from "@/lib/constants";
 import { headers } from "next/headers";
+
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof auth.api.getSession>>
+>["user"] & { role?: string };
 
 export const analyzeMvp = async (
   sets: ProcessedSet[],
   sessionId: number,
 ): Promise<MvpOutput> => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) throw new Error("Unauthorized");
+    const authSession = await auth.api.getSession({ headers: await headers() });
+    const user = authSession?.user as AdminUser | undefined;
+    if (!authSession || user?.role !== "admin")
+      throw new Error(errorCodes.NotAuthenticated);
+
+    if (!sessionId || sessionId <= 0) throw new Error("Invalid session ID");
 
     // Fast path: If MVP is already calculated, return it immediately.
     const existingSession = await prisma.session.findFirst({
@@ -44,7 +53,7 @@ export const analyzeMvp = async (
     const now = performance.now();
 
     const model = withTracing(google("gemini-2.5-flash"), posthog, {
-      posthogDistinctId: session.user?.email ?? "Unidentified User",
+      posthogDistinctId: authSession.user?.email ?? "Unidentified User",
       posthogProperties: {
         sessionId,
       },
@@ -86,7 +95,7 @@ export const analyzeMvp = async (
     if (updateResult.success && updateResult.data.count > 0) {
       revalidateTag("getAllSessions", "max");
       after(() =>
-        logMvpUpdateSuccess(sessionId, object, new Date(), duration, session),
+        logMvpUpdateSuccess(sessionId, object, new Date(), duration, authSession),
       );
       return object;
     }

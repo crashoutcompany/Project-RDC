@@ -28,47 +28,33 @@ export const updateAuthStatus = async (session: Session | null) => {
   } else redirect("/signin");
 };
 
-/**
- * Fetches and validates YouTube video details for RDC sessions
- *
- * @description
- * This server action:
- * 1. Validates that the video ID isn't already in use
- * 2. Fetches video metadata from YouTube API
- * 3. Formats video data for session storage
- * 4. Handles errors including authentication failures
- * 5. Revalidates cached data on successful fetch
- *
- * @param videoId - The YouTube video ID to fetch details for
- * @returns Object containing video details or error information
- * @throws Returns error object if video fetch fails or authentication is invalid
- *
- * @example
- * const { video, error } = await getRDCVideoDetails('dQw4w9WgXcQ', 'Rocket League', 'distinct-id-123');
- * if (error) {
- *   // Handle error case
- * } else {
- *   // Use video details
- * }
- */
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof auth.api.getSession>>
+>["user"] & { role?: string };
+
+const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
+
 export const getRDCVideoDetails = async (
   videoId: string,
   gameName: string,
   distinctId: string,
 ): GetRdcVideoDetails => {
-  // TODO Maybe only validate if it's a valid video when clicking next.
   try {
-    const isAuthenticated = await auth.api.getSession({
+    const authSession = await auth.api.getSession({
       headers: await headers(),
     });
-    if (!isAuthenticated) {
+    const user = authSession?.user as AdminUser | undefined;
+    if (!authSession || user?.role !== "admin") {
       posthog.capture({
         event: PostHogEvents.VIDEO_FETCH_DENIED,
         distinctId,
-        properties: { reason: "User not authenticated" },
+        properties: { reason: "User not authenticated or not admin" },
       });
       return { video: null, error: errorCodes.NotAuthenticated };
     }
+
+    if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId))
+      return { video: null, error: "Invalid YouTube video ID." };
 
     const dbRecord = await prisma.session.findFirst({
       where: { videoId },
@@ -77,7 +63,11 @@ export const getRDCVideoDetails = async (
     const apiKey = config.YOUTUBE_API_KEY;
 
     if (!dbRecord) {
-      const apiUrl = `https://youtube.googleapis.com/youtube/v3/videos?part=snippet&part=player&id=${videoId}&key=${apiKey}`;
+      const apiUrl = new URL("https://youtube.googleapis.com/youtube/v3/videos");
+      apiUrl.searchParams.set("part", "snippet");
+      apiUrl.searchParams.set("part", "player");
+      apiUrl.searchParams.set("id", videoId);
+      apiUrl.searchParams.set("key", apiKey ?? "");
       const YTvideo = await fetch(apiUrl);
 
       if (!apiKey) {

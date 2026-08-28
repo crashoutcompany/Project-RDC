@@ -51,8 +51,41 @@ import { insertNewSessionFromAdmin } from "../actions/adminAction";
 import { auth } from "@/lib/auth";
 import prisma from "prisma/db";
 import { errorCodes } from "@/lib/constants";
+import { FormValues } from "../(routes)/admin/_utils/form-helpers";
+import { StatName } from "@/lib/stat-names";
 
 const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+
+const validSession = (): FormValues => ({
+  game: "Call of Duty",
+  sessionName: "Session Name",
+  sessionUrl: "https://www.youtube.com/watch?v=video123",
+  thumbnail: "https://example.com/thumbnail.jpg",
+  date: new Date("2023-10-01"),
+  videoId: "video123",
+  players: [{ playerId: 1, playerName: "Ben" }],
+  sets: [
+    {
+      setId: 1,
+      setWinners: [{ playerId: 1, playerName: "Ben" }],
+      matches: [
+        {
+          matchWinners: [{ playerId: 1, playerName: "Ben" }],
+          playerSessions: [
+            {
+              playerId: 1,
+              playerStats: [
+                { statId: "1", stat: StatName.COD_SCORE, statValue: "100" },
+                { statId: "2", stat: StatName.COD_POS, statValue: "1" },
+              ],
+              playerSessionName: "Ben",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+});
 
 describe("adminAction tests", () => {
   beforeEach(() => {
@@ -77,41 +110,14 @@ describe("adminAction tests", () => {
       (prisma.playerStat.createMany as jest.Mock).mockResolvedValue({});
       (prisma.gameStat.findMany as jest.Mock).mockResolvedValue([
         { statId: 1, statName: "COD_SCORE" },
+        { statId: 2, statName: "COD_POS" },
       ]);
       (prisma.player.findUnique as jest.Mock).mockResolvedValue({
         playerId: 1,
         playerName: "Ben",
       });
 
-      const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
-        game: "Call of Duty",
-        sessionName: "Session Name",
-        sessionUrl: "http://example.com",
-        thumbnail: "http://example.com/thumbnail.jpg",
-        date: new Date("2023-10-01"),
-        videoId: "video123",
-        players: [{ playerId: 1, playerName: "Ben" }],
-        sets: [
-          {
-            setId: 1,
-            setWinners: [{ playerId: 1, playerName: "Ben" }],
-            matches: [
-              {
-                matchWinners: [{ playerId: 1, playerName: "Ben" }],
-                playerSessions: [
-                  {
-                    playerId: 1,
-                    playerStats: [
-                      { statId: "1", stat: "COD_SCORE", statValue: "100" },
-                    ],
-                    playerSessionName: "",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      };
+      const session = validSession();
 
       const result = await insertNewSessionFromAdmin(session);
       expect(result).toEqual({ error: null });
@@ -139,18 +145,7 @@ describe("adminAction tests", () => {
       mockGetSession.mockResolvedValue({ user: { role: "admin" } });
       (prisma.game.findFirst as jest.Mock).mockResolvedValue(null);
 
-      const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
-        game: "Call of Duty",
-        sessionName: "Session Name",
-        sessionUrl: "http://example.com",
-        thumbnail: "http://example.com/thumbnail.jpg",
-        date: new Date("2023-10-01"),
-        videoId: "video123",
-        sets: [],
-        players: [{ playerId: 1, playerName: "Ben" }],
-      };
-
-      const result = await insertNewSessionFromAdmin(session);
+      const result = await insertNewSessionFromAdmin(validSession());
       expect(result).toEqual({ error: "Game not found." });
     });
 
@@ -159,18 +154,7 @@ describe("adminAction tests", () => {
       (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
       (prisma.session.findFirst as jest.Mock).mockResolvedValue({});
 
-      const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
-        game: "Call of Duty",
-        sessionName: "Session Name",
-        sessionUrl: "http://example.com",
-        thumbnail: "http://example.com/thumbnail.jpg",
-        date: new Date("2023-10-01"),
-        videoId: "video123",
-        sets: [],
-        players: [{ playerId: 1, playerName: "Ben" }],
-      };
-
-      const result = await insertNewSessionFromAdmin(session);
+      const result = await insertNewSessionFromAdmin(validSession());
       expect(result).toEqual({ error: "Video already exists." });
     });
 
@@ -180,18 +164,7 @@ describe("adminAction tests", () => {
         throw new Error("Unexpected error");
       });
 
-      const session: Parameters<typeof insertNewSessionFromAdmin>["0"] = {
-        game: "Call of Duty",
-        sessionName: "Session Name",
-        sessionUrl: "http://example.com",
-        thumbnail: "http://example.com/thumbnail.jpg",
-        date: new Date("2023-10-01"),
-        videoId: "video123",
-        sets: [],
-        players: [{ playerId: 1, playerName: "Ben" }],
-      };
-
-      const result = await insertNewSessionFromAdmin(session);
+      const result = await insertNewSessionFromAdmin(validSession());
       expect(result).toEqual({
         error: "Unknown error occurred. Please try again.",
       });
