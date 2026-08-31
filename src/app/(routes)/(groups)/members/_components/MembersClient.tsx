@@ -88,9 +88,15 @@ export function MembersClient({
               canHover ? (
                 <HoverCard key={rdc.name} openDelay={200} closeDelay={200}>
                   <HoverCardTrigger asChild>
-                    <MemberAvatarLink member={rdc} />
+                    <div className="inline-block">
+                      <MemberAvatarLink member={rdc} />
+                    </div>
                   </HoverCardTrigger>
-                  <HoverCardContent align="center" side="right">
+                  <HoverCardContent
+                    align="center"
+                    side="right"
+                    className="pointer-events-none"
+                  >
                     <H3>{rdc.name}</H3>
                     <i className="text-muted-foreground leading-7">
                       {rdc.desc}

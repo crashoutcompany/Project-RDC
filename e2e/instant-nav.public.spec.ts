@@ -133,21 +133,19 @@ test.describe("instant nav: public soft navigations", () => {
       .getByTestId("members-content")
       .getByTestId("member-link-mark");
     await expect(memberLink).toBeVisible({ timeout: 20000 });
+    await expect(memberLink).toHaveAttribute("href", MEMBER_FIXTURE_PATH);
 
     // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     // Center in the viewport so the fixed Battle button cannot cover the tap.
     await memberLink.evaluate((el) =>
       el.scrollIntoView({ block: "center", inline: "nearest" }),
     );
-    await memberLink.focus();
     await page.waitForTimeout(2000);
+    await page.keyboard.press("Escape");
 
     await instant(page, async () => {
       await Promise.all([
-        page.waitForURL(`**${MEMBER_FIXTURE_PATH}`, {
-          timeout: 15000,
-          waitUntil: "commit",
-        }),
+        page.waitForURL(`**${MEMBER_FIXTURE_PATH}`, { timeout: 15000 }),
         memberLink.click(),
       ]);
       await expect(page.getByTestId("member-detail-shell-marker")).toBeVisible({
