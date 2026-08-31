@@ -1,10 +1,16 @@
 "use server";
 
-import { VisionResultCodes } from "@/lib/constants";
+import { VisionResultCodes, errorCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
 import { analyzeScreenShot } from "@/app/actions/visionAction";
-import { getGameIdFromName } from "@/app/actions/adminAction";
 import { VisionResult } from "@/lib/visionTypes";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import prisma from "prisma/db";
+
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof auth.api.getSession>>
+>["user"] & { role?: string };
 
 export const handleAnalyzeBtnClick = async (
   base64FileContent: string,
@@ -12,25 +18,47 @@ export const handleAnalyzeBtnClick = async (
   gameName: string,
 ): Promise<FnReturnType> => {
   try {
-    // Get game ID with error handling
-    let gameId: number;
-    try {
-      gameId = await getGameIdFromName(gameName);
-      if (!gameId) {
-        throw new Error(`Game "${gameName}" not found`);
-      }
-    } catch (error) {
-      console.error("Failed to get game ID:", error);
+    const authUser = await auth.api.getSession({ headers: await headers() });
+    const user = authUser?.user as AdminUser | undefined;
+    if (!authUser || user?.role !== "admin")
+      return {
+        status: VisionResultCodes.Failed,
+        message: errorCodes.NotAuthenticated,
+      };
+
+    if (!base64FileContent?.trim())
+      return {
+        status: VisionResultCodes.Failed,
+        message: "No screenshot provided.",
+      };
+
+    if (!gameName?.trim())
+      return {
+        status: VisionResultCodes.Failed,
+        message: "Game name is required.",
+      };
+
+    if (!sessionPlayers?.length)
+      return {
+        status: VisionResultCodes.Failed,
+        message: "At least one player is required.",
+      };
+
+    const game = await prisma.game.findFirst({
+      where: { gameName },
+      select: { gameId: true },
+    });
+
+    if (!game)
       return {
         status: VisionResultCodes.Failed,
         message: `Unable to find game "${gameName}". Please verify the game name is correct.`,
       };
-    }
 
     const analysisResults = await analyzeScreenShot(
       base64FileContent,
       sessionPlayers,
-      gameId, // TODO: This should be from the selected game
+      game.gameId,
     );
 
     console.log("Analysis results", { analysisResults });

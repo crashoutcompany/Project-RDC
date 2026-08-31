@@ -12,6 +12,12 @@ const isInstantNavTestBuild =
 const nextConfig: NextConfig = {
   cacheComponents: true,
   reactCompiler: true,
+  serverExternalPackages: [
+    "@opentelemetry/sdk-node",
+    "@opentelemetry/resources",
+    "@posthog/ai",
+    "@ai-sdk/otel",
+  ],
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
     exposeTestingApiInProductionBuild: isInstantNavTestBuild,

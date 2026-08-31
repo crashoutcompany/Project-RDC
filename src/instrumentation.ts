@@ -1,8 +1,32 @@
- 
 // import { cookies } from "next/headers";
 // import posthog from "./posthog/server-init";
 // import { v4 } from "uuid";
 
+/**
+ * Registers Node.js-only OpenTelemetry exporters for AI SDK traces.
+ * Skipped on the Edge runtime because `@opentelemetry/sdk-node` is Node-only.
+ */
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { startAiTelemetry } = await import("./posthog/ai-telemetry-register");
+  startAiTelemetry();
+}
+
+/**
+ * Handles errors that occur during Next.js requests.
+ *
+ * @description
+ * Logs details about errors that occur during request processing, including:
+ * - Error digest and message
+ * - Request path and method
+ * - Router context (Pages vs App router)
+ * - Route information and rendering context
+ * - Revalidation status
+ *
+ * @param error - The error object containing digest and error details
+ * @param request - Request context including path, method and headers
+ * @param context - Next.js runtime context including router and rendering information
+ */
 export async function onRequestError(
   error: { digest: string } & Error,
   request: {

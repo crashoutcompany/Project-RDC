@@ -2,7 +2,7 @@
 
 import { GameStat } from "@/generated/prisma/client";
 import prisma, { handlePrismaOperation } from "prisma/db";
-import { FormValues } from "../(routes)/admin/_utils/form-helpers";
+import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { auth } from "@/lib/auth";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
@@ -49,7 +49,14 @@ export async function approveSession(sessionId: number) {
   }
 }
 
-export async function getGameStats(gameName: string): Promise<GameStat[]> {
+export async function getGameStats(
+  gameName: string,
+): Promise<GameStat[] | { error: string }> {
+  const authUser = await auth.api.getSession({ headers: await headers() });
+  const user = authUser?.user as AdminUser | undefined;
+  if (!authUser || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
+
   console.log("Looking for gameStats for ", gameName);
   const game = await handlePrismaOperation((prisma) =>
     prisma.game.findFirst({ where: { gameName } }),
@@ -72,20 +79,6 @@ export async function getGameStats(gameName: string): Promise<GameStat[]> {
   return gameStats.data;
 }
 
-export async function getGameIdFromName(gameName: string) {
-  const game = await prisma.game.findFirst({
-    where: {
-      gameName: gameName,
-    },
-  });
-
-  if (!game) {
-    throw new Error(`Game with name ${gameName} not found`);
-  }
-
-  return game.gameId;
-}
-
 export const insertNewSessionFromAdmin = async (
   session: FormValues,
 ): Promise<{ error: null | string }> => {
@@ -101,8 +94,14 @@ export const insertNewSessionFromAdmin = async (
     if (!user || adminUser?.role !== "admin")
       return { error: errorCodes.NotAuthenticated };
 
+    const parsed = formSchema.safeParse(session);
+    if (!parsed.success)
+      return { error: "Invalid session data. Please review the form." };
+
+    const validatedSession = parsed.data;
+
     const sessionGame = await prisma.game.findFirst({
-      where: { gameName: session.game },
+      where: { gameName: validatedSession.game },
     });
 
     if (!sessionGame) return { error: "Game not found." };
@@ -112,7 +111,7 @@ export const insertNewSessionFromAdmin = async (
       prisma.session.findFirst({
         where: {
           gameId: sessionGame.gameId,
-          AND: { videoId: session.videoId },
+          AND: { videoId: validatedSession.videoId },
         },
       }),
       prisma.gameStat.findMany({
@@ -131,11 +130,11 @@ export const insertNewSessionFromAdmin = async (
       const newSession = await prismaTx.session.create({
         data: {
           gameId: sessionGame.gameId,
-          sessionName: session.sessionName,
-          sessionUrl: session.sessionUrl,
-          thumbnail: session.thumbnail,
-          date: session.date,
-          videoId: session.videoId,
+          sessionName: validatedSession.sessionName,
+          sessionUrl: validatedSession.sessionUrl,
+          thumbnail: validatedSession.thumbnail,
+          date: validatedSession.date,
+          videoId: validatedSession.videoId,
           createdBy: user.user?.email || "SYSTEM",
         },
       });
@@ -144,7 +143,7 @@ export const insertNewSessionFromAdmin = async (
 
       // For each set in the session assign to parent session
       await Promise.all(
-        session.sets.map(async (set, i) => {
+        validatedSession.sets.map(async (set, i) => {
           console.log(
             "\n-- Creating Set From Admin Form Submission:  -- \n",
             set,
@@ -267,7 +266,7 @@ export const insertNewSessionFromAdmin = async (
                       console.log("StatId: ", gameStat!.statId);
                       console.log("Date: ", session.date);
 
-                      const sessionDate = new Date(session.date);
+                      const sessionDate = new Date(validatedSession.date);
                       console.log("Session Date: ", sessionDate);
 
                       return {
@@ -303,9 +302,6 @@ export const insertNewSessionFromAdmin = async (
     console.groupEnd();
   }
 };
-
-export const revalidateAction = async (path: string) =>
-  revalidateTag(path, "max");
 
 export async function addGame(
   formData: FormData,
@@ -370,16 +366,17 @@ export async function addGameStat(
   if (!statName || !gameId || !type)
     return { error: "Missing required fields." };
 
-  // const res = await handlePrismaOperation(() =>
-  //   prisma.gameStat.create({
-  //     data: {
-  //       statName: statName, // TODO Refactor
-  //       gameId: gameId,
-  //       type: type === "INT" ? "INT" : "STRING",
-  //     },
-  //   }),
-  // );
-  // if (!res.success) return { error: res.error || "Failed to add game stat." };
-  // revalidateTag("getAllGameStats");
+  const res = await handlePrismaOperation((prisma) =>
+    prisma.gameStat.create({
+      data: {
+        statName,
+        gameId,
+        type: type === "INT" ? "INT" : "STRING",
+      },
+    }),
+  );
+  if (!res.success) return { error: res.error || "Failed to add game stat." };
+
+  revalidateTag("getAllGameStats", "max");
   return { error: null };
 }

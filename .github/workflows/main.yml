@@ -1,9 +1,11 @@
-# Fork PRs do not receive repository secrets. Lint/test use inline DB URL fallbacks for prisma generate.
-# Build + e2e-instant run only for push to main and same-repo PRs (need secrets). Fork PRs: lint + test only;
+# Fork PRs do not receive repository secrets. Lint/test spin up a local Postgres
+# service and bootstrap Prisma before generate. Build + e2e-instant run only for
+# push to main and same-repo PRs (need secrets). Fork PRs: lint + test only;
 # use Vercel preview deployments for full compile/deploy signal on external contributions.
 #
 # e2e-instant uses a Neon preview/ephemeral branch (not secrets.DATABASE_URL) so CI never
 # points Playwright at production. Instant-nav testing API must stay off Vercel (VERCEL=1).
+
 name: Actions CI
 
 on:
@@ -12,13 +14,30 @@ on:
       - main
   pull_request:
 
+env:
+  CI_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || env.CI_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || env.CI_DATABASE_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,16 +45,22 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"
+          node-version: "22"
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: |
+          npx prisma db push
+          npx prisma generate --sql
 
       - name: Run linter
         run: npm run lint
 
   build:
-    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -48,7 +73,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"
+          node-version: "22"
+          cache: npm
 
       - name: Install Vercel CLI
         run: npm install -g vercel
@@ -57,7 +83,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: npm install
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma generate --sql
 
       - name: Pull Vercel Environment Variables
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
@@ -73,9 +105,23 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || 'postgresql://127.0.0.1:5432/ci?schema=public' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || env.CI_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || env.CI_DATABASE_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,10 +129,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"
+          node-version: "22"
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: |
+          npx prisma db push
+          npx prisma generate --sql
 
       - name: Run tests
         run: npm run test

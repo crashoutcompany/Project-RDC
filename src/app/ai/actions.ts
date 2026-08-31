@@ -2,10 +2,13 @@
 
 import { auth } from "@/lib/auth";
 import { google } from "@ai-sdk/google";
-import { generateObject } from "ai";
-import { withTracing } from "@posthog/ai";
-import posthog from "@/posthog/server-init";
+import { generateText, Output } from "ai";
 import type { ProcessedSet } from "../(routes)/(groups)/games/[slug]/_components/match-data";
+import {
+  AI_TELEMETRY_INCLUDE_RUNTIME_CONTEXT,
+  AiTelemetryProperty,
+  flushAiTelemetry,
+} from "@/posthog/ai-telemetry";
 // import { createStreamableValue } from "@ai-sdk/rsc";
 
 import { mvpSystemPrompt } from "./prompts";
@@ -17,15 +20,24 @@ import {
 import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { MvpOutput, mvpSchema } from "./types";
+import { errorCodes } from "@/lib/constants";
 import { headers } from "next/headers";
+
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof auth.api.getSession>>
+>["user"] & { role?: string };
 
 export const analyzeMvp = async (
   sets: ProcessedSet[],
   sessionId: number,
 ): Promise<MvpOutput> => {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) throw new Error("Unauthorized");
+    const authSession = await auth.api.getSession({ headers: await headers() });
+    const user = authSession?.user as AdminUser | undefined;
+    if (!authSession || user?.role !== "admin")
+      throw new Error(errorCodes.NotAuthenticated);
+
+    if (!sessionId || sessionId <= 0) throw new Error("Invalid session ID");
 
     // Fast path: If MVP is already calculated, return it immediately.
     const existingSession = await prisma.session.findFirst({
@@ -43,26 +55,39 @@ export const analyzeMvp = async (
 
     const now = performance.now();
 
-    const model = withTracing(google("gemini-2.5-flash"), posthog, {
-      posthogDistinctId: session.user?.email ?? "Unidentified User",
-      posthogProperties: {
-        sessionId,
-      },
-    });
+    let output: MvpOutput;
+    try {
+      const result = await generateText({
+        model: google("gemini-2.5-flash"),
+        output: Output.object({ schema: mvpSchema }),
+        system: mvpSystemPrompt,
+        prompt: `Analyze the following game sets and determine the MVP based on the provided statistics: ${JSON.stringify(
+          sets,
+        )}`,
+        runtimeContext: {
+          distinctId: authSession.user?.email ?? "Unidentified User",
+          traceName: "analyze-mvp",
+          properties: {
+            [AiTelemetryProperty.ENVIRONMENT]: process.env.NODE_ENV,
+            [AiTelemetryProperty.SESSION_ID]: sessionId,
+          },
+        },
+        telemetry: {
+          functionId: "analyze-mvp",
+          includeRuntimeContext: AI_TELEMETRY_INCLUDE_RUNTIME_CONTEXT,
+        },
+      });
 
-    const { object, usage } = await generateObject({
-      schema: mvpSchema,
-      model: model,
-      system: mvpSystemPrompt,
-      prompt: `Analyze the following game sets and determine the MVP based on the provided statistics: ${JSON.stringify(
-        sets,
-      )}`,
-    });
+      if (!result.output) throw new Error("MVP analysis produced no result");
 
-    console.log("Total usage:", usage);
+      output = result.output;
+      console.log("Total usage:", result.usage);
+    } finally {
+      after(() => flushAiTelemetry());
+    }
 
     const player = await prisma.player.findFirst({
-      where: { playerName: { startsWith: object.player } },
+      where: { playerName: { startsWith: output.player } },
     });
 
     // Atomically update the session ONLY if an MVP has not been set.
@@ -73,8 +98,8 @@ export const analyzeMvp = async (
           mvpId: null,
         },
         data: {
-          mvpDescription: object.description,
-          mvpStats: object.stats,
+          mvpDescription: output.description,
+          mvpStats: output.stats,
           mvpId: player?.playerId,
         },
       }),
@@ -86,9 +111,15 @@ export const analyzeMvp = async (
     if (updateResult.success && updateResult.data.count > 0) {
       revalidateTag("getAllSessions", "max");
       after(() =>
-        logMvpUpdateSuccess(sessionId, object, new Date(), duration, session),
+        logMvpUpdateSuccess(
+          sessionId,
+          output,
+          new Date(),
+          duration,
+          authSession,
+        ),
       );
-      return object;
+      return output;
     }
 
     // If count is 0, we lost the race. Another process set the MVP.

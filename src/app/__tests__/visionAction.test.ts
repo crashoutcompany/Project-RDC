@@ -20,6 +20,14 @@ jest.mock("@/lib/game-processors/MarioKart8Processor");
 jest.mock("@/lib/game-processors/RocketLeagueProcessor");
 jest.mock("@/lib/game-processors/CoDGunGameProcessor");
 
+jest.mock("@/lib/config", () => ({
+  __esModule: true,
+  default: {
+    DOCUMENT_INTELLIGENCE_ENDPOINT: "https://example.test",
+    DOCUMENT_INTELLIGENCE_API_KEY: "test-key",
+  },
+}));
+
 // Store mock functions in a mutable object that can be accessed after hoisting
 const azureMocks = {
   post: jest.fn(),

@@ -6,7 +6,7 @@ import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { UseFormReturn } from "react-hook-form";
-import { FormValues } from "../(routes)/admin/_utils/form-helpers";
+import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { Prisma } from "@/generated/prisma/client";
 import { headers } from "next/headers";
 
@@ -30,14 +30,20 @@ export async function createSessionEditRequest(
   dirtyFields: UseFormReturn<FormValues>["formState"]["dirtyFields"],
 ): Promise<CreateEditResult> {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { error: errorCodes.NotAuthenticated };
+  const user = session?.user as AdminUser | undefined;
+  if (!session || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
   else if (Object.keys(dirtyFields).length === 0) {
     return { error: "No changes detected to submit." };
   }
 
+  const parsed = formSchema.safeParse(proposedData);
+  if (!parsed.success)
+    return { error: "Invalid session data. Please review the form." };
+
   try {
     const json = JSON.stringify(
-      { proposedData: proposedData, dirtyFields: dirtyFields },
+      { proposedData: parsed.data, dirtyFields: dirtyFields },
       null,
       2,
     );

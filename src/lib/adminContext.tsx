@@ -29,8 +29,12 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
     async (gameName: string): Promise<GameStat[]> => {
       console.log("Getting game stats from db for game: ", gameName);
       try {
-        const gameStats = await getGameStats(gameName);
-        const filteredGameStats = gameStats.filter(
+        const result = await getGameStats(gameName);
+        if (!Array.isArray(result)) {
+          console.error("Error getting game stats: ", result.error);
+          return [];
+        }
+        const filteredGameStats = result.filter(
           (stat) => !stat.statName.endsWith("_DAY"),
         );
         setGameStats(filteredGameStats);

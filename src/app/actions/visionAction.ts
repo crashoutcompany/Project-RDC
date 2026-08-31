@@ -13,13 +13,11 @@ import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { AnalysisResults, Stat, VisionPlayer } from "@/lib/visionTypes";
 import { MarvelRivalsProcessor } from "@/lib/game-processors/MarvelRivalsProcessor";
+import config from "@/lib/config";
 
-const client = DocumentIntelligence(
-  process.env["NEXT_PUBLIC_DOCUMENT_INTELLIGENCE_ENDPOINT"]!,
-  {
-    key: process.env["NEXT_PUBLIC_DOCUMENT_INTELLIGENCE_API_KEY"]!,
-  },
-);
+const client = DocumentIntelligence(config.DOCUMENT_INTELLIGENCE_ENDPOINT!, {
+  key: config.DOCUMENT_INTELLIGENCE_API_KEY!,
+});
 
 export const getGameProcessor = (gameId: number): GameProcessor => {
   switch (gameId) {
