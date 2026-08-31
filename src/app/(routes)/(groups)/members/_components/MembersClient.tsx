@@ -24,15 +24,16 @@ interface MembersClientProps {
 }
 
 /**
- * True when the primary input can hover (desktop). Touch devices are false so
- * HoverCard does not steal the first tap from member links.
+ * True when HoverCard is safe: fine pointer, hover capability, and no touch.
+ * `maxTouchPoints` covers Playwright mobile on Linux, where hover:hover can still match.
  */
 function useCanHover(): boolean {
   const [canHover, setCanHover] = useState(false);
 
   useEffect(() => {
     const mql = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const update = () => setCanHover(mql.matches);
+    const update = () =>
+      setCanHover(navigator.maxTouchPoints === 0 && mql.matches);
     update();
     mql.addEventListener("change", update);
     return () => mql.removeEventListener("change", update);

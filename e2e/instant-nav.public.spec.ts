@@ -129,17 +129,25 @@ test.describe("instant nav: public soft navigations", () => {
       timeout: 20000,
     });
     // Prefer the grid link test id — `a[href=…]` can also match navbar items.
-    const memberLink = page.getByTestId("member-link-mark");
+    const memberLink = page
+      .getByTestId("members-content")
+      .getByTestId("member-link-mark");
     await expect(memberLink).toBeVisible({ timeout: 20000 });
 
     // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
-    await memberLink.scrollIntoViewIfNeeded();
+    // Center in the viewport so the fixed Battle button cannot cover the tap.
+    await memberLink.evaluate((el) =>
+      el.scrollIntoView({ block: "center", inline: "nearest" }),
+    );
     await memberLink.focus();
     await page.waitForTimeout(2000);
 
     await instant(page, async () => {
       await Promise.all([
-        page.waitForURL(`**${MEMBER_FIXTURE_PATH}`, { timeout: 15000 }),
+        page.waitForURL(`**${MEMBER_FIXTURE_PATH}`, {
+          timeout: 15000,
+          waitUntil: "commit",
+        }),
         memberLink.click(),
       ]);
       await expect(page.getByTestId("member-detail-shell-marker")).toBeVisible({
