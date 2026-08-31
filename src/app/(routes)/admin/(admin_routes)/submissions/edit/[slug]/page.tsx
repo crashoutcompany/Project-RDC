@@ -2,8 +2,30 @@ import EntryCreatorForm from "../../../../_components/form/EntryCreatorForm";
 import { handlePrismaOperation } from "prisma/db";
 import { Player } from "@/generated/prisma/client";
 import { FormValues } from "../../../../_utils/form-helpers";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function Page({
+export default function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  return (
+    <div className="container mx-auto py-6">
+      <h1
+        className="mb-6 text-2xl font-bold"
+        data-testid="admin-edit-shell-marker"
+      >
+        Edit Session
+      </h1>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <EditSessionContent params={params} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function EditSessionContent({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -11,7 +33,7 @@ export default async function Page({
   const sessionId = parseInt((await params).slug);
 
   if (isNaN(sessionId))
-    return <div className="container mx-auto py-6">Invalid session ID</div>;
+    return <div>Invalid session ID</div>;
 
   const session = await handlePrismaOperation((prisma) =>
     prisma.session.findUnique({
@@ -52,7 +74,7 @@ export default async function Page({
   );
 
   if (!session?.data) {
-    return <div className="container mx-auto py-6">Session not found</div>;
+    return <div>Session not found</div>;
   }
 
   const players = new Set<
@@ -127,12 +149,11 @@ export default async function Page({
         playerId: player.playerId,
         playerName: player.playerName,
       })),
-    })), // We'll need to transform the data more carefully based on the game type
+    })),
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <h1 className="mb-6 text-2xl font-bold">Edit Session</h1>
+    <div data-testid="admin-edit-content">
       <EntryCreatorForm
         rdcMembers={Array.from(players)}
         defaultValues={defaultValues}

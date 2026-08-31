@@ -1,8 +1,12 @@
 import { handlePrismaOperation } from "prisma/db";
-import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
+import "server-only";
 
-export const getMember = cache(async (slug: string) => {
-  const member = await handlePrismaOperation((prisma) =>
+export const getMember = async (slug: string) => {
+  "use cache";
+  cacheLife("max");
+  cacheTag("getMember", slug);
+  return await handlePrismaOperation((prisma) =>
     prisma.player.findFirst({
       where: {
         playerName: {
@@ -28,6 +32,4 @@ export const getMember = cache(async (slug: string) => {
       },
     }),
   );
-
-  return member;
-});
+};

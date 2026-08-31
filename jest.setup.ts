@@ -1,7 +1,4 @@
-/**
- * Jest setup - runs before each test file.
- * Mocks console methods to reduce noise in test output.
- */
+/** Mocks console methods so test output stays quiet. */
 const noop = () => {};
 
 beforeEach(() => {

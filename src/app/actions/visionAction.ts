@@ -34,22 +34,6 @@ export const getGameProcessor = (gameId: number): GameProcessor => {
   }
 };
 
-/**
- * Analyzes a screenshot using Azure Document Intelligence to extract game stats
- *
- * @description
- * This function:
- * 1. Sends the image to Azure's Document Intelligence API for analysis
- * 2. Processes the response to extract team and player information
- * 3. Validates and normalizes all extracted data
- * 4. Determines match winners based on team scores
- * 5. Flags any potential recognition issues that need manual review
- *
- * @param base64Source - Base64 encoded image data to analyze
- * @param sessionPlayers - Array of valid players in the current session for validation
- * @returns A VisionResult object containing processed data and status information
- * @throws Returns a Failed status with error details if processing fails
- */
 export const analyzeScreenShot = async (
   base64Source: string,
   sessionPlayers: Player[] = [],

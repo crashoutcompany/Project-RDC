@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type DbTableProps<T extends Record<string, unknown>> = {
   data: T[];
@@ -56,7 +58,18 @@ function DbTable<T extends Record<string, unknown>>({
   );
 }
 
-export default async function Page() {
+export default function Page() {
+  return (
+    <div className="space-y-4">
+      <H1 data-testid="admin-update-shell-marker">Update Database</H1>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <UpdateDatabaseContent />
+      </Suspense>
+    </div>
+  );
+}
+
+async function UpdateDatabaseContent() {
   const [statsQuery, gamesQuery, playersQuery] = await Promise.all([
     getAllGameStats(),
     getAllGames(),
@@ -68,9 +81,7 @@ export default async function Page() {
   const players = playersQuery.success ? playersQuery.data : [];
 
   return (
-    <div className="space-y-4">
-      <H1>Update Database</H1>
-
+    <div className="space-y-4" data-testid="admin-update-content">
       <div>
         <H2>Games</H2>
         <form

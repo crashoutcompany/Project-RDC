@@ -48,12 +48,6 @@ const zodFile = z
     error: "Invalid file type. Please upload a valid image.",
   });
 
-/**
- * Converts a File object to a base64 encoded string
- *
- * @param selectedFile - The File object to convert
- * @returns Promise that resolves with the base64 encoded string
- */
 const getFileAsBase64 = async (selectedFile: File): Promise<string | null> => {
   const reader = new FileReader();
 
@@ -74,22 +68,6 @@ const getFileAsBase64 = async (selectedFile: File): Promise<string | null> => {
   }
 };
 
-/**
- * BulkUploadModal component for uploading and processing multiple screenshots
- *
- * @description
- * This component allows users to:
- * 1. Select multiple screenshot files at once
- * 2. Preview selected files before processing
- * 3. Process all files in parallel using the vision API
- * 4. View processing status for each file
- * 5. Trigger a review modal when processing is complete
- *
- * @param props - Component props
- * @param props.onBulkProcessingComplete - Callback when all files are processed
- * @param props.sessionPlayers - Array of players in the current session
- * @param props.gameName - Name of the current game
- */
 const BulkUploadModal = (props: Props) => {
   const { onBulkProcessingComplete, sessionPlayers, gameName } = props;
 
@@ -101,9 +79,6 @@ const BulkUploadModal = (props: Props) => {
   const fileMapRef = useRef<Map<string, File>>(new Map());
   const fileMap = fileMapRef.current;
 
-  /**
-   * Handles file selection from the file input
-   */
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       if (!event.target.files || event.target.files.length === 0) return;
@@ -142,9 +117,6 @@ const BulkUploadModal = (props: Props) => {
     [fileMap],
   );
 
-  /**
-   * Removes a file from the list
-   */
   const handleRemoveFile = useCallback(
     (id: string) => {
       setFiles((prev) => {
@@ -157,9 +129,6 @@ const BulkUploadModal = (props: Props) => {
     [fileMap],
   );
 
-  /**
-   * Updates a single file's status in state
-   */
   const updateFileStatus = useCallback(
     (id: string, updates: Partial<BulkProcessingResult>) => {
       setFiles((prev) =>
@@ -169,9 +138,6 @@ const BulkUploadModal = (props: Props) => {
     [],
   );
 
-  /**
-   * Processes a single file using the vision API and updates status in real-time
-   */
   const processFileWithStatusUpdate = useCallback(
     async (fileResult: BulkProcessingResult): Promise<BulkProcessingResult> => {
       const file = fileMap.get(fileResult.id);
@@ -243,9 +209,6 @@ const BulkUploadModal = (props: Props) => {
     [fileMap, sessionPlayers, gameName, updateFileStatus],
   );
 
-  /**
-   * Processes all pending files in parallel with individual status updates
-   */
   const handleProcessAll = async () => {
     if (files.length === 0) {
       toast.warning("No files to process", { richColors: true });
@@ -306,9 +269,6 @@ const BulkUploadModal = (props: Props) => {
     handleClose();
   };
 
-  /**
-   * Cleans up and closes the modal
-   */
   const handleClose = () => {
     // Clean up preview URLs
     files.forEach((f) => {
@@ -319,9 +279,6 @@ const BulkUploadModal = (props: Props) => {
     setOpen(false);
   };
 
-  /**
-   * Gets the status icon for a file
-   */
   const getStatusIcon = (status: BulkProcessingResult["status"]) => {
     switch (status) {
       case "pending":

@@ -44,28 +44,11 @@ export interface WinnerConfig {
 }
 
 export type GameProcessor = {
-  /**
-   * Process players from the vision data and return a list of processed players (VisionPlayer)
-   * @param playerData - The player data to process
-   * @param sessionPlayers - The session players to validate against
-   * @returns An object containing processed players and a flag indicating if a check is required
-   */
   processPlayers: (
     playerData: AnalyzedTeamData[] | AnalyzedPlayersObj[], // Use a union type here
     sessionPlayers: Player[],
   ) => { processedPlayers: VisionPlayer[]; reqCheckFlag: boolean };
-  /**
-   * Calculate winners based on the processed players' stats and the game configuration
-   * @param players - The processed players
-   * @returns An array of winning players
-   */
   calculateWinners: (players: VisionPlayer[]) => VisionPlayer[];
-  /**
-   * To be used for validating stats of processed players (VisionPlayer)
-   * @param statValue
-   * @param numPlayers = number of players in the match for validations based on player count/team size
-   * @returns
-   */
   validateStats: (
     statValue: string | undefined,
     numPlayers?: number,
@@ -73,13 +56,6 @@ export type GameProcessor = {
     statValue: string;
     reqCheck: boolean;
   };
-  /**
-   * Final check Validate the results of the game based on the processed players and winners
-   * @param visionPlayers - The processed players
-   * @param winners - The winning players
-   * @param requiresCheck - Flag indicating if a check is required
-   * @returns An object containing the status, data, and message
-   */
   validateResults: (
     visionPlayers: VisionPlayer[],
     winners: VisionPlayer[],

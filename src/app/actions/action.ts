@@ -11,15 +11,6 @@ import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
 import { revalidatePath } from "next/cache";
 
-/**
- * Updates the authentication status based on the provided session.
- *
- * If a session is provided, it signs out the user and redirects to the home page.
- * If no session is provided, it redirects the user to the sign-in page.
- *
- * @param {Session | null} session - The current user session.
- * @returns {Promise<void>} A promise that resolves when the operation is complete.
- */
 export const updateAuthStatus = async (session: Session | null) => {
   if (session) {
     revalidatePath("/", "layout");

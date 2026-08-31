@@ -1,9 +1,6 @@
 import { StatName } from "@/lib/stat-names";
 import { getAllGames } from "prisma/lib/games";
 
-/**
- * Enum of RDC member names.
- */
 export enum MembersEnum {
   Mark = "mark",
   Ipi = "ipi",
@@ -15,11 +12,6 @@ export enum MembersEnum {
   Des = "des",
 }
 
-/**
- * Returns navigation data for all games.
- *
- * @returns Promise resolving to an array of game navigation objects.
- */
 export const getGamesNav = async () => {
   const games = await getAllGames();
 

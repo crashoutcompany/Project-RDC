@@ -30,72 +30,60 @@ import { Skeleton } from "./ui/skeleton";
 import { headers } from "next/headers";
 
 export const Navbar = async () => {
-  const games = await getGamesNav();
-  const members = await getMembersNav();
-
   return (
-    <NavigationMenu className="sticky top-0 z-20 mx-auto w-screen rounded-lg bg-inherit px-2">
+    <NavigationMenu
+      className="sticky top-0 z-20 mx-auto w-screen rounded-lg bg-inherit px-2"
+      data-testid="navbar-shell-marker"
+    >
       <NavigationMenuList>
         <NavigationMenuItem className={navigationMenuTriggerStyle()}>
-          <Link href="/">
+          <Link href="/" data-testid="nav-home-link">
             <FillText text="Home" className="text-chart-4" />
           </Link>
         </NavigationMenuItem>
         <NavigationMenuItem className={navigationMenuTriggerStyle()}>
-          <Link href="/about">
+          <Link href="/about" data-testid="nav-about-link">
             <FillText text="About" className="text-chart-4" />
           </Link>
         </NavigationMenuItem>
         <NavigationMenuItem>
-          <NavigationMenuTrigger>
+          <NavigationMenuTrigger data-testid="nav-games-trigger">
             <FillText className="text-chart-4" text="Games" />
           </NavigationMenuTrigger>
           <NavigationMenuContent>
-            <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
-              {games.map((game) => (
-                <ListItem key={game.url} href={game.url} title={game.name}>
-                  {game.desc}
-                </ListItem>
-              ))}
-            </ul>
+            <Suspense
+              fallback={
+                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px]">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </ul>
+              }
+            >
+              <GamesNavItems />
+            </Suspense>
           </NavigationMenuContent>
         </NavigationMenuItem>
         <NavigationMenuItem>
-          <NavigationMenuTrigger>
+          <NavigationMenuTrigger data-testid="nav-members-trigger">
             <FillText className="text-chart-4" text="Members" />
           </NavigationMenuTrigger>
           <NavigationMenuContent>
-            <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
-              {members.map((rdc) => (
-                <div key={rdc.url} className="flex gap-5">
-                  <Avatar>
-                    <Image
-                      alt={rdc.alt}
-                      src={rdc.src || Icon}
-                      height={60}
-                      width={60}
-                    />
-                  </Avatar>
-                  <ListItem
-                    className="shrink-0"
-                    href={rdc.url}
-                    title={rdc.navName}
-                  />
-                </div>
-              ))}
-              <ListItem
-                className="col-span-full"
-                href="/members"
-                title="Browse all members"
-              />
-            </ul>
+            <Suspense
+              fallback={
+                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px]">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </ul>
+              }
+            >
+              <MembersNavItems />
+            </Suspense>
           </NavigationMenuContent>
         </NavigationMenuItem>
         <Suspense fallback={<Skeleton className="h-full w-9" />}>
           <AdminSection />
         </Suspense>
 
-        {/* MOBILE */}
         <NavigationMenuItem className="md:hidden">
           <NavigationMenuTrigger>
             <HamburgerMenuIcon />
@@ -110,7 +98,6 @@ export const Navbar = async () => {
             </ul>
           </NavigationMenuContent>
         </NavigationMenuItem>
-        {/* END MOBILE */}
 
         <Suspense fallback={<Skeleton className="size-10 rounded-full" />}>
           <ProfileSection />
@@ -122,6 +109,57 @@ export const Navbar = async () => {
     </NavigationMenu>
   );
 };
+
+async function GamesNavItems() {
+  "use cache";
+  const games = await getGamesNav();
+  return (
+    <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
+      {games.map((game) => (
+        <ListItem key={game.url} href={game.url} title={game.name}>
+          {game.desc}
+        </ListItem>
+      ))}
+    </ul>
+  );
+}
+
+async function MembersNavItems() {
+  "use cache";
+  const members = await getMembersNav();
+  return (
+    <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
+      {members.map((rdc) => (
+        <li key={rdc.url} className="flex grow gap-5">
+          <Avatar>
+            <Image
+              alt={rdc.alt}
+              src={rdc.src || Icon}
+              height={60}
+              width={60}
+            />
+          </Avatar>
+          <NavigationMenuLink asChild>
+            <Link
+              prefetch={true}
+              href={rdc.url}
+              className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block shrink-0 space-y-1 rounded-md p-3 leading-none no-underline outline-hidden transition-colors select-none"
+            >
+              <div className="text-sm leading-none font-medium">
+                {rdc.navName}
+              </div>
+            </Link>
+          </NavigationMenuLink>
+        </li>
+      ))}
+      <ListItem
+        className="col-span-full"
+        href="/members"
+        title="Browse all members"
+      />
+    </ul>
+  );
+}
 
 const ListItem = React.forwardRef<
   React.ComponentRef<"a">,
@@ -190,7 +228,11 @@ const ProfileSection = async () => {
 const AdminSection = async () => {
   return (
     <NavigationMenuItem className="hidden md:block">
-      <Link className={navigationMenuTriggerStyle()} href="/admin">
+      <Link
+        className={navigationMenuTriggerStyle()}
+        href="/admin"
+        data-testid="nav-admin-link"
+      >
         <FillText className="text-chart-4" text="Admin" />
       </Link>
     </NavigationMenuItem>

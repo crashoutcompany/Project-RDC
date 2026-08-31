@@ -5,7 +5,6 @@ import {
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig, NeonDbError } from "@neondatabase/serverless";
 import ws from "ws";
-import posthog from "@/posthog/server-init";
 import { PrismaClient } from "@/generated/prisma/client";
 
 neonConfig.webSocketConstructor = ws;
@@ -44,9 +43,16 @@ export async function handlePrismaOperation<T>(
     const data = await operation(prisma);
     return { success: true, data };
   } catch (error: any) {
-    posthog.captureException(error, "database-error", {
-      code: error?.code,
-    });
+    // Lazy-load so scripts (prisma seed via tsx) can use this module without
+    // pulling in `server-only` via PostHog/config.
+    try {
+      const { default: posthog } = await import("@/posthog/server-init");
+      posthog.captureException(error, "database-error", {
+        code: error?.code,
+      });
+    } catch {
+      // ignore analytics failures outside the Next server runtime
+    }
     if (error?.code === "P1000")
       console.warn("Database connection error. Database may be expired.");
     if (error instanceof PrismaClientKnownRequestError) {

@@ -21,7 +21,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "prisma/*": ["./prisma/*"]
+      "prisma/*": ["./prisma/*"],
+      "public/*": ["./public/*"]
     },
     "target": "ES2023"
   },

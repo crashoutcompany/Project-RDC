@@ -51,11 +51,6 @@ export const getAvgAndSum = async (
   );
 };
 
-/**
- * Computes set wins and match wins for each player.
- * @param game game record
- * @returns Array of object containing info about the amount of match and set wins a player has.
- */
 export const calcWinsPerPlayer = (
   game: QueryResponseData<Awaited<ReturnType<typeof getWinsPerPlayer>>>,
 ) => {
@@ -99,12 +94,6 @@ type MembersPerPosition = {
 type FirstThroughEighth = {
   [K in 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8]?: number;
 };
-/**
- * Computes per player, the amount of times they've placed first, second, third, and last. Also includes their placing 1 - 8.
- * @param gameId id of the game record.
- * @param statName statName of the stat you are checking.
- * @returns Array of objects containing info about a player's placings.
- */
 export const calcMostPerPlacing = async (
   gameId: number,
   statName: StatEndsWith<"POS">,
@@ -180,12 +169,6 @@ export const calcMostPerPlacing = async (
   return data;
 };
 
-/**
- * Computes the total of a given stat per player.
- * @param gameId id of the game record.
- * @param statName statName of the stat you are checking for.
- * @returns Computes total of stat per player
- */
 export const calcStatPerPlayer = async (gameId: number, statName: StatName) => {
   const stats = await getStatPerPlayer(gameId, statName);
 
