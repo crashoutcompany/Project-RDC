@@ -1,7 +1,16 @@
- 
 // import { cookies } from "next/headers";
 // import posthog from "./posthog/server-init";
 // import { v4 } from "uuid";
+
+/**
+ * Registers Node.js-only OpenTelemetry exporters for AI SDK traces.
+ * Skipped on the Edge runtime because `@opentelemetry/sdk-node` is Node-only.
+ */
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { startAiTelemetry } = await import("./posthog/ai-telemetry-register");
+  startAiTelemetry();
+}
 
 /**
  * Handles errors that occur during Next.js requests.
