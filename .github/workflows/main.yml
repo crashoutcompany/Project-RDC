@@ -15,7 +15,9 @@ on:
   pull_request:
 
 env:
-  CI_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+  # Literal URL: GitHub forbids `env` context inside job-level `env:` maps.
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+  DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
 
 jobs:
   lint:
@@ -35,9 +37,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || env.CI_DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || env.CI_DATABASE_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,10 +61,6 @@ jobs:
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -92,10 +87,17 @@ jobs:
         run: npx prisma generate --sql
 
       - name: Pull Vercel Environment Variables
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build with Vercel
         env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
@@ -119,9 +121,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || env.CI_DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL || env.CI_DATABASE_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
