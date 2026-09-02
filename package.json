@@ -115,7 +115,7 @@
     "jest": "^30.1.3",
     "jest-environment-jsdom": "^30.1.2",
     "jest-fixed-jsdom": "^0.0.11",
-    "neonctl": "^2.18.1",
+    "neonctl": "^4.13.0",
     "next-devtools-mcp": "^0.4.0",
     "postcss": "^8.5.4",
     "prettier": "^3.8.1",
