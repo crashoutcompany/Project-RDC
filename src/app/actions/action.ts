@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
 import { revalidatePath } from "next/cache";
+import { buildYouTubeVideosListUrl } from "@/lib/youtube";
 
 export const updateAuthStatus = async (session: Session | null) => {
   if (session) {
@@ -25,6 +26,14 @@ type AdminUser = NonNullable<
 
 const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
+/**
+ * Fetches YouTube metadata for an RDC Live video and maps it onto session fields.
+ *
+ * @param videoId - 11-character YouTube video ID
+ * @param gameName - Selected game name, used to detect duplicate sessions
+ * @param distinctId - Analytics distinct id for denied/failed fetches
+ * @returns Video session fields on success, or an error message
+ */
 export const getRDCVideoDetails = async (
   videoId: string,
   gameName: string,
@@ -54,11 +63,7 @@ export const getRDCVideoDetails = async (
     const apiKey = config.YOUTUBE_API_KEY;
 
     if (!dbRecord) {
-      const apiUrl = new URL("https://youtube.googleapis.com/youtube/v3/videos");
-      apiUrl.searchParams.set("part", "snippet");
-      apiUrl.searchParams.set("part", "player");
-      apiUrl.searchParams.set("id", videoId);
-      apiUrl.searchParams.set("key", apiKey ?? "");
+      const apiUrl = buildYouTubeVideosListUrl(videoId, apiKey ?? "");
       const YTvideo = await fetch(apiUrl);
 
       if (!apiKey) {
@@ -78,7 +83,7 @@ export const getRDCVideoDetails = async (
       const json = (await YTvideo.json()) as YouTubeVideoListResponse;
       const video = json.items[0];
 
-      if (video?.snippet.channelTitle !== "RDC Live")
+      if (video?.snippet?.channelTitle !== "RDC Live")
         return { error: "Please upload a video by RDC Live", video: null };
 
       const session: YTAPIRequestSession = {
