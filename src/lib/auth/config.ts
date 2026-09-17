@@ -9,3 +9,10 @@ export const AUTH_ORIGINS = {
   vercelProject: "https://project-rdc.vercel.app",
   vercelPreviewWildcard: "https://*.vercel.app",
 } as const;
+
+export const TEST_AUTH_USER = {
+  id: "project-rdc-e2e-tester",
+  name: "Project RDC E2E Tester",
+  email: "e2e-tester@rdcstats.test",
+  role: "admin",
+} as const;
