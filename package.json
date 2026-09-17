@@ -30,7 +30,6 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.56",
     "@ai-sdk/otel": "^1.0.85",
-    "@auth/prisma-adapter": "^2.11.1",
     "@azure-rest/ai-document-intelligence": "^1.0.0-beta.3",
     "@azure-rest/ai-vision-image-analysis": "^1.0.0-beta.3",
     "@azure/cognitiveservices-computervision": "^8.2.0",
@@ -75,7 +74,6 @@
     "lucide-react": "^0.560.0",
     "motion": "^12.5.0",
     "next": "16.3.3",
-    "next-auth": "^5.0.0-beta.32",
     "next-themes": "^0.4.6",
     "posthog-js": "^1.425.0",
     "posthog-node": "^5.51.6",
