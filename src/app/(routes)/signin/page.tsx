@@ -1,10 +1,9 @@
 import { Suspense } from "react";
-import { auth } from "@/lib/auth";
 import { enabledSocialProviders } from "@/lib/auth";
+import { getRscSession } from "@/lib/auth/server";
 import { SignInButtons } from "@/components/auth/sign-in-buttons";
 import { H1 } from "@/components/headings";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 
 /** Shell commits under instant(); session gate streams in separately. */
 export default function Page() {
@@ -25,7 +24,7 @@ export default function Page() {
 }
 
 async function SignInControls() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRscSession();
   if (session) redirect("/");
 
   return <SignInButtons providers={enabledSocialProviders} />;

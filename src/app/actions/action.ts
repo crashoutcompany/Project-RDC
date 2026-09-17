@@ -3,6 +3,7 @@
 import prisma from "prisma/db";
 import config from "@/lib/config";
 import { auth, Session } from "@/lib/auth";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import { headers } from "next/headers";
 import { errorCodes } from "@/lib/constants";
 import { redirect } from "next/navigation";
@@ -19,7 +20,7 @@ export const updateAuthStatus = async (session: Session | null) => {
 };
 
 type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
 >["user"] & { role?: string };
 
 const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
@@ -30,9 +31,7 @@ export const getRDCVideoDetails = async (
   distinctId: string,
 ): GetRdcVideoDetails => {
   try {
-    const authSession = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const authSession = await getAuthoritativeSession();
     const user = authSession?.user as AdminUser | undefined;
     if (!authSession || user?.role !== "admin") {
       posthog.capture({
