@@ -7,7 +7,7 @@ This document provides essential context and guidelines for working on Project R
 - **Framework:** This is a [Next.js](https://nextjs.org/) project using TypeScript and React.
 - **Development Server:** To run the development server, use the following command:
   ```bash
-  npm run dev
+  pnpm dev
   ```
 - **Code Style:**
 
@@ -27,12 +27,12 @@ This document provides essential context and guidelines for working on Project R
 
 The `package.json` file contains the following scripts:
 
-- `npm run dev`: Starts the Next.js development server with Turbopack.
-- `npm run postinstall`: Generates Prisma client after an install.
-- `npm run build`: Creates a production build of the application.
-- `npm run build-memory`: Creates a production build with experimental memory usage debugging.
-- `npm run start`: Starts the Next.js production server.
-- `npm run lint`: Lints the codebase using Next.js's built-in ESLint configuration.
+- `pnpm dev`: Starts the Next.js development server with Turbopack.
+- `pnpm postinstall`: Generates Prisma client after an install.
+- `pnpm build`: Creates a production build of the application.
+- `pnpm build-memory`: Creates a production build with experimental memory usage debugging.
+- `pnpm start`: Starts the Next.js production server.
+- `pnpm lint`: Lints the codebase.
 
 ## General Knowledge
 
@@ -50,7 +50,7 @@ The path aliases for the project live in the components.json file.
   - [React Hook Form](https://react-hook-form.com/): For managing forms.
   - [Zod](https://zod.dev/): For data validation.
 - **Authentication:**
-  - [NextAuth.js](https://next-auth.js.org/): For handling authentication.
+  - [Better Auth](https://www.better-auth.com/): For handling authentication.
 - **Database:**
   - [Prisma](https://www.prisma.io/): The ORM for interacting with the database.
   - [Neon](https://neon.tech/): Serverless Postgres database.
@@ -60,4 +60,4 @@ The path aliases for the project live in the components.json file.
 - **Prisma Client:** The Prisma client is your primary interface to the database. Import it from `prisma/db.ts`.
 - **Schema:** The database schema is defined in `prisma/schema.prisma`. Before performing any database operations, ensure that the properties you are accessing are defined in the schema and that your queries adhere to valid Prisma syntax.
 - **Migrations:** Database migrations are managed by Prisma. To create a new migration, use the `prisma migrate dev` command.
-- **Seeding:** The database can be seeded with initial data by running `npx prisma db seed`. The seed script is located at `prisma/seed.ts`.
+- **Seeding:** The database can be seeded with initial data by running `pnpm exec prisma db seed`. The seed script is located at `prisma/seed.ts`.

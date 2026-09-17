@@ -4,6 +4,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "types": ["node", "vitest/globals"],
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

@@ -1,15 +1,17 @@
 /**
- * Mock implementation of better-auth for Jest tests.
+ * Mock implementation of better-auth for Vitest.
  * This prevents ESM import issues with the actual better-auth package.
  */
-export const betterAuth = jest.fn(() => ({
+import { vi } from "vitest";
+
+export const betterAuth = vi.fn(() => ({
   api: {
-    getSession: jest.fn(),
+    getSession: vi.fn(),
   },
 }));
 
-export const prismaAdapter = jest.fn(() => ({}));
+export const prismaAdapter = vi.fn(() => ({}));
 
-export const nextCookies = jest.fn(() => ({}));
+export const nextCookies = vi.fn(() => ({}));
 
 export default betterAuth;
