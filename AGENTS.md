@@ -92,23 +92,31 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Authentication
 
-- Better Auth configuration lives in `src/lib/auth.ts`; app-specific auth
-  constants live in `src/lib/auth/config.ts`
+- Better Auth configuration lives in `src/lib/auth.ts`; shared factories live in
+  `src/lib/auth/{create-auth,base-url,client,proxy}.ts`
 - Read server sessions with `auth.api.getSession({ headers: await headers() })`
 - Check for authenticated user before performing admin operations
 - Admin routes and actions require `session.user.role === "admin"`
 - The sign-in page is `/signin`
 - Return error codes from `src/lib/constants` for consistent error handling
 
-### Agent login
+### How agents sign in
 
-- Build and start E2E with `EXPOSE_TESTING_API=1`
-- Set `TEST_AUTH_SECRET` and send it as
-  `Authorization: Bearer <secret>` to `POST /api/test-auth/login`
-- The endpoint creates a real Better Auth session for the seeded admin tester;
-  it is unavailable on Vercel and production deployments
-- Playwright performs this login in `e2e/global-setup.ts` and stores state in
-  `e2e/.auth/tester.json`
+- Build and start with `EXPOSE_TESTING_API=1`. Never set that flag on Vercel Production.
+- Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with
+  `Authorization: Bearer <secret>`.
+- The route upserts the seeded admin tester and mints a real Better Auth session.
+  Production always 404s.
+- Playwright `e2e/global-setup.ts` writes `e2e/.auth/tester.json`.
+- If Deployment Protection is on, also send
+  `x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+### Neon Managed Better Auth revisit
+
+Revisit Neon Managed Better Auth only after all of: GA; SDK ≥1.0 with a changelog;
+documented http-dev cookie story or configurable cookie names; API to seed a tester
+per branch. Users already live in this Neon database, so a later switch is a schema
+move, not a rewrite.
 
 ### Stat Tracking
 

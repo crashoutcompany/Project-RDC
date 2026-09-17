@@ -24,12 +24,13 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-vi.mock("next/server", () => ({
-  after: vi.fn((fn: () => unknown) => fn()),
-  NextResponse: {
-    json: vi.fn((data: unknown) => ({ data, status: 200 })),
-  },
-}));
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: vi.fn((fn: () => unknown) => fn()),
+  };
+});
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => new Headers()),
