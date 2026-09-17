@@ -35,6 +35,7 @@ describe("test auth guards", () => {
 
   it.each([
     ["the expose flag is absent", { EXPOSE_TESTING_API: undefined }],
+    ["NODE_ENV is development but expose is absent", { NODE_ENV: "development", EXPOSE_TESTING_API: undefined }],
     ["the app is running on Vercel without a preview env", { VERCEL: "1" }],
     ["the deployment is production", { VERCEL_ENV: "production" }],
   ])("is disabled when %s", (_label, overrides) => {
