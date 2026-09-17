@@ -1,4 +1,4 @@
-// shared:test-auth-route v1
+// shared:test-auth-route v2
 import { NextResponse } from "next/server";
 import {
   createTesterSession,

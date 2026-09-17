@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
 import {
   SidebarInset,
@@ -7,7 +6,7 @@ import {
 } from "@/components/ui/sidebar";
 import { AdminProvider } from "@/lib/adminContext";
 import { Separator } from "@radix-ui/react-separator";
-import { headers } from "next/headers";
+import { getRscSession } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { Suspense } from "react";
@@ -37,7 +36,7 @@ async function AuthenticatedAdminShell({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRscSession();
   const role =
     session && "role" in session.user ? session.user.role : undefined;
   if (!session || role !== "admin") redirect("/");
