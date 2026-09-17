@@ -1,28 +1,25 @@
-# Fork PRs do not receive repository secrets. Lint/test spin up a local Postgres
-# service and bootstrap Prisma before generate. Build + e2e-instant run only for
-# push to main and same-repo PRs (need secrets). Fork PRs: lint + test only;
-# use Vercel preview deployments for full compile/deploy signal on external contributions.
-#
-# e2e-instant uses a Neon preview/ephemeral branch (not secrets.DATABASE_URL) so CI never
-# points Playwright at production. Instant-nav testing API must stay off Vercel (VERCEL=1).
-
-name: Actions CI
+name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 env:
-  # Literal URL: GitHub forbids `env` context inside job-level `env:` maps.
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
   DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+  BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-characters
 
 jobs:
   lint:
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16
@@ -38,72 +35,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm install --ignore-scripts
-
-      - name: Generate Prisma client
-        run: |
-          npx prisma db push
-          npx prisma generate --sql
-
-      - name: Run linter
-        run: npm run lint
-
-  build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+          version: 10.1.0
+      - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel
-
-      - name: Install dependencies
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: npm install --ignore-scripts
-
-      - name: Generate Prisma client
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-        run: npx prisma generate --sql
-
-      - name: Pull Vercel Environment Variables
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-
-      - name: Build with Vercel
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
-          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-        run: vercel build --token="$VERCEL_TOKEN" --prod
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: |
+          pnpm exec prisma db push
+          pnpm exec prisma generate --sql
+      - run: pnpm lint
 
   test:
     runs-on: ubuntu-latest
@@ -122,57 +66,80 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: "22"
-          cache: npm
+          version: 10.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: |
+          pnpm exec prisma db push
+          pnpm exec prisma generate --sql
+      - run: pnpm test
 
-      - name: Install dependencies
-        run: npm install --ignore-scripts
-
-      - name: Generate Prisma client
+  build:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
+      NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm add --global vercel@latest
+      - name: Pull Vercel environment
+        env:
+          VERCEL_ENV: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+        run: vercel pull --yes --environment="$VERCEL_ENV" --token="$VERCEL_TOKEN"
+      - name: Build with Vercel
+        env:
+          VERCEL_ENV: ${{ github.event_name == 'push' && 'production' || 'preview' }}
         run: |
-          npx prisma db push
-          npx prisma generate --sql
+          if [ "$VERCEL_ENV" = "production" ]; then
+            vercel build --prod --token="$VERCEL_TOKEN"
+          else
+            vercel build --token="$VERCEL_TOKEN"
+          fi
 
-      - name: Run tests
-        run: npm run test
-        continue-on-error: false
-
-  # Instant-nav Playwright e2e against a Neon PR/ephemeral branch (never prod DATABASE_URL).
-  # INSTANT_NAV_TEST_BUILD=1 is set by npm run test:instant; do not set VERCEL=1 here.
-  # Auth secret is required for next build/start (navbar/proxy import better-auth); CI fallback is e2e-only.
-  e2e-instant:
+  e2e:
     if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      TEST_AUTH_SECRET: ${{ secrets.TEST_AUTH_SECRET }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
       NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      AUTH_TRUST_HOST: "true"
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET || secrets.BETTER_AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || secrets.AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
-      AUTH_GITHUB_ID: ${{ secrets.AUTH_GITHUB_ID || 'ci-placeholder' }}
-      AUTH_GITHUB_SECRET: ${{ secrets.AUTH_GITHUB_SECRET || 'ci-placeholder' }}
-      AUTH_GOOGLE_ID: ${{ secrets.AUTH_GOOGLE_ID || 'ci-placeholder' }}
-      AUTH_GOOGLE_SECRET: ${{ secrets.AUTH_GOOGLE_SECRET || 'ci-placeholder' }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: "20.19.0"
+          version: 10.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
 
-      - name: Resolve Neon branch name
-        id: neon_branch
+      - name: Resolve Neon branch
+        id: neon
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.number }}
@@ -180,7 +147,8 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            printf 'name=preview/pr-%s-%s\n' "$PR_NUMBER" "$HEAD_REF" >> "$GITHUB_OUTPUT"
+            safe_ref="${HEAD_REF//\//-}"
+            printf 'name=preview/pr-%s-%s\n' "$PR_NUMBER" "$safe_ref" >> "$GITHUB_OUTPUT"
             printf 'ephemeral=false\n' >> "$GITHUB_OUTPUT"
           else
             printf 'name=ci/e2e-%s\n' "$GIT_SHA" >> "$GITHUB_OUTPUT"
@@ -188,11 +156,11 @@ jobs:
           fi
 
       - name: Create or reuse Neon branch
-        id: create_neon_branch
+        id: database
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: ${{ steps.neon_branch.outputs.name }}
+          branch_name: ${{ steps.neon.outputs.name }}
           api_key: ${{ secrets.NEON_API_KEY }}
           database: ${{ secrets.NEON_DATABASE }}
           role: ${{ secrets.NEON_ROLE }}
@@ -200,24 +168,24 @@ jobs:
 
       - name: Install dependencies
         env:
-          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
-          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
-        run: npm install
+          DATABASE_URL: ${{ steps.database.outputs.db_url_pooled }}
+          DIRECT_URL: ${{ steps.database.outputs.db_url }}
+        run: pnpm install --frozen-lockfile
 
-      # Neon branches copy parent schema + data; no migrate/seed needed for public fixtures.
       - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
+        run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run instant-nav e2e
+      - name: Run authenticated E2E
         env:
-          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
-          DIRECT_URL: ${{ steps.create_neon_branch.outputs.db_url }}
-        run: npm run test:instant
+          DATABASE_URL: ${{ steps.database.outputs.db_url_pooled }}
+          DIRECT_URL: ${{ steps.database.outputs.db_url }}
+          EXPOSE_TESTING_API: "1"
+        run: pnpm test:e2e
 
       - name: Delete ephemeral Neon branch
-        if: always() && steps.neon_branch.outputs.ephemeral == 'true' && steps.create_neon_branch.outcome == 'success'
+        if: always() && steps.neon.outputs.ephemeral == 'true' && steps.database.outcome == 'success'
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: ${{ steps.neon_branch.outputs.name }}
+          branch: ${{ steps.database.outputs.branch_id }}
           api_key: ${{ secrets.NEON_API_KEY }}

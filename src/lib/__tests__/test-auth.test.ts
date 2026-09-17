@@ -1,6 +1,8 @@
-jest.mock("@/lib/auth", () => ({ auth: {} }));
-jest.mock("better-auth/crypto", () => ({ makeSignature: jest.fn() }));
-jest.mock("prisma/db", () => ({ __esModule: true, default: {} }));
+import { vi } from "vitest";
+
+vi.mock("@/lib/auth", () => ({ auth: {} }));
+vi.mock("better-auth/crypto", () => ({ makeSignature: vi.fn() }));
+vi.mock("prisma/db", () => ({ __esModule: true, default: {} }));
 
 import {
   isTestAuthEnabled,

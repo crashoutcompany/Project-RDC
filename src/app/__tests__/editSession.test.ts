@@ -3,10 +3,10 @@ import {
   describe,
   expect,
   beforeEach,
-  afterEach,
   it,
-  jest,
-} from "@jest/globals";
+  vi,
+  type Mock,
+} from "vitest";
 import { approveEditRequest } from "../actions/editSession";
 import { auth } from "@/lib/auth";
 import type { FormValues } from "../(routes)/admin/_utils/form-helpers";
@@ -36,15 +36,15 @@ const mockUser: MockSession = {
 };
 
 // Mock auth
-jest.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
 
-const mockGetSession = auth.api.getSession as unknown as jest.Mock<
+const mockGetSession = auth.api.getSession as unknown as Mock<
   () => Promise<MockSession | null>
 >;
 
@@ -124,7 +124,7 @@ const setupTest = async (options: SetupTestOptions = {}) => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockGetSession.mockResolvedValue(mockUser);
 });
 

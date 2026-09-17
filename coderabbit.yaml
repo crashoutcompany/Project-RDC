@@ -27,7 +27,7 @@ reviews:
   labeling_instructions: []
   path_filters:
     - "!prisma/migrations/**"
-    - "!package-lock.json"
+    - "!pnpm-lock.yaml"
     - "!.agents/**"
   path_instructions: []
   abort_on_close: true
