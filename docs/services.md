@@ -95,12 +95,12 @@ npm run update-neon-branch
 
 ## Authentication
 
-### NextAuth.js
+### Better Auth
 
-**Website**: [https://next-auth.js.org](https://next-auth.js.org)  
-**Documentation**: [https://next-auth.js.org/getting-started/introduction](https://next-auth.js.org/getting-started/introduction)
+**Website**: [https://www.better-auth.com](https://www.better-auth.com)
+**Documentation**: [https://www.better-auth.com/docs](https://www.better-auth.com/docs)
 
-**Purpose**: Authentication framework for Next.js applications.
+**Purpose**: Self-hosted authentication for the Next.js application.
 
 **Providers Used**:
 
@@ -113,14 +113,15 @@ npm run update-neon-branch
 - `AUTH_GITHUB_SECRET` - GitHub OAuth App Client Secret
 - `AUTH_GOOGLE_ID` - Google OAuth Client ID
 - `AUTH_GOOGLE_SECRET` - Google OAuth Client Secret
-- `AUTH_SECRET` - Secret key for JWT encryption
-- `AUTH_TRUST_HOST` - Trust host configuration
+- `BETTER_AUTH_SECRET` - Secret used to sign and encrypt auth data
+- `BETTER_AUTH_URL` - Optional canonical auth origin
 
 **Usage**:
 
-- Configuration in `src/auth.ts`
+- Configuration in `src/lib/auth.ts`
+- App-specific auth constants in `src/lib/auth/config.ts`
 - Sign-in page at `/signin`
-- Admin access restricted to specific users
+- Admin access requires a Better Auth session with the `admin` role
 
 **OAuth Provider Links**:
 
@@ -326,5 +327,5 @@ See `docs/setup.md` for detailed environment variable setup instructions.
 1. **API Keys**: All API keys should be stored securely and never committed to version control
 2. **Service Accounts**: Google Cloud service account keys are base64-encoded in environment variables
 3. **Cron Jobs**: Weekly cron jobs run on Mondays at 10:00 AM UTC
-4. **Authentication**: Admin access is currently restricted to specific GitHub/Google accounts (see `src/auth.ts`)
+4. **Authentication**: Admin access is role-gated in `src/lib/auth.ts` and `src/proxy.ts`
 5. **Billing**: Monitor usage in each service's dashboard to track costs and usage limits
