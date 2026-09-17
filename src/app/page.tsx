@@ -86,7 +86,7 @@ async function HomeGames() {
                   className="object-cover transition-transform duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-125"
                   fill
                   sizes="(max-width: 639px) 100vw, 208px"
-                  alt=""
+                  alt={game.name}
                   src={game.src || ""}
                 />
                 <CardHeader className="relative h-1/4 bg-black/50">
