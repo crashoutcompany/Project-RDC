@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Player } from "@/generated/prisma/client";
 import { useFormContext, useFieldArray } from "react-hook-form";
-import { v4 as uuidv4 } from "uuid";
 import { Input } from "@/components/ui/input";
 import { useAdmin } from "@/lib/adminContext";
 import { FormValues } from "../../_utils/form-helpers";
