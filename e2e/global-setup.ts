@@ -34,7 +34,7 @@ export function storageStateFromLoginCookie(
       {
         name: httpSafeCookieName(cookie.name),
         value: cookie.value,
-        url: baseURL,
+        domain: hostname,
         path: cookie.path || "/",
         expires,
         httpOnly: true,
