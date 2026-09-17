@@ -6,18 +6,8 @@ import { H1 } from "@/components/headings";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
+/** Shell commits under instant(); session gate streams in separately. */
 export default function Page() {
-  return (
-    <Suspense>
-      <SignInPage />
-    </Suspense>
-  );
-}
-
-async function SignInPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (session) redirect("/");
-
   return (
     <div className="m-10">
       <H1 data-testid="signin-shell-marker">Sign in Page</H1>
@@ -26,8 +16,17 @@ async function SignInPage() {
         of the providers below.
       </div>
       <div className="mx-auto mt-4 w-fit">
-        <SignInButtons providers={enabledSocialProviders} />
+        <Suspense fallback={null}>
+          <SignInControls />
+        </Suspense>
       </div>
     </div>
   );
+}
+
+async function SignInControls() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (session) redirect("/");
+
+  return <SignInButtons providers={enabledSocialProviders} />;
 }
