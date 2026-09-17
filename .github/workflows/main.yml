@@ -90,7 +90,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
       NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
@@ -124,8 +124,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      TEST_AUTH_SECRET: ${{ secrets.TEST_AUTH_SECRET }}
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      TEST_AUTH_SECRET: ${{ secrets.TEST_AUTH_SECRET || 'test-auth-secret' }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'ci-e2e-only-better-auth-secret-32chars' }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
       NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
