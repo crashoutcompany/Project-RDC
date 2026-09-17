@@ -115,6 +115,9 @@ npm run update-neon-branch
 - `AUTH_GOOGLE_SECRET` - Google OAuth Client Secret
 - `BETTER_AUTH_SECRET` - Secret used to sign and encrypt auth data
 - `BETTER_AUTH_URL` - Optional canonical auth origin
+- `TEST_AUTH_SECRET` - Shared secret for the local authenticated E2E login
+- `EXPOSE_TESTING_API` - Set to `1` only for local/CI E2E builds
+- `PLAYWRIGHT_BASE_URL` - Optional Playwright target URL
 
 **Usage**:
 
@@ -122,6 +125,8 @@ npm run update-neon-branch
 - App-specific auth constants in `src/lib/auth/config.ts`
 - Sign-in page at `/signin`
 - Admin access requires a Better Auth session with the `admin` role
+- Test login endpoint at `/api/test-auth/login` is disabled on Vercel and
+  production deployments
 
 **OAuth Provider Links**:
 
