@@ -23,16 +23,31 @@ export async function POST(request: Request) {
 
   const { cookieName, cookieValue, cookieOptions, expiresAt, user } =
     await createTesterSession();
+  const expose = process.env.EXPOSE_TESTING_API === "1";
+  const safeName = expose ? httpSafeCookieName(cookieName) : cookieName;
+
+  // When EXPOSE_TESTING_API=1, also return cookie fields so Playwright can
+  // build storageState without relying on APIRequestContext Set-Cookie parsing
+  // (unreliable for loopback / __Secure- stripping).
   const response = NextResponse.json({
     user: {
       id: user.id,
       email: user.email,
       role: user.role,
     },
+    ...(expose
+      ? {
+          cookie: {
+            name: safeName,
+            value: cookieValue,
+            path: cookieOptions.path ?? "/",
+          },
+        }
+      : {}),
   });
 
-  if (process.env.EXPOSE_TESTING_API === "1") {
-    response.cookies.set(httpSafeCookieName(cookieName), cookieValue, {
+  if (expose) {
+    response.cookies.set(safeName, cookieValue, {
       httpOnly: true,
       path: cookieOptions.path ?? "/",
       sameSite: "lax",
@@ -44,7 +59,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       path: cookieOptions.path ?? "/",
       sameSite: "lax",
-      secure: cookieOptions.secure,
+      secure: Boolean(cookieOptions.secure),
       expires: expiresAt,
     });
   }
