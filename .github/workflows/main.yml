@@ -1,4 +1,11 @@
-# shared:ci-main v1
+# shared:ci-main v2
+# Skeleton aligned with View/Z/blue ci-main. RDC intentional knobs:
+#   NEEDS_PRISMA=true          — lint/test apply schema to local Postgres
+#   INSTALL_FLAGS=--ignore-scripts — skip postinstall (prisma generate runs explicitly)
+#   USE_PRISMA_NEON=true       — Neon create-branch-action prisma URL shaping
+# Optional e2e knobs (set in the e2e job, not unmarked forks):
+#   SYNC_PRISMA_NEON=true      — prisma db push + generate on Neon branch before e2e
+#   BETTER_AUTH_URL            — loopback URL for authenticated Playwright
 name: Actions CI
 
 on:
@@ -20,6 +27,8 @@ env:
   TEST_SCRIPT: test
   INSTALL_FLAGS: --ignore-scripts
   USE_PRISMA_NEON: "true"
+  # Optional: sync Prisma schema onto Neon e2e branches (Better Auth tables, etc.)
+  SYNC_PRISMA_NEON: "true"
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
   DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
   BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-characters
@@ -195,9 +204,9 @@ jobs:
           DIRECT_URL: ${{ steps.database.outputs.db_url }}
         run: pnpm install --frozen-lockfile
 
-      # Neon preview branches can lag parent schema (e.g. Better Auth UserSession).
+      # Optional knob: Neon preview branches can lag parent schema (Better Auth).
       - name: Sync Prisma schema to Neon branch
-        if: env.HAS_E2E == 'true'
+        if: env.HAS_E2E == 'true' && env.SYNC_PRISMA_NEON == 'true'
         env:
           DATABASE_URL: ${{ steps.database.outputs.db_url_pooled }}
           DIRECT_URL: ${{ steps.database.outputs.db_url }}
@@ -215,6 +224,7 @@ jobs:
           DATABASE_URL: ${{ steps.database.outputs.db_url_pooled }}
           DIRECT_URL: ${{ steps.database.outputs.db_url }}
           EXPOSE_TESTING_API: "1"
+          # Optional knob: force loopback Better Auth base URL for Playwright.
           BETTER_AUTH_URL: http://127.0.0.1:3000
         run: pnpm test:e2e
 
