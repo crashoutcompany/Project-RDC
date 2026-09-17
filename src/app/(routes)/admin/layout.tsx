@@ -28,7 +28,9 @@ async function AuthenticatedAdminShell({
   children: React.ReactNode;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session || session.user.role !== "admin") redirect("/");
+  const role =
+    session && "role" in session.user ? session.user.role : undefined;
+  if (!session || role !== "admin") redirect("/");
 
   return (
     <SidebarProvider defaultOpen>
