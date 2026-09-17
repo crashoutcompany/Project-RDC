@@ -43,9 +43,10 @@ export function isTestAuthEnabled(
 ): boolean {
   if (readTestAuthSecret(env.TEST_AUTH_SECRET) === null) return false;
 
+  // Never enable on Vercel production. Preview/prod builds also omit the route
+  // via isTestingApiExposed() (VERCEL=1), so require an explicit local expose.
   const vercelEnv = readEnvValue(env.VERCEL_ENV);
-  if (vercelEnv === "preview" || vercelEnv === "development") return true;
-  if (vercelEnv) return false;
+  if (vercelEnv === "production") return false;
 
   return (
     readEnvValue(env.NODE_ENV) === "development" || isTestingApiExposed(env)
