@@ -63,7 +63,10 @@ const PlayerStatManager = (props: Props) => {
   useEffect(() => {
     let ignore = false;
     const matchFields = getValues(`${curPlayerSession}.playerStats`);
-    gameStats.forEach((stat, index) => {
+    type PlayerStatRow =
+      FormValues["sets"][number]["matches"][number]["playerSessions"][number]["playerStats"][number];
+
+    gameStats.forEach((stat) => {
       const isMatch = matchFields.some((f) => f.stat === stat.statName); // Need to do this in dev because useEffect renders twice.
       const isToggleStat =
         isMarvelRivals &&
@@ -73,15 +76,16 @@ const PlayerStatManager = (props: Props) => {
       if (!ignore && !isMatch)
         append({
           statId: stat.statId,
-          stat: stat.statName as any, // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type
+          // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type.
+          stat: stat.statName as PlayerStatRow["stat"],
           statValue: isToggleStat ? "0" : "",
-        });
+        } as PlayerStatRow);
     });
 
     return () => {
       ignore = true;
     };
-  }, [gameStats, append, curPlayerSession, getValues]);
+  }, [gameStats, append, curPlayerSession, getValues, isMarvelRivals]);
 
   // Separate fields into regular and expandable for Marvel Rivals
   const regularFields = isMarvelRivals
