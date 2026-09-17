@@ -26,21 +26,24 @@ type AuthEnvironment = {
   enabledSocialProviders: SocialProviderId[];
 };
 
-type CreateAuthOptions = {
-  appName: string;
-  database: NonNullable<BetterAuthOptions["database"]>;
-  env?: AuthEnv;
-  productionUrl: string;
-  previewOrigin: string;
-  extraTrustedOrigins?: readonly string[];
-  sessionModelName?: string;
-  userAdditionalFields?: NonNullable<
-    NonNullable<BetterAuthOptions["user"]>["additionalFields"]
-  >;
-  onError?: NonNullable<
-    NonNullable<BetterAuthOptions["onAPIError"]>["onError"]
-  >;
-};
+type UserAdditionalFields = NonNullable<
+  NonNullable<BetterAuthOptions["user"]>["additionalFields"]
+>;
+
+type CreateAuthOptions<TFields extends UserAdditionalFields = UserAdditionalFields> =
+  {
+    appName: string;
+    database: NonNullable<BetterAuthOptions["database"]>;
+    env?: AuthEnv;
+    productionUrl: string;
+    previewOrigin: string;
+    extraTrustedOrigins?: readonly string[];
+    sessionModelName?: string;
+    userAdditionalFields?: TFields;
+    onError?: NonNullable<
+      NonNullable<BetterAuthOptions["onAPIError"]>["onError"]
+    >;
+  };
 
 const PROVIDER_ENV = {
   github: {
@@ -110,7 +113,7 @@ export function resolveAuthEnvironment(
   };
 }
 
-export function createAuth({
+export function createAuth<const TFields extends UserAdditionalFields>({
   appName,
   database,
   env = process.env,
@@ -120,7 +123,7 @@ export function createAuth({
   sessionModelName,
   userAdditionalFields,
   onError,
-}: CreateAuthOptions) {
+}: CreateAuthOptions<TFields>) {
   const { secret, socialProviders } = resolveAuthEnvironment(env);
 
   return betterAuth({
@@ -139,9 +142,9 @@ export function createAuth({
         maxAge: 300,
       },
     },
-    ...(userAdditionalFields
-      ? { user: { additionalFields: userAdditionalFields } }
-      : {}),
+    user: {
+      additionalFields: userAdditionalFields,
+    },
     ...(onError ? { onAPIError: { onError } } : {}),
     plugins: [nextCookies()],
   });
