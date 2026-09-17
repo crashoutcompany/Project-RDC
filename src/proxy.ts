@@ -1,42 +1,35 @@
+// shared:auth-proxy v1
 import type { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
+import { SIGN_IN_PATH } from "@/lib/auth/config";
 
 /**
  * Returns true when `path` is `/admin` or a nested admin route.
  */
-function isAdminPath(path: string): boolean {
+export function isAdminPath(path: string): boolean {
   return path === "/admin" || path.startsWith("/admin/");
 }
 
 /**
- * Returns true when `path` is `/submission` or a nested submission route.
- */
-function isSubmissionPath(path: string): boolean {
-  return path === "/submission" || path.startsWith("/submission/");
-}
-
-/**
- * Redirects signed-in users off `/signin`. Requires an admin session for
- * `/admin` and nested admin routes; requires any session for `/submission`.
+ * Redirects signed-in users off `/signin` and requires an admin session for
+ * `/admin` and nested admin routes.
  */
 export async function proxy(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
   const path = request.nextUrl.pathname;
-  const role =
-    session && "role" in session.user
-      ? (session.user as { role?: string }).role
-      : undefined;
+  const requiresSession = path === SIGN_IN_PATH || isAdminPath(path);
+  if (!requiresSession) return;
 
-  if (session && path === "/signin")
+  const session = await auth.api.getSession({ headers: request.headers });
+
+  if (session && path === SIGN_IN_PATH)
     return Response.redirect(new URL("/", request.url));
 
-  if (isAdminPath(path) && (!session || role !== "admin"))
-    return Response.redirect(new URL("/", request.url));
-
-  if (isSubmissionPath(path) && !session)
+  if (isAdminPath(path) && (!session || session.user.role !== "admin"))
     return Response.redirect(new URL("/", request.url));
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|.*\\.png$).*)"],
+  matcher: [
+    "/((?!api(?:/|$)|_next(?:/|$)|favicon\\.ico$|.*\\.(?:avif|gif|ico|jpe?g|png|svg|webp)$).*)",
+  ],
 };

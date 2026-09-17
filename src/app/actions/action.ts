@@ -2,7 +2,6 @@
 
 import prisma from "prisma/db";
 import config from "@/lib/config";
-// import { Session } from "next-auth";
 import { auth, Session } from "@/lib/auth";
 import { headers } from "next/headers";
 import { errorCodes } from "@/lib/constants";
