@@ -5,9 +5,16 @@ import { request, type FullConfig } from "@playwright/test";
 
 export const TESTER_STORAGE_STATE = "e2e/.auth/tester.json";
 
-type StorageState = Awaited<
-  ReturnType<Awaited<ReturnType<typeof request.newContext>>["storageState"]>
->;
+type LoginCookie = {
+  name: string;
+  value: string;
+  path?: string;
+};
+
+type LoginResponse = {
+  user?: { id: string; email: string; role?: string | null };
+  cookie?: LoginCookie;
+};
 
 function httpSafeCookieName(name: string): string {
   if (name.startsWith("__Secure-")) return name.slice("__Secure-".length);
@@ -15,23 +22,26 @@ function httpSafeCookieName(name: string): string {
   return name;
 }
 
-/** Normalize API-context cookies for Chromium browser storageState reuse. */
-export function sanitizeStorageState(state: StorageState, hostname: string) {
+/** Build Chromium-safe storageState from the test-auth login cookie payload. */
+export function storageStateFromLoginCookie(
+  cookie: LoginCookie,
+  hostname: string,
+) {
   const expires = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
   return {
-    cookies: state.cookies
-      .filter((cookie) => cookie.name && cookie.value)
-      .map((cookie) => ({
+    cookies: [
+      {
         name: httpSafeCookieName(cookie.name),
         value: cookie.value,
-        domain: cookie.domain || hostname,
+        domain: hostname,
         path: cookie.path || "/",
-        expires: cookie.expires > 0 ? Math.floor(cookie.expires) : expires,
-        httpOnly: Boolean(cookie.httpOnly),
+        expires,
+        httpOnly: true,
         secure: false,
         sameSite: "Lax" as const,
-      })),
-    origins: state.origins ?? [],
+      },
+    ],
+    origins: [] as { origin: string; localStorage: [] }[],
   };
 }
 
@@ -55,11 +65,16 @@ export default async function globalSetup(config: FullConfig) {
       `Test login failed with ${response.status()}: ${await response.text()}`,
     );
 
+  const body = (await response.json()) as LoginResponse;
+  if (!body.cookie?.name || !body.cookie?.value)
+    throw new Error(
+      "Test login response missing cookie payload for Playwright storageState",
+    );
+
   await mkdir(dirname(TESTER_STORAGE_STATE), { recursive: true });
-  const state = await api.storageState();
   await writeFile(
     TESTER_STORAGE_STATE,
-    JSON.stringify(sanitizeStorageState(state, hostname), null, 2),
+    JSON.stringify(storageStateFromLoginCookie(body.cookie, hostname), null, 2),
   );
   await api.dispose();
 }
