@@ -43,7 +43,7 @@ vi.mock("@azure-rest/ai-document-intelligence", () => {
     })),
     getLongRunningPoller: vi.fn(() => ({
       get body() {
-        return azureMocks.pollUntilDone().then((res: any) => res.body);
+        return azureMocks.pollUntilDone().then((res: { body: unknown }) => res.body);
       },
       pollUntilDone: (...args: unknown[]) => azureMocks.pollUntilDone(...args),
     })),

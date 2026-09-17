@@ -115,7 +115,9 @@ type RechartsPayloadItem = {
 
 const ChartTooltip =
    
-  RechartsPrimitive.Tooltip as unknown as React.ComponentType<any>;
+  RechartsPrimitive.Tooltip as unknown as React.ComponentType<
+    Record<string, unknown>
+  >;
 
 type ChartTooltipContentProps = {
   active?: boolean;
@@ -306,7 +308,9 @@ function ChartTooltipContent({
 // Avoid strict Recharts typings by casting to a generic component type
 const ChartLegend =
    
-  RechartsPrimitive.Legend as unknown as React.ComponentType<any>;
+  RechartsPrimitive.Legend as unknown as React.ComponentType<
+    Record<string, unknown>
+  >;
 
 type ChartLegendContentProps = {
   className?: string;
