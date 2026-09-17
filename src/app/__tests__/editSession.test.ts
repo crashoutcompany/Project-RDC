@@ -13,8 +13,15 @@ import type { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import prisma from "prisma/db";
 import { errorCodes } from "@/lib/constants";
 
-// Cast prisma to any to avoid complex mock typing issues in tests
-const prismaMock = prisma as any;
+type PrismaMock = {
+  session: { findUnique: Mock };
+  sessionEditRequest: { findUnique: Mock };
+  gameSet: { create: Mock };
+  match: { create: Mock };
+  playerSession: { create: Mock };
+};
+
+const prismaMock = prisma as unknown as PrismaMock;
 
 // Auth mock type matching better-auth Session type
 interface MockSession {
