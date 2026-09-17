@@ -137,10 +137,14 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     socialProviders,
     // Prisma @@map("user_session") does not match Better Auth's modelName
     // "UserSession" table probe; auth still uses the Prisma client correctly.
+    // Disable __Secure- cookie names for local/CI e2e (HTTP loopback).
     advanced: {
       database: {
         validateSchema: false,
       },
+      ...(process.env.EXPOSE_TESTING_API === "1" && process.env.VERCEL !== "1"
+        ? { useSecureCookies: false as const }
+        : {}),
     },
     session: {
       ...(sessionModelName ? { modelName: sessionModelName } : {}),
