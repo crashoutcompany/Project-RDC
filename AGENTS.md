@@ -12,7 +12,7 @@ This document provides essential context and guidelines for AI coding assistants
 - **Language**: TypeScript
 - **UI Library**: React 19
 - **Database**: PostgreSQL (Neon) with Prisma ORM
-- **Authentication**: NextAuth.js
+- **Authentication**: Self-hosted Better Auth
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **Data Fetching**: Server Actions pattern
 - **Analytics**: PostHog
@@ -67,7 +67,7 @@ This document provides essential context and guidelines for AI coding assistants
 ### Prisma Usage
 
 - **Schema**: Defined in `prisma/schema.prisma`
-- **Client Location**: Custom location at `prisma/generated/`
+- **Client Location**: Generated at `src/generated/prisma/`
 - **Import Pattern**: Always import Prisma client from `prisma/db.ts`
 - **Error Handling**: Wrap operations with `handlePrismaOperation` for consistent error handling
 
@@ -92,8 +92,12 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Authentication
 
-- Admin functionality requires authentication checks using `auth()` from `@/auth`
+- Better Auth configuration lives in `src/lib/auth.ts`; app-specific auth
+  constants live in `src/lib/auth/config.ts`
+- Read server sessions with `auth.api.getSession({ headers: await headers() })`
 - Check for authenticated user before performing admin operations
+- Admin routes and actions require `session.user.role === "admin"`
+- The sign-in page is `/signin`
 - Return error codes from `src/lib/constants` for consistent error handling
 
 ### Stat Tracking
@@ -122,7 +126,7 @@ This document provides essential context and guidelines for AI coding assistants
 
 - **UI**: React, Next.js, Tailwind CSS, shadcn/ui, Recharts
 - **Forms**: React Hook Form, Zod
-- **Auth**: NextAuth.js
+- **Auth**: Better Auth
 - **Database**: Prisma, Neon (serverless Postgres)
 - **Analytics**: PostHog
 

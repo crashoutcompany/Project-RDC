@@ -2,7 +2,6 @@ import posthog from "@/posthog/server-init";
 import { auth, Session } from "@/lib/auth";
 import { FormValues } from "@/app/(routes)/admin/_utils/form-helpers";
 import ErrorModelOutput from "@azure-rest/ai-document-intelligence";
-// import { Session } from "next-auth";
 import { v4 } from "uuid";
 import type { MvpOutput } from "@/app/ai/types";
 import { after } from "next/server";

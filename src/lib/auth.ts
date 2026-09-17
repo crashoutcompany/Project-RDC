@@ -1,35 +1,65 @@
+// shared:auth v1
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import prisma from "prisma/db";
-import config from "@/lib/config";
 import { nextCookies } from "better-auth/next-js";
+import prisma from "prisma/db";
+import {
+  AUTH_ORIGINS,
+  type SocialProvider,
+} from "@/lib/auth/config";
 import posthog from "@/posthog/server-init";
 
-const PRODUCTION_ORIGIN = "https://rdcstats.com";
 const baseURL =
-  process.env.VERCEL_ENV === "production"
-    ? PRODUCTION_ORIGIN
-    : config.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  process.env.BETTER_AUTH_URL ??
+  (process.env.VERCEL_ENV === "production"
+    ? AUTH_ORIGINS.production
+    : AUTH_ORIGINS.local);
 
 const trustedOrigins = [
   ...new Set(
     [
       baseURL,
-      PRODUCTION_ORIGIN,
-      "https://www.rdcstats.com",
-      "https://project-rdc.vercel.app",
+      AUTH_ORIGINS.production,
+      AUTH_ORIGINS.productionWww,
+      AUTH_ORIGINS.vercelProject,
+      AUTH_ORIGINS.vercelPreviewWildcard,
       process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
     ].filter((origin): origin is string => Boolean(origin)),
   ),
+];
+
+const githubCredentials =
+  process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
+    ? {
+        clientId: process.env.AUTH_GITHUB_ID,
+        clientSecret: process.env.AUTH_GITHUB_SECRET,
+      }
+    : undefined;
+
+const googleCredentials =
+  process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
+    ? {
+        clientId: process.env.AUTH_GOOGLE_ID,
+        clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      }
+    : undefined;
+
+export const enabledSocialProviders: SocialProvider[] = [
+  ...(githubCredentials ? (["github"] as const) : []),
+  ...(googleCredentials ? (["google"] as const) : []),
 ];
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  secret: config.AUTH_SECRET,
+  secret: process.env.BETTER_AUTH_SECRET,
   session: {
-    modelName: "UserSession", // Maps better-auth's session to Prisma's UserSession model
+    modelName: "UserSession",
+    cookieCache: {
+      enabled: true,
+      maxAge: 300,
+    },
   },
   onAPIError: {
     onError(error, ctx) {
@@ -39,24 +69,11 @@ export const auth = betterAuth({
   },
   baseURL,
   trustedOrigins,
-  trustHost: config.AUTH_TRUST_HOST === "true",
   socialProviders: {
-    github: {
-      clientId: config.AUTH_GITHUB_ID!,
-      clientSecret: config.AUTH_GITHUB_SECRET!,
-      redirectUri: `${baseURL}/api/auth/callback/github`,
-      // Map profile to user fields if needed
-    },
-    google: {
-      clientId: config.AUTH_GOOGLE_ID!,
-      clientSecret: config.AUTH_GOOGLE_SECRET!,
-      redirectUri: `${baseURL}/api/auth/callback/google`,
-      // display: "popup",
-    },
+    ...(githubCredentials ? { github: githubCredentials } : {}),
+    ...(googleCredentials ? { google: googleCredentials } : {}),
   },
-  plugins: [
-    nextCookies(), // Recommended for Next.js
-  ],
+  plugins: [nextCookies()],
   user: {
     additionalFields: {
       role: {
@@ -66,15 +83,6 @@ export const auth = betterAuth({
       },
     },
   },
-  hooks: {
-    // after: {
-    //   createSession: async (session) => {
-    //     // valid session created
-    //   },
-    // },
-  },
-  // Replacements for allowlist
-  // We can implement a middleware or just check session.user.role in actions
 });
 
 export type Session = typeof auth.$Infer.Session;
