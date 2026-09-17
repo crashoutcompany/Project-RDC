@@ -12,9 +12,20 @@ test.describe("instant nav: authenticated admin", () => {
   );
   test.use({ storageState: TESTER_STORAGE_STATE });
 
-  test("Admin shell commits on initial load under instant()", async ({
-    page,
-  }) => {
+  test("session cookie reaches /admin before instant()", async ({ page }) => {
+    await page.goto("/admin");
+    await expect(page).not.toHaveURL(/\/signin/);
+    await expect(page.getByTestId("admin-shell-marker")).toBeVisible({
+      timeout: 20000,
+    });
+  });
+
+  test("Admin shell commits on soft nav under instant()", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("nav-about-link")).toBeVisible({
+      timeout: 20000,
+    });
+
     await instant(
       page,
       async () => {

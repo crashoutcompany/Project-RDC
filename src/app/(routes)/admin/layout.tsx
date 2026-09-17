@@ -12,12 +12,22 @@ import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { H1 } from "@/components/headings";
 
+/**
+ * Shell marker sits outside the session await so instant() can commit chrome
+ * while AuthenticatedAdminShell streams. Pages/actions must still enforce auth.
+ */
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<Skeleton className="h-72 w-full" />}>
-      <AuthenticatedAdminShell>{children}</AuthenticatedAdminShell>
-    </Suspense>
+    <div>
+      <H1 data-testid="admin-shell-marker" className="sr-only">
+        Admin
+      </H1>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
+        <AuthenticatedAdminShell>{children}</AuthenticatedAdminShell>
+      </Suspense>
+    </div>
   );
 }
 
