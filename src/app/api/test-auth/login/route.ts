@@ -2,9 +2,8 @@
 import { NextResponse } from "next/server";
 import {
   createTesterSession,
-  isTestAuthEnabled,
-  isValidTestAuthSecret,
-  readBearerToken,
+  evaluateTestAuthRequest,
+  TEST_AUTH_HEADER,
 } from "@/lib/test-auth";
 
 /** Chromium rejects __Secure-/__Host- names unless Secure is set. */
@@ -15,11 +14,12 @@ function httpSafeCookieName(name: string): string {
 }
 
 export async function POST(request: Request) {
-  if (!isTestAuthEnabled())
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  if (!isValidTestAuthSecret(readBearerToken(request)))
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const decision = evaluateTestAuthRequest(
+    request.headers.get(TEST_AUTH_HEADER),
+  );
+  if (!decision.allow) {
+    return NextResponse.json({ error: "Not found" }, { status: decision.status });
+  }
 
   const { cookieName, cookieValue, cookieOptions, expiresAt, user } =
     await createTesterSession();

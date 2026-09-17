@@ -3,7 +3,12 @@
 # vs
 .vscode
 .mcp.json
-.cursor
+.cursor/*
+!.cursor/environment.json
+!.cursor/dev/
+!.cursor/dev/**
+.cursor/dev/certs/
+.cursor/dev/node_modules/
 
 # dependencies
 /node_modules

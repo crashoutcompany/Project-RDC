@@ -103,8 +103,8 @@ This document provides essential context and guidelines for AI coding assistants
 ### How agents sign in
 
 - Build and start with `EXPOSE_TESTING_API=1`. Never set that flag on Vercel Production.
-- Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with
-  `Authorization: Bearer <secret>`.
+- Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with header
+  `x-test-auth-secret: <secret>`.
 - The route upserts the seeded admin tester and mints a real Better Auth session.
   Production always 404s.
 - Playwright `e2e/global-setup.ts` writes `e2e/.auth/tester.json`.
