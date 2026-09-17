@@ -42,7 +42,7 @@ const mockPrisma = {
 
 export const handlePrismaOperation = vi.fn((callback) =>
   callback(mockPrisma)
-    .then((data: any) => ({ success: true, data }))
+    .then((data: unknown) => ({ success: true, data }))
     .catch((error: Error) => ({ success: false, error: error.message }))
 );
 

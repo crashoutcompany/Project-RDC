@@ -63,7 +63,7 @@ export type GameProcessor = {
   ) => {
     status: VisionResultCodes;
 
-    data: any;
+    data: { players: VisionPlayer[]; winner: VisionPlayer[] };
     message: string;
   };
 };

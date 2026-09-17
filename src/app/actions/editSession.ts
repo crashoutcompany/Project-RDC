@@ -127,7 +127,7 @@ export async function approveEditRequest(editId: number, note?: string) {
   async function markRequestApproved(
     tx: Prisma.TransactionClient,
     id: number,
-    reviewer: any,
+    reviewer: { user?: { id?: string; email?: string | null } },
     reviewNote?: string,
   ) {
     await tx.sessionEditRequest.update({

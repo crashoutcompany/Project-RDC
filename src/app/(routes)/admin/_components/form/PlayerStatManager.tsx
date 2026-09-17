@@ -74,7 +74,7 @@ const PlayerStatManager = (props: Props) => {
       if (!ignore && !isMatch)
         append({
           statId: stat.statId,
-          stat: stat.statName as any, // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type
+          stat: stat.statName as StatName, // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type
           statValue: isToggleStat ? "0" : "",
         });
     });
