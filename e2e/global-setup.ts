@@ -25,9 +25,10 @@ function httpSafeCookieName(name: string): string {
 /** Build Chromium-safe storageState from the test-auth login cookie payload. */
 export function storageStateFromLoginCookie(
   cookie: LoginCookie,
-  hostname: string,
+  baseURL: string,
 ) {
   const expires = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
+  const { hostname } = new URL(baseURL);
   return {
     cookies: [
       {
@@ -54,7 +55,6 @@ export default async function globalSetup(config: FullConfig) {
     config.projects[0]?.use.baseURL ??
     process.env.PLAYWRIGHT_BASE_URL ??
     "http://127.0.0.1:3000";
-  const hostname = new URL(baseURL).hostname;
   const api = await request.newContext({ baseURL });
   const response = await api.post("/api/test-auth/login", {
     headers: { "x-test-auth-secret": secret },
@@ -70,11 +70,15 @@ export default async function globalSetup(config: FullConfig) {
     throw new Error(
       "Test login response missing cookie payload for Playwright storageState",
     );
+  if (body.user?.role !== "admin")
+    throw new Error(
+      `Test login did not mint an admin session (role=${body.user?.role ?? "missing"})`,
+    );
 
   await mkdir(dirname(TESTER_STORAGE_STATE), { recursive: true });
   await writeFile(
     TESTER_STORAGE_STATE,
-    JSON.stringify(storageStateFromLoginCookie(body.cookie, hostname), null, 2),
+    JSON.stringify(storageStateFromLoginCookie(body.cookie, baseURL), null, 2),
   );
   await api.dispose();
 }
