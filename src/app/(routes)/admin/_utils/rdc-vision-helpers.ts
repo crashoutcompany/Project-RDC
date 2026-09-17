@@ -4,12 +4,11 @@ import { VisionResultCodes, errorCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
 import { analyzeScreenShot } from "@/app/actions/visionAction";
 import { VisionResult } from "@/lib/visionTypes";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import prisma from "prisma/db";
 
 type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
 >["user"] & { role?: string };
 
 export const handleAnalyzeBtnClick = async (
@@ -18,7 +17,7 @@ export const handleAnalyzeBtnClick = async (
   gameName: string,
 ): Promise<FnReturnType> => {
   try {
-    const authUser = await auth.api.getSession({ headers: await headers() });
+    const authUser = await getAuthoritativeSession();
     const user = authUser?.user as AdminUser | undefined;
     if (!authUser || user?.role !== "admin")
       return {

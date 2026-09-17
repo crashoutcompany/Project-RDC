@@ -1,5 +1,6 @@
-// shared:proxy v1
+// shared:auth-proxy v2
 
+import { parseSetCookieHeader, toCookieOptions } from "better-auth/cookies";
 import { NextRequest, NextResponse } from "next/server";
 
 export type AuthAccessRule = "session" | `role:${string}`;
@@ -15,7 +16,17 @@ type Session = {
 
 type Auth = {
   api: {
-    getSession(options: { headers: Headers }): Promise<Session | null>;
+    getSession(options: {
+      headers: Headers;
+      returnHeaders?: boolean;
+    }): Promise<
+      | Session
+      | null
+      | {
+          headers: Headers;
+          response: Session | null;
+        }
+    >;
   };
 };
 
@@ -44,6 +55,47 @@ export function resolvePathAccess(
   return rules.find((rule) => pathMatches(pathname, rule.path))?.access ?? null;
 }
 
+function hasBetterAuthSessionCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some(
+      (cookie) =>
+        cookie.name.includes("session_token") ||
+        cookie.name.includes("session_data"),
+    );
+}
+
+function applyAuthCookies(response: NextResponse, headers: Headers) {
+  const setCookie = headers.get("set-cookie");
+  if (!setCookie) return response;
+
+  const parsed = parseSetCookieHeader(setCookie);
+  parsed.forEach((value, key) => {
+    if (!key) return;
+    response.cookies.set(key, value.value, toCookieOptions(value));
+  });
+  return response;
+}
+
+async function loadSession(auth: Auth, request: NextRequest) {
+  const result = await auth.api.getSession({
+    headers: request.headers,
+    returnHeaders: true,
+  });
+
+  if (result && typeof result === "object" && "response" in result) {
+    return {
+      session: result.response,
+      headers: result.headers,
+    };
+  }
+
+  return {
+    session: (result as Session | null) ?? null,
+    headers: new Headers(),
+  };
+}
+
 export function createAuthProxy({
   auth,
   publicPaths = [],
@@ -57,35 +109,50 @@ export function createAuthProxy({
     const isSignInPath = pathname === signInPath;
 
     if (!access && !isSignInPath) {
-      return NextResponse.next();
+      // Public paths stay renderable for guests. If a session cookie is
+      // present, refresh it here (not in RSC) so Set-Cookie can stick.
+      if (!hasBetterAuthSessionCookie(request)) {
+        return NextResponse.next();
+      }
+
+      const { headers: sessionHeaders } = await loadSession(auth, request);
+      return applyAuthCookies(NextResponse.next(), sessionHeaders);
     }
 
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    const { session, headers: sessionHeaders } = await loadSession(
+      auth,
+      request,
+    );
 
     if (isSignInPath) {
-      return session
+      const response = session
         ? NextResponse.redirect(new URL(signedInPath, request.url))
         : NextResponse.next();
+      return applyAuthCookies(response, sessionHeaders);
     }
 
     if (!access) {
-      return NextResponse.next();
+      return applyAuthCookies(NextResponse.next(), sessionHeaders);
     }
 
     if (!session) {
-      return NextResponse.redirect(new URL(signInPath, request.url));
+      return applyAuthCookies(
+        NextResponse.redirect(new URL(signInPath, request.url)),
+        sessionHeaders,
+      );
     }
 
     if (access.startsWith("role:")) {
       const requiredRole = access.slice("role:".length);
       const role = "role" in session.user ? session.user.role : undefined;
       if (role !== requiredRole) {
-        return new NextResponse(null, { status: 403 });
+        return applyAuthCookies(
+          new NextResponse(null, { status: 403 }),
+          sessionHeaders,
+        );
       }
     }
 
-    return NextResponse.next();
+    return applyAuthCookies(NextResponse.next(), sessionHeaders);
   };
 }

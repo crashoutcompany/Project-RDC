@@ -1,4 +1,4 @@
-// shared:create-auth v1
+// shared:create-auth v2
 
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
@@ -135,9 +135,8 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     database,
     secret,
     socialProviders,
-    // Prisma @@map("user_session") does not match Better Auth's modelName
-    // "UserSession" table probe; auth still uses the Prisma client correctly.
-    // Disable __Secure- cookie names for local/CI e2e (HTTP loopback).
+    // RDC: Prisma @@map("user_session") vs Better Auth "UserSession" probe.
+    // RDC: disable __Secure- cookie names for local/CI e2e (HTTP loopback).
     advanced: {
       database: {
         validateSchema: false,
@@ -148,11 +147,14 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     },
     session: {
       ...(sessionModelName ? { modelName: sessionModelName } : {}),
+      // Refresh only via proxy / route handlers / client POST — never from RSC GET.
+      deferSessionRefresh: true,
       cookieCache: {
         enabled: true,
         maxAge: 300,
       },
     },
+    // RDC: always pass additionalFields so session.user.role stays typed.
     user: {
       additionalFields: userAdditionalFields,
     },
