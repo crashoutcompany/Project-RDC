@@ -5,7 +5,23 @@ import config from "@/lib/config";
 import { nextCookies } from "better-auth/next-js";
 import posthog from "@/posthog/server-init";
 
-const baseURL = config.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const PRODUCTION_ORIGIN = "https://rdcstats.com";
+const baseURL =
+  process.env.VERCEL_ENV === "production"
+    ? PRODUCTION_ORIGIN
+    : config.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+const trustedOrigins = [
+  ...new Set(
+    [
+      baseURL,
+      PRODUCTION_ORIGIN,
+      "https://www.rdcstats.com",
+      "https://project-rdc.vercel.app",
+      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    ].filter((origin): origin is string => Boolean(origin)),
+  ),
+];
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -22,6 +38,7 @@ export const auth = betterAuth({
     },
   },
   baseURL,
+  trustedOrigins,
   trustHost: config.AUTH_TRUST_HOST === "true",
   socialProviders: {
     github: {
