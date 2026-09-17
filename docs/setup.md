@@ -25,7 +25,7 @@ NEXT_PUBLIC_POSTHOG_HOST="your_posthog_host"
 
 ### `.env.development.local`
 
-This file is used when running the application in development mode with `npm run dev`. It should contain all the necessary environment variables for full functionality.
+This file is used when running the application in development mode with `pnpm dev`. It should contain all the necessary environment variables for full functionality.
 
 ```bash
 # Add all required environment variables here
@@ -36,7 +36,7 @@ This file is used when running the application in development mode with `npm run
 
 ### `.env.production.local`
 
-This file is used for production builds and when running the application with `npm run start`. The build process will load variables from both `.env` and `.env.production.local`, with variables in `.env.production.local` taking precedence.
+This file is used for production builds and when running the application with `pnpm start`. The build process will load variables from both `.env` and `.env.production.local`, with variables in `.env.production.local` taking precedence.
 
 ```bash
 # Add all required environment variables here
@@ -47,7 +47,7 @@ This file is used for production builds and when running the application with `n
 
 ## Git Hooks (Husky)
 
-This project uses [Husky](https://typicode.github.io/husky/) for Git hooks. Hooks are automatically installed when you run `npm install` via the `prepare` script.
+This project uses [Husky](https://typicode.github.io/husky/) for Git hooks. Hooks are automatically installed when you run `pnpm install` via the `prepare` script.
 
 **Note:** The `prepare` script checks for the `CI` environment variable and skips Husky installation in CI/deployment environments (like GitHub Actions and Vercel).
 
@@ -64,7 +64,7 @@ The project automatically switches your local database connection to match Neon 
 1. **Authenticate with Neon CLI** (one-time):
 
    ```bash
-   npx neonctl auth
+   pnpm exec neonctl auth
    ```
 
 2. **Configure Project ID** - Add `projectId` to your `.neon` file:
@@ -76,7 +76,7 @@ The project automatically switches your local database connection to match Neon 
    }
    ```
 
-   You can find your project ID in the [Neon Console](https://console.neon.tech) URL or by running `npx neonctl projects list`.
+   You can find your project ID in the [Neon Console](https://console.neon.tech) URL or by running `pnpm exec neonctl projects list`.
 
 ### How It Works
 
@@ -91,7 +91,7 @@ When you checkout a branch that has a corresponding Neon preview branch (created
 To manually trigger the database branch switch:
 
 ```bash
-npm run update-neon-branch
+pnpm update-neon-branch
 ```
 
 ### Logs

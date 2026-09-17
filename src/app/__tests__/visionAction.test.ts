@@ -1,26 +1,23 @@
 /**
  * Vision Action Tests
- *
- * Note: Some tests may fail due to Jest mock hoisting issues with the Azure SDK.
- * The mock functions are defined but accessed before initialization due to jest.mock hoisting.
- * Consider using jest.doMock() or manual mocks in __mocks__ folder for more reliable mocking.
  */
+import { vi } from "vitest";
 
 // Mock modules that import ESM packages
-jest.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
 
 // Mock the game processor modules
-jest.mock("@/lib/game-processors/MarioKart8Processor");
-jest.mock("@/lib/game-processors/RocketLeagueProcessor");
-jest.mock("@/lib/game-processors/CoDGunGameProcessor");
+vi.mock("@/lib/game-processors/MarioKart8Processor");
+vi.mock("@/lib/game-processors/RocketLeagueProcessor");
+vi.mock("@/lib/game-processors/CoDGunGameProcessor");
 
-jest.mock("@/lib/config", () => ({
+vi.mock("@/lib/config", () => ({
   __esModule: true,
   default: {
     DOCUMENT_INTELLIGENCE_ENDPOINT: "https://example.test",
@@ -29,28 +26,28 @@ jest.mock("@/lib/config", () => ({
 }));
 
 // Store mock functions in a mutable object that can be accessed after hoisting
-const azureMocks = {
-  post: jest.fn(),
-  pollUntilDone: jest.fn(),
-};
+const azureMocks = vi.hoisted(() => ({
+  post: vi.fn(),
+  pollUntilDone: vi.fn(),
+}));
 
 // Mock Azure SDK
-jest.mock("@azure-rest/ai-document-intelligence", () => {
+vi.mock("@azure-rest/ai-document-intelligence", () => {
   // Use a closure to capture the mocks object reference
   return {
     __esModule: true,
-    default: jest.fn(() => ({
-      path: jest.fn(() => ({
+    default: vi.fn(() => ({
+      path: vi.fn(() => ({
         post: (...args: unknown[]) => azureMocks.post(...args),
       })),
     })),
-    getLongRunningPoller: jest.fn(() => ({
+    getLongRunningPoller: vi.fn(() => ({
       get body() {
         return azureMocks.pollUntilDone().then((res: any) => res.body);
       },
       pollUntilDone: (...args: unknown[]) => azureMocks.pollUntilDone(...args),
     })),
-    isUnexpected: jest.fn(() => false),
+    isUnexpected: vi.fn(() => false),
   };
 });
 
@@ -61,9 +58,7 @@ import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcess
 import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
 import { Player } from "@/generated/prisma/client";
 
-const mockMK8Processor = MarioKart8Processor as jest.Mocked<
-  typeof MarioKart8Processor
->;
+const mockMK8Processor = vi.mocked(MarioKart8Processor);
 
 // Expose mock functions for test usage
 const mockPostFn = azureMocks.post;
@@ -74,7 +69,7 @@ describe("Vision Action Tests", () => {
   const mockPlayers = [{ playerId: 1, playerName: "Player1" }] as Player[];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default mock implementations for a successful path
     mockPostFn.mockResolvedValue({});
     mockPollUntilDoneFn.mockResolvedValue({

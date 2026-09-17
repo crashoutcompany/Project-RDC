@@ -17,12 +17,8 @@ ensure_postgres
 ensure_role_db
 write_env_files
 
-log "Installing npm dependencies..."
-if [ -f package-lock.json ]; then
-  npm ci --ignore-scripts
-else
-  npm install --ignore-scripts
-fi
+log "Installing pnpm dependencies..."
+pnpm install --frozen-lockfile --ignore-scripts
 
 # Load DATABASE_URL / DIRECT_URL for Prisma + seed.
 set -a
@@ -31,10 +27,10 @@ source "${REPO_ROOT}/.env"
 set +a
 
 log "Syncing Prisma schema (db push)..."
-npx prisma db push
+pnpm exec prisma db push
 
 log "Generating Prisma client (TypedSQL)..."
-npx prisma generate --sql
+pnpm exec prisma generate --sql
 
 # wsproxy is needed because the seed uses the Neon serverless driver.
 ensure_wsproxy

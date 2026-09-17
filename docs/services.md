@@ -60,13 +60,13 @@ The project includes automatic database branch switching when you change git bra
 **Manual Usage**:
 
 ```bash
-npm run update-neon-branch
+pnpm update-neon-branch
 ```
 
 **Troubleshooting**:
 
-- If the hook doesn't run, ensure Husky is installed: `npm run prepare`
-- If authentication fails, run `npx neonctl auth` to re-authenticate
+- If the hook doesn't run, ensure Husky is installed: `pnpm prepare`
+- If authentication fails, run `pnpm exec neonctl auth` to re-authenticate
 - Verify the Neon branch exists in the [Neon Console](https://console.neon.tech)
 
 ---

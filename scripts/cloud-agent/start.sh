@@ -19,4 +19,4 @@ write_env_files
 ensure_wsproxy
 
 log "Starting Next.js dev server on http://localhost:3000"
-exec npm run dev
+exec pnpm dev

@@ -127,10 +127,11 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Development Workflow
 
-- **Dev Server**: `npm run dev` (uses Turbopack)
-- **Build**: `npm run build` for production builds
-- **Post-install**: Automatically runs `prisma generate --sql` after npm install
-- **Testing**: Jest with React Testing Library (`npm test`)
+- **Toolchain**: Node.js 24 and pnpm 10
+- **Dev Server**: `pnpm dev` (uses Turbopack)
+- **Build**: `pnpm build` for production builds
+- **Post-install**: Automatically runs `prisma generate --sql` after `pnpm install`
+- **Testing**: Vitest with React Testing Library (`pnpm test`)
 
 ### Key Dependencies
 
