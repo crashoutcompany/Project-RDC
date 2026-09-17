@@ -107,7 +107,7 @@ test.describe("instant nav: public soft navigations", () => {
     // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     await gameLink.scrollIntoViewIfNeeded();
     await gameLink.focus();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     await instant(page, async () => {
       await Promise.all([
@@ -141,7 +141,7 @@ test.describe("instant nav: public soft navigations", () => {
     await memberLink.evaluate((el) =>
       el.scrollIntoView({ block: "center", inline: "nearest" }),
     );
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.keyboard.press("Escape");
 
     await instant(page, async () => {
