@@ -37,6 +37,10 @@ describe("test auth guards", () => {
     ["the expose flag is absent", { EXPOSE_TESTING_API: undefined }],
     ["the app is running on Vercel without a preview env", { VERCEL: "1" }],
     ["the deployment is production", { VERCEL_ENV: "production" }],
+    [
+      "Vercel preview is set without EXPOSE_TESTING_API",
+      { VERCEL: "1", VERCEL_ENV: "preview", EXPOSE_TESTING_API: undefined },
+    ],
   ])("is disabled when %s", (_label, overrides) => {
     Object.assign(process.env, overrides);
     expect(isTestAuthEnabled()).toBe(false);
