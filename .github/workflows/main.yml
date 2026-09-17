@@ -16,6 +16,7 @@ env:
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
   DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
   BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-characters
+  TEST_AUTH_SECRET: test-auth-secret
 
 jobs:
   lint:

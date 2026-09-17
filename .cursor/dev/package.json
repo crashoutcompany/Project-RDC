@@ -1,0 +1,11 @@
+{
+  "name": "neon-local-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Neon-compatible proxy for Cloud Agent dev (HTTP /sql + WebSocket /v2 -> local Postgres). Not used in production.",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "ws": "^8.18.1"
+  }
+}

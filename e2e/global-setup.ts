@@ -47,7 +47,7 @@ export default async function globalSetup(config: FullConfig) {
   const hostname = new URL(baseURL).hostname;
   const api = await request.newContext({ baseURL });
   const response = await api.post("/api/test-auth/login", {
-    headers: { authorization: `Bearer ${secret}` },
+    headers: { "x-test-auth-secret": secret },
   });
 
   if (!response.ok())
