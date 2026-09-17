@@ -135,6 +135,13 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     database,
     secret,
     socialProviders,
+    // Prisma @@map("user_session") does not match Better Auth's modelName
+    // "UserSession" table probe; auth still uses the Prisma client correctly.
+    advanced: {
+      database: {
+        validateSchema: false,
+      },
+    },
     session: {
       ...(sessionModelName ? { modelName: sessionModelName } : {}),
       cookieCache: {
