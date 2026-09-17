@@ -1,87 +1,43 @@
-// shared:auth v1
-import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { nextCookies } from "better-auth/next-js";
 import prisma from "prisma/db";
+import posthog from "@/posthog/server-init";
 import {
   AUTH_ORIGINS,
-  type SocialProvider,
+  APP_NAME,
+  PREVIEW_ORIGIN,
+  PRODUCTION_URL,
 } from "@/lib/auth/config";
-import posthog from "@/posthog/server-init";
+import {
+  createAuth,
+  getEnabledSocialProviders,
+} from "@/lib/auth/create-auth";
 
-const baseURL =
-  process.env.BETTER_AUTH_URL ??
-  (process.env.VERCEL_ENV === "production"
-    ? AUTH_ORIGINS.production
-    : AUTH_ORIGINS.local);
+export type { SocialProviderId } from "@/lib/auth/create-auth";
 
-const trustedOrigins = [
-  ...new Set(
-    [
-      baseURL,
-      AUTH_ORIGINS.production,
-      AUTH_ORIGINS.productionWww,
-      AUTH_ORIGINS.vercelProject,
-      AUTH_ORIGINS.vercelPreviewWildcard,
-      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
-    ].filter((origin): origin is string => Boolean(origin)),
-  ),
-];
+export const enabledSocialProviders = getEnabledSocialProviders();
 
-const githubCredentials =
-  process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
-    ? {
-        clientId: process.env.AUTH_GITHUB_ID,
-        clientSecret: process.env.AUTH_GITHUB_SECRET,
-      }
-    : undefined;
-
-const googleCredentials =
-  process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-    ? {
-        clientId: process.env.AUTH_GOOGLE_ID,
-        clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      }
-    : undefined;
-
-export const enabledSocialProviders: SocialProvider[] = [
-  ...(githubCredentials ? (["github"] as const) : []),
-  ...(googleCredentials ? (["google"] as const) : []),
-];
-
-export const auth = betterAuth({
+export const auth = createAuth({
+  appName: APP_NAME,
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  secret: process.env.BETTER_AUTH_SECRET,
-  session: {
-    modelName: "UserSession",
-    cookieCache: {
-      enabled: true,
-      maxAge: 300,
+  productionUrl: PRODUCTION_URL,
+  previewOrigin: PREVIEW_ORIGIN,
+  extraTrustedOrigins: [
+    AUTH_ORIGINS.productionWww,
+    AUTH_ORIGINS.vercelProject,
+  ],
+  sessionModelName: "UserSession",
+  userAdditionalFields: {
+    role: {
+      type: "string",
+      required: false,
+      defaultValue: "user",
     },
   },
-  onAPIError: {
-    onError(error, ctx) {
-      console.error(error);
-      posthog.captureException(error, "auth-error");
-    },
-  },
-  baseURL,
-  trustedOrigins,
-  socialProviders: {
-    ...(githubCredentials ? { github: githubCredentials } : {}),
-    ...(googleCredentials ? { google: googleCredentials } : {}),
-  },
-  plugins: [nextCookies()],
-  user: {
-    additionalFields: {
-      role: {
-        type: "string",
-        required: false,
-        defaultValue: "user",
-      },
-    },
+  onError(error) {
+    console.error(error);
+    posthog.captureException(error, "auth-error");
   },
 });
 
