@@ -2,12 +2,11 @@ import { NextConfig } from "next";
 import { withBotId } from "botid/next/config";
 
 /**
- * Instant-nav e2e marker for local/CI measured builds only.
+ * E2E marker for local/CI measured builds only.
  * Never true on Vercel deploys (`VERCEL=1` is set for preview and production).
  */
-const isInstantNavTestBuild =
-  process.env.INSTANT_NAV_TEST_BUILD === "1" &&
-  process.env.VERCEL !== "1";
+const exposeTestingApi =
+  process.env.EXPOSE_TESTING_API === "1" && process.env.VERCEL !== "1";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
@@ -20,7 +19,7 @@ const nextConfig: NextConfig = {
   ],
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
-    exposeTestingApiInProductionBuild: isInstantNavTestBuild,
+    exposeTestingApiInProductionBuild: exposeTestingApi,
   },
   images: {
     remotePatterns: [

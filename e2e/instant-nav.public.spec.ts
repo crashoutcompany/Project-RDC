@@ -2,7 +2,8 @@ import { test, expect } from "@playwright/test";
 import { instant } from "@next/playwright";
 
 /** Suite origin; keeps initial-load `instant()` aligned with Playwright `baseURL`. */
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
+const BASE_URL =
+  process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 
 /** Known seeded game slug from generateStaticParams / production data. */
 const GAME_FIXTURE_PATH = "/games/mariokart8";
@@ -106,7 +107,7 @@ test.describe("instant nav: public soft navigations", () => {
     // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     await gameLink.scrollIntoViewIfNeeded();
     await gameLink.focus();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("domcontentloaded");
 
     await instant(page, async () => {
       await Promise.all([
@@ -140,7 +141,7 @@ test.describe("instant nav: public soft navigations", () => {
     await memberLink.evaluate((el) =>
       el.scrollIntoView({ block: "center", inline: "nearest" }),
     );
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("domcontentloaded");
     await page.keyboard.press("Escape");
 
     await instant(page, async () => {

@@ -100,6 +100,16 @@ This document provides essential context and guidelines for AI coding assistants
 - The sign-in page is `/signin`
 - Return error codes from `src/lib/constants` for consistent error handling
 
+### Agent login
+
+- Build and start E2E with `EXPOSE_TESTING_API=1`
+- Set `TEST_AUTH_SECRET` and send it as
+  `Authorization: Bearer <secret>` to `POST /api/test-auth/login`
+- The endpoint creates a real Better Auth session for the seeded admin tester;
+  it is unavailable on Vercel and production deployments
+- Playwright performs this login in `e2e/global-setup.ts` and stores state in
+  `e2e/.auth/tester.json`
+
 ### Stat Tracking
 
 - Stats are defined as enums in Prisma schema (`StatName` enum)
