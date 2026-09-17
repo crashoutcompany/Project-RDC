@@ -1,13 +1,17 @@
 import { vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ auth: {} }));
-vi.mock("better-auth/crypto", () => ({ makeSignature: vi.fn() }));
+vi.mock("better-auth/crypto", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("better-auth/crypto")>();
+  return { ...actual, makeSignature: vi.fn() };
+});
 vi.mock("prisma/db", () => ({ __esModule: true, default: {} }));
 
 import {
+  evaluateTestAuthRequest,
   isTestAuthEnabled,
   isValidTestAuthSecret,
-  readBearerToken,
+  TEST_AUTH_HEADER,
 } from "@/lib/test-auth";
 
 describe("test auth guards", () => {
@@ -31,7 +35,7 @@ describe("test auth guards", () => {
 
   it.each([
     ["the expose flag is absent", { EXPOSE_TESTING_API: undefined }],
-    ["the app is running on Vercel", { VERCEL: "1" }],
+    ["the app is running on Vercel without a preview env", { VERCEL: "1" }],
     ["the deployment is production", { VERCEL_ENV: "production" }],
   ])("is disabled when %s", (_label, overrides) => {
     Object.assign(process.env, overrides);
@@ -49,14 +53,14 @@ describe("test auth guards", () => {
     expect(isValidTestAuthSecret("")).toBe(false);
   });
 
-  it("reads only bearer authorization tokens", () => {
-    expect(
-      readBearerToken(
-        new Request("http://localhost", {
-          headers: { authorization: "Bearer test-auth-secret" },
-        }),
-      ),
-    ).toBe("test-auth-secret");
-    expect(readBearerToken(new Request("http://localhost"))).toBeNull();
+  it("allows a matching x-test-auth-secret header", () => {
+    expect(evaluateTestAuthRequest("test-auth-secret")).toEqual({
+      allow: true,
+    });
+    expect(evaluateTestAuthRequest("wrong-secret")).toEqual({
+      allow: false,
+      status: 401,
+    });
+    expect(TEST_AUTH_HEADER).toBe("x-test-auth-secret");
   });
 });

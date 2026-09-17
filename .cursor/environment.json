@@ -1,15 +1,21 @@
 {
   "name": "Project RDC",
-  "install": "bash scripts/cloud-agent/install.sh",
-  "start": "bash scripts/cloud-agent/start-db.sh",
+  "install": "bash .cursor/dev/install.sh",
+  "start": "bash .cursor/dev/start.sh",
   "terminals": [
     {
-      "name": "wsproxy",
-      "command": "bash scripts/cloud-agent/wsproxy.sh"
+      "name": "neon-proxy",
+      "command": "node .cursor/dev/neon-local-proxy.mjs"
     },
     {
       "name": "dev",
-      "command": "pnpm dev"
+      "command": "export NODE_EXTRA_CA_CERTS=\"$PWD/.cursor/dev/certs/ca.crt\"; until curl -sf --cacert \"$NODE_EXTRA_CA_CERTS\" https://db.localtest.me/health >/dev/null 2>&1; do sleep 0.5; done; pnpm dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "next-dev",
+      "port": 3000
     }
   ]
 }
