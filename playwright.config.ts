@@ -26,7 +26,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "EXPOSE_TESTING_API=1 npm run start",
+    command: "EXPOSE_TESTING_API=1 pnpm start",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
