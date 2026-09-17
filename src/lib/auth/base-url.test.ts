@@ -32,6 +32,36 @@ describe("resolveAuthBaseUrl", () => {
     ).toBe(PRODUCTION_URL);
   });
 
+  it("allows loopback BETTER_AUTH_URL for local e2e production builds", () => {
+    expect(
+      resolveAuthBaseUrl(PRODUCTION_URL, {
+        NODE_ENV: "production",
+        EXPOSE_TESTING_API: "1",
+        BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      }),
+    ).toBe("http://127.0.0.1:3000");
+  });
+
+  it("does not allow loopback override on Vercel even with EXPOSE_TESTING_API", () => {
+    expect(
+      resolveAuthBaseUrl(PRODUCTION_URL, {
+        NODE_ENV: "production",
+        EXPOSE_TESTING_API: "1",
+        VERCEL: "1",
+        BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      }),
+    ).toBe(PRODUCTION_URL);
+  });
+
+  it("defaults to loopback for local e2e production builds without BETTER_AUTH_URL", () => {
+    expect(
+      resolveAuthBaseUrl(PRODUCTION_URL, {
+        NODE_ENV: "production",
+        EXPOSE_TESTING_API: "1",
+      }),
+    ).toBe("http://127.0.0.1:3000");
+  });
+
   it("keeps a non-loopback BETTER_AUTH_URL in production", () => {
     expect(
       resolveAuthBaseUrl(PRODUCTION_URL, {
