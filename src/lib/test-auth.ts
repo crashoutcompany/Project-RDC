@@ -40,9 +40,10 @@ export function readTestAuthSecret(secret: string | undefined): string | null {
 }
 
 /**
- * RDC policy (stricter than blue preview auto-enable): require
- * EXPOSE_TESTING_API=1 and never enable on Vercel production. Preview/prod
- * builds also omit the route via isTestingApiExposed() (VERCEL=1).
+ * Shared CrashOut policy (blue/Z/RDC): require TEST_AUTH_SECRET +
+ * EXPOSE_TESTING_API=1, deny Vercel production via VERCEL_ENV, and keep
+ * Vercel runtimes closed via isTestingApiExposed (VERCEL !== "1"). Do not
+ * auto-enable from NODE_ENV=development or preview alone.
  */
 export function isTestAuthEnabled(
   env: TestAuthEnv = currentTestAuthEnv(),
