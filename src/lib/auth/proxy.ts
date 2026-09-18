@@ -12,21 +12,25 @@ export type AuthPathRule = {
 
 type Session = {
   user: object;
+  needsRefresh?: boolean;
 };
+
+type GetSessionResult =
+  | Session
+  | null
+  | {
+      headers: Headers;
+      response: Session | null;
+    };
 
 type Auth = {
   api: {
     getSession(options: {
       headers: Headers;
       returnHeaders?: boolean;
-    }): Promise<
-      | Session
-      | null
-      | {
-          headers: Headers;
-          response: Session | null;
-        }
-    >;
+      /** Better Auth refreshes durable session rows only on POST when deferSessionRefresh is on. */
+      method?: "GET" | "POST";
+    }): Promise<GetSessionResult>;
   };
 };
 
@@ -77,12 +81,10 @@ function applyAuthCookies(response: NextResponse, headers: Headers) {
   return response;
 }
 
-async function loadSession(auth: Auth, request: NextRequest) {
-  const result = await auth.api.getSession({
-    headers: request.headers,
-    returnHeaders: true,
-  });
-
+function unwrapSessionResult(result: GetSessionResult): {
+  session: Session | null;
+  headers: Headers;
+} {
   if (result && typeof result === "object" && "response" in result) {
     return {
       session: result.response,
@@ -94,6 +96,30 @@ async function loadSession(auth: Auth, request: NextRequest) {
     session: (result as Session | null) ?? null,
     headers: new Headers(),
   };
+}
+
+async function loadSession(auth: Auth, request: NextRequest) {
+  // GET is read-only under deferSessionRefresh (may set needsRefresh).
+  let loaded = unwrapSessionResult(
+    await auth.api.getSession({
+      headers: request.headers,
+      returnHeaders: true,
+      method: "GET",
+    }),
+  );
+
+  // Durable expiry refresh + Set-Cookie only happen on POST.
+  if (loaded.session?.needsRefresh) {
+    loaded = unwrapSessionResult(
+      await auth.api.getSession({
+        headers: request.headers,
+        returnHeaders: true,
+        method: "POST",
+      }),
+    );
+  }
+
+  return loaded;
 }
 
 export function createAuthProxy({
