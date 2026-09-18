@@ -1,13 +1,14 @@
-// shared:sign-in-buttons v1
+// shared:sign-in-buttons v2
 "use client";
 
 import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
+
+import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth/client";
 import {
   SIGN_IN_PATH,
   type SocialProvider,
 } from "@/lib/auth/config";
-import { Button } from "@/components/ui/button";
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
   github: "GitHub",
@@ -39,12 +40,13 @@ export function SignInButtons({
     }
   }
 
-  if (providers.length === 0)
+  if (providers.length === 0) {
     return (
       <p role="status" className="text-muted-foreground text-sm">
         No social sign-in providers are currently configured.
       </p>
     );
+  }
 
   return (
     <div className="flex flex-col gap-4">
