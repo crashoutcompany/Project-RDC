@@ -1,4 +1,4 @@
-// shared:test-auth v1
+// shared:test-auth v2
 import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import prisma from "prisma/db";
 import { auth } from "@/lib/auth";
@@ -34,18 +34,22 @@ function readEnvValue(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+/** Treat unset / whitespace-only values as missing. Never log the raw secret. */
 export function readTestAuthSecret(secret: string | undefined): string | null {
   return readEnvValue(secret);
 }
 
+/**
+ * Shared CrashOut policy (blue/Z/RDC): require TEST_AUTH_SECRET +
+ * EXPOSE_TESTING_API=1, deny Vercel production via VERCEL_ENV, and keep
+ * Vercel runtimes closed via isTestingApiExposed (VERCEL !== "1"). Do not
+ * auto-enable from NODE_ENV=development or preview alone.
+ */
 export function isTestAuthEnabled(
   env: TestAuthEnv = currentTestAuthEnv(),
 ): boolean {
   if (readTestAuthSecret(env.TEST_AUTH_SECRET) === null) return false;
 
-  // Never enable on Vercel production (defense in depth — expose also requires
-  // VERCEL !== "1"). Always require EXPOSE_TESTING_API=1; do not auto-enable
-  // from NODE_ENV=development alone.
   const vercelEnv = readEnvValue(env.VERCEL_ENV);
   if (vercelEnv === "production") return false;
 

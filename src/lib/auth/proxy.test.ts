@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createAuthProxy, resolvePathAccess } from "./proxy";
 
-function request(pathname: string) {
-  return new NextRequest(`https://example.com${pathname}`, {
-    headers: { "x-request-id": "request-1" },
-  });
+function request(pathname: string, cookieHeader?: string) {
+  const headers: Record<string, string> = { "x-request-id": "request-1" };
+  if (cookieHeader) headers.cookie = cookieHeader;
+  return new NextRequest(`https://example.com${pathname}`, { headers });
 }
 
 describe("resolvePathAccess", () => {
@@ -39,7 +39,7 @@ describe("resolvePathAccess", () => {
 });
 
 describe("createAuthProxy", () => {
-  it("does not fetch a session for ungated or public paths", async () => {
+  it("does not fetch a session for public paths without a session cookie", async () => {
     const getSession = vi.fn();
     const proxy = createAuthProxy({
       auth: { api: { getSession } },
@@ -54,8 +54,73 @@ describe("createAuthProxy", () => {
     expect(getSession).not.toHaveBeenCalled();
   });
 
-  it("passes request headers and redirects guests from gated paths", async () => {
-    const getSession = vi.fn().mockResolvedValue(null);
+  it("reads session with GET and skips POST when needsRefresh is false", async () => {
+    const getSession = vi.fn().mockResolvedValue({
+      headers: new Headers(),
+      response: { user: { id: "1" }, needsRefresh: false },
+    });
+    const proxy = createAuthProxy({
+      auth: { api: { getSession } },
+      publicPaths: ["/"],
+      rules: [{ path: "/app/*", access: "session" }],
+      signInPath: "/signin",
+    });
+
+    await proxy(request("/", "better-auth.session_token=stale"));
+
+    expect(getSession).toHaveBeenCalledTimes(1);
+    expect(getSession).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      returnHeaders: true,
+      method: "GET",
+    });
+  });
+
+  it("POSTs to refresh when GET reports needsRefresh", async () => {
+    const sessionHeaders = new Headers({
+      "set-cookie": "better-auth.session_token=refreshed; Path=/; HttpOnly",
+    });
+    const getSession = vi
+      .fn()
+      .mockResolvedValueOnce({
+        headers: new Headers(),
+        response: { user: { id: "1" }, needsRefresh: true },
+      })
+      .mockResolvedValueOnce({
+        headers: sessionHeaders,
+        response: { user: { id: "1" }, needsRefresh: false },
+      });
+    const proxy = createAuthProxy({
+      auth: { api: { getSession } },
+      publicPaths: ["/"],
+      rules: [{ path: "/app/*", access: "session" }],
+      signInPath: "/signin",
+    });
+
+    const response = await proxy(
+      request("/", "better-auth.session_token=stale"),
+    );
+
+    expect(getSession).toHaveBeenNthCalledWith(1, {
+      headers: expect.any(Headers),
+      returnHeaders: true,
+      method: "GET",
+    });
+    expect(getSession).toHaveBeenNthCalledWith(2, {
+      headers: expect.any(Headers),
+      returnHeaders: true,
+      method: "POST",
+    });
+    expect(response.cookies.get("better-auth.session_token")?.value).toBe(
+      "refreshed",
+    );
+  });
+
+  it("passes request headers with returnHeaders and redirects guests from gated paths", async () => {
+    const getSession = vi.fn().mockResolvedValue({
+      headers: new Headers(),
+      response: null,
+    });
     const proxy = createAuthProxy({
       auth: { api: { getSession } },
       rules: [{ path: "*", access: "session" }],
@@ -65,12 +130,19 @@ describe("createAuthProxy", () => {
 
     const response = await proxy(incoming);
 
-    expect(getSession).toHaveBeenCalledWith({ headers: incoming.headers });
+    expect(getSession).toHaveBeenCalledWith({
+      headers: incoming.headers,
+      returnHeaders: true,
+      method: "GET",
+    });
     expect(response.headers.get("location")).toBe("https://example.com/signin");
   });
 
   it("redirects signed-in users away from sign-in", async () => {
-    const getSession = vi.fn().mockResolvedValue({ user: {} });
+    const getSession = vi.fn().mockResolvedValue({
+      headers: new Headers(),
+      response: { user: {} },
+    });
     const proxy = createAuthProxy({
       auth: { api: { getSession } },
       publicPaths: ["/signin"],
@@ -88,7 +160,10 @@ describe("createAuthProxy", () => {
     const proxy = createAuthProxy({
       auth: {
         api: {
-          getSession: vi.fn().mockResolvedValue({ user: { role: "member" } }),
+          getSession: vi.fn().mockResolvedValue({
+            headers: new Headers(),
+            response: { user: { role: "member" } },
+          }),
         },
       },
       rules: [{ path: "/admin/*", access: "role:admin" }],

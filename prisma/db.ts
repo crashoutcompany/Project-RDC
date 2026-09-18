@@ -42,18 +42,22 @@ export async function handlePrismaOperation<T>(
   try {
     const data = await operation(prisma);
     return { success: true, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code: unknown }).code)
+        : undefined;
     // Lazy-load so scripts (prisma seed via tsx) can use this module without
     // pulling in `server-only` via PostHog/config.
     try {
       const { default: posthog } = await import("@/posthog/server-init");
       posthog.captureException(error, "database-error", {
-        code: error?.code,
+        code: errorCode,
       });
     } catch {
       // ignore analytics failures outside the Next server runtime
     }
-    if (error?.code === "P1000")
+    if (errorCode === "P1000")
       console.warn("Database connection error. Database may be expired.");
     if (error instanceof PrismaClientKnownRequestError) {
       return {
