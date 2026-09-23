@@ -120,7 +120,7 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "neonctl": "^2.18.1",
+    "neonctl": "^5.0.0",
     "next-devtools-mcp": "^0.4.0",
     "postcss": "^8.5.4",
     "prettier": "^3.8.1",
