@@ -14,6 +14,7 @@ vi.mock("@/posthog/ai-telemetry", () => ({
   AiTelemetryProperty: { SOURCE: "source", ENVIRONMENT: "environment" },
 }));
 
+import { after } from "next/server";
 import { createLlmVisionProvider } from "./llm";
 
 describe("createLlmVisionProvider", () => {
@@ -44,10 +45,10 @@ describe("createLlmVisionProvider", () => {
 
     const call = generateTextMock.mock.calls[0][0];
     const imagePart = call.messages[0].content.find(
-      (part: { type: string }) => part.type === "image",
+      (part: { type: string }) => part.type === "file",
     );
     expect(imagePart).toMatchObject({
-      type: "image",
+      type: "file",
       mediaType: "image/png",
     });
   });
@@ -64,7 +65,7 @@ describe("createLlmVisionProvider", () => {
 
     const call = generateTextMock.mock.calls[0][0];
     const imagePart = call.messages[0].content.find(
-      (part: { type: string }) => part.type === "image",
+      (part: { type: string }) => part.type === "file",
     );
     expect(imagePart).toMatchObject({ mediaType: "image/jpeg" });
   });
@@ -80,5 +81,27 @@ describe("createLlmVisionProvider", () => {
         rosterHint: [],
       }),
     ).rejects.toThrow("Vision extraction produced no result");
+  });
+
+  it("flushes telemetry via after() by default", async () => {
+    generateTextMock.mockResolvedValue({ output: { players: [] } });
+    const provider = createLlmVisionProvider("google:gemini-2.5-flash");
+
+    await provider.extract({ imageBase64: "iVBORw0KGgo", gameId: 2, rosterHint: [] });
+
+    expect(after).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses an injected scheduleFlush instead of after() (CLI path)", async () => {
+    generateTextMock.mockResolvedValue({ output: { players: [] } });
+    const scheduleFlush = vi.fn();
+    const provider = createLlmVisionProvider("google:gemini-2.5-flash", {
+      scheduleFlush,
+    });
+
+    await provider.extract({ imageBase64: "iVBORw0KGgo", gameId: 2, rosterHint: [] });
+
+    expect(scheduleFlush).toHaveBeenCalledTimes(1);
+    expect(after).not.toHaveBeenCalled();
   });
 });

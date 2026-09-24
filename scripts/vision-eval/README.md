@@ -62,17 +62,27 @@ scripts/vision-eval/fixtures/
 - `winners` — expected winner names, order doesn't matter.
 
 Start with ~20 fixtures across the games/scenarios you care about most.
-Getting screenshots:
+Getting screenshots and a starting `expected.json`:
 
-- Real uploads you've already saved from the admin vision modal.
-- The scoreboard harvester (`scripts/scoreboard-harvester/`) can pull
-  end-of-match frames from a YouTube video or local file — but its OCR
-  pre-filter is a macOS-only Swift/Apple Vision binary, so on Linux you'll
-  need to grab frames manually (e.g. `ffmpeg -ss <time> -i video.mp4 -frames:v 1 image.png`)
-  rather than via `pnpm harvest`.
+- **The scoreboard harvester (`scripts/scoreboard-harvester/`)** can build fixtures
+  directly, on any OS:
 
-Whatever the source, you hand-label `expected.json` yourself — the harvester
-only extracts candidate frames, it doesn't produce ground truth.
+  ```bash
+  pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
+    --detect-model google:gemini-2.5-flash --emit-fixtures scripts/vision-eval/fixtures
+  ```
+
+  This finds each end-of-match scoreboard, runs the app's real extraction on it, and
+  writes `<video-id>-match-NN/{image.png,expected.json}` straight into the fixtures
+  directory. Every generated `expected.json` starts with `"_draft": true` — **check
+  every stat value against the actual screenshot and delete `_draft` before trusting
+  it**; `loadFixtures` warns loudly on any case still marked as a draft, and this eval
+  script only reports scores, it doesn't verify them for you. See the harvester's
+  README for detector/model options.
+- Real uploads you've already saved from the admin vision modal (hand-label
+  `expected.json` yourself).
+- Grab a frame manually (`ffmpeg -ss <time> -i video.mp4 -frames:v 1 image.png`) and
+  hand-label it, if you don't want to run the harvester.
 
 ## What it reports, per provider
 

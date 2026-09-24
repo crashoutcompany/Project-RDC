@@ -1,6 +1,6 @@
 import type { Player } from "@/generated/prisma/client";
 import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
-import { getGameProcessor } from "@/app/actions/visionAction";
+import { getGameProcessor } from "@/lib/game-processors";
 import { buildRosterHint, getVisionProvider, toLegacyAnalyzed } from "@/lib/vision";
 import type { Stat } from "@/lib/visionTypes";
 
@@ -17,6 +17,8 @@ export interface CaseResult {
  * without its `after()`/PostHog calls, which need an active Next.js request
  * scope that a bare CLI script never has. Keep this in sync with
  * `src/app/actions/visionAction.ts` if that orchestration changes.
+ *
+ * Also used by the scoreboard harvester's `--draft` stage.
  */
 export const runVisionCase = async (
   imageBase64: string,
@@ -30,7 +32,8 @@ export const runVisionCase = async (
       throw new Error(`Game config not found for gameId: ${gameId}`);
     }
 
-    const provider = getVisionProvider();
+    // No request scope here, so flush telemetry inline instead of via after().
+    const provider = getVisionProvider({ scheduleFlush: (flush) => void flush() });
     const scoreboard = await provider.extract({
       imageBase64,
       gameId,

@@ -3,7 +3,10 @@ import type { Player } from "@/generated/prisma/client";
 import { PLAYER_MAPPINGS } from "@/app/(routes)/admin/_utils/player-mappings";
 import type { VisionProvider } from "./types";
 import { azureDocumentIntelligenceProvider } from "./providers/azure-di";
-import { createLlmVisionProvider } from "./providers/llm";
+import {
+  createLlmVisionProvider,
+  type LlmVisionProviderOptions,
+} from "./providers/llm";
 
 export type {
   VisionProvider,
@@ -24,12 +27,14 @@ export { toLegacyAnalyzed } from "./bridge";
  * `local:` models are only reachable from `pnpm dev` or a self-hosted
  * deployment; a Vercel server action cannot reach localhost or your LAN.
  */
-export const getVisionProvider = (): VisionProvider => {
+export const getVisionProvider = (
+  options: LlmVisionProviderOptions = {},
+): VisionProvider => {
   const providerKind = process.env.VISION_PROVIDER || "azure-di";
 
   switch (providerKind) {
     case "llm":
-      return createLlmVisionProvider();
+      return createLlmVisionProvider(undefined, options);
     case "azure-di":
       return azureDocumentIntelligenceProvider;
     default:

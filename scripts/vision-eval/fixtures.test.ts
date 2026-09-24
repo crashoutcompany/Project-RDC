@@ -105,4 +105,18 @@ describe("loadFixtures", () => {
     writeCase(dir, "a-case", { gameId: 1, sessionPlayers: [], players: [] });
     expect(loadFixtures(dir).map((f) => f.id)).toEqual(["a-case", "b-case"]);
   });
+
+  it("warns about a fixture that is still an unreviewed harvester draft", () => {
+    writeCase(dir, "draft-case", {
+      _draft: true,
+      gameId: 2,
+      sessionPlayers: ["Mark"],
+      players: [{ name: "Mark", stats: { RL_GOALS: "3" } }],
+    });
+
+    expect(loadFixtures(dir)).toHaveLength(1);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("draft-case: expected.json is still an unreviewed harvester draft"),
+    );
+  });
 });

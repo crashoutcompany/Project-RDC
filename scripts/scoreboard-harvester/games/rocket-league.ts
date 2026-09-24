@@ -31,5 +31,18 @@ export const rocketLeague: GameProfile = {
     fps: 1,
     minMatchIntervalSec: 180,
   },
+  ai: {
+    description:
+      "The Rocket League end-of-match results screen: two team tables " +
+      "(blue on top, orange below) with columns SCORE, GOALS, ASSISTS, SAVES, " +
+      "SHOTS and one row per player, plus a WINNER banner or an MVP badge on " +
+      "one player.",
+    reject:
+      "The in-match TAB scoreboard (same columns, but gameplay and the match " +
+      "clock are still visible and there is no WINNER banner), goal replays, " +
+      "the post-goal or podium celebration without the stat tables, menus, " +
+      "loading screens, and ordinary gameplay.",
+  },
   referenceFileName: "scoreboard.png",
+  appGameId: 2,
 };

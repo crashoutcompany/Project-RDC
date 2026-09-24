@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"],
+      "prisma/*": ["./prisma/*"],
+      "public/*": ["./public/*"],
+      "server-only": ["./scripts/shims/server-only.ts"]
+    }
+  }
+}

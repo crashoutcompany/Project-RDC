@@ -12,6 +12,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "vision-ocr uses Apple's Vision framework and only builds on macOS." >&2
+    echo "On other platforms, harvest with the AI detector instead: --detector ai" >&2
+    exit 1
+fi
+
 mkdir -p ../bin
 
 echo "Compiling vision-ocr.swift…"

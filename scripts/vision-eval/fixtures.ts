@@ -12,6 +12,8 @@ export interface Fixture {
 }
 
 interface ExpectedJson {
+  /** Set by `pnpm harvest --emit-fixtures`; delete once every value is hand-checked. */
+  _draft?: boolean;
   gameId: number;
   sessionPlayers: string[];
   players: { name: string; stats: Record<string, string> }[];
@@ -49,6 +51,12 @@ export const loadFixtures = (fixturesDir: string): Fixture[] => {
       const expectedJson = JSON.parse(
         readFileSync(expectedPath, "utf-8"),
       ) as ExpectedJson;
+
+      if (expectedJson._draft)
+        console.warn(
+          `${entry.name}: expected.json is still an unreviewed harvester draft — ` +
+            `check every value, then delete "_draft", or its scores are meaningless`,
+        );
 
       const sessionPlayers = expectedJson.sessionPlayers.map(
         (playerName, index) =>

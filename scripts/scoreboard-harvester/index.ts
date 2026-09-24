@@ -5,33 +5,51 @@
  * Downloads (or accepts) a video, extracts end-of-match scoreboard
  * screenshots, and writes one PNG per detected match. Game-agnostic — the
  * actual scoreboard recognition is driven by a per-game profile in games/.
- * See README.md for full docs.
+ * Detection runs on any OS with a vision model (`--detector ai`), or with
+ * Apple Vision OCR on macOS (`--detector ocr`). See README.md for full docs.
  *
- *   npx tsx scripts/scoreboard-harvester extract  --game rocket-league --url <youtube>
- *   npx tsx scripts/scoreboard-harvester bootstrap --game rocket-league --from ./shot.png
+ *   pnpm harvest -- extract  --game rocket-league --url <youtube>
+ *   pnpm harvest -- bootstrap --game rocket-league --from ./shot.png
  */
+import "./load-env";
 import { parseArgs } from "util";
 import path from "path";
 import fs from "fs";
 import sharp from "sharp";
 
-import { checkDeps } from "./pipeline/deps";
+import { getVisionModelSpec } from "@/lib/vision/models";
+import { checkDeps, isVisionOcrUsable } from "./pipeline/deps";
 import { downloadVideo, probeDuration } from "./pipeline/download";
 import { sampleFrames } from "./pipeline/sample";
 import { filterByPHash, loadReferenceHash } from "./pipeline/phash";
-import { ocrFrames } from "./pipeline/ocr";
-import { dedupAndSave } from "./pipeline/dedup";
+import {
+  detectFrames,
+  selectRefineFrames,
+  type FrameClassifier,
+} from "./pipeline/detect";
+import { createOcrClassifier } from "./pipeline/classifiers/ocr";
+import { createAiClassifier } from "./pipeline/classifiers/ai";
+import { clusterConsecutive, dedupAndSave } from "./pipeline/dedup";
 import { submitMatches } from "./pipeline/submit";
 import { parseFiniteNumber, sanitizeUrl, urlToSlug } from "./utils";
-import { FrameRecord, Manifest, ResolvedConfig } from "./types";
+import {
+  DetectionRecord,
+  FrameRecord,
+  Manifest,
+  ResolvedConfig,
+} from "./types";
 import { DEFAULT_GAME_ID, listGameIds, resolveProfile } from "./games/registry";
 import type { GameProfile } from "./games/types";
 
-const HARVESTER_ROOT = __dirname;
+const HARVESTER_ROOT = import.meta.dirname;
 const COMMANDS = ["extract", "bootstrap"] as const;
 const DEFAULT_SAMPLE_WIDTH = 1280;
 const DEFAULT_JPEG_QUALITY = 3;
-const DEFAULT_OCR_CONCURRENCY = 2;
+const DEFAULT_DETECT_CONCURRENCY = 2;
+const DEFAULT_AI_STRIDE_SEC = 4;
+const DEFAULT_AI_GRID = 3;
+const DEFAULT_AI_MIN_CONFIDENCE = 0.6;
+const DETECTORS = ["auto", "ocr", "ai"] as const;
 type Command = (typeof COMMANDS)[number];
 
 interface ParsedArgs {
@@ -49,8 +67,11 @@ interface ParsedArgs {
  * @returns Parsed command, source, resolved profile, and resolved configuration.
  */
 function parseInputs(): ParsedArgs {
+  const argv = process.argv.slice(2);
+
+  if (argv[0] === "--") argv.shift();
   const { values, positionals } = parseArgs({
-    args: process.argv.slice(2),
+    args: argv,
     allowPositionals: true,
     options: {
       game: { type: "string", default: DEFAULT_GAME_ID },
@@ -69,10 +90,26 @@ function parseInputs(): ParsedArgs {
       quality: { type: "string", default: "720" },
       "sample-width": { type: "string", default: String(DEFAULT_SAMPLE_WIDTH) },
       "jpeg-quality": { type: "string", default: String(DEFAULT_JPEG_QUALITY) },
-      "ocr-concurrency": {
+      detector: { type: "string", default: "auto" },
+      "detect-model": { type: "string" },
+      "detect-concurrency": { type: "string" },
+      // Pre-AI name for --detect-concurrency, kept as an alias.
+      "ocr-concurrency": { type: "string" },
+      "ai-stride-sec": {
         type: "string",
-        default: String(DEFAULT_OCR_CONCURRENCY),
+        default: String(DEFAULT_AI_STRIDE_SEC),
       },
+      "ai-grid": { type: "string", default: String(DEFAULT_AI_GRID) },
+      "ai-min-confidence": {
+        type: "string",
+        default: String(DEFAULT_AI_MIN_CONFIDENCE),
+      },
+      "no-refine": { type: "boolean", default: false },
+      hwaccel: { type: "string" },
+      draft: { type: "boolean", default: false },
+      "extract-model": { type: "string" },
+      players: { type: "string" },
+      "emit-fixtures": { type: "string" },
       "keep-frames": { type: "boolean", default: false },
       start: { type: "string" },
       end: { type: "string" },
@@ -178,13 +215,74 @@ function parseInputs(): ParsedArgs {
     min: 1,
     max: 31,
   })!;
-  const ocrConcurrency = parseFiniteNumber({
-    name: "ocr-concurrency",
-    raw: values["ocr-concurrency"],
+  const detectConcurrency =
+    parseFiniteNumber({
+      name: "detect-concurrency",
+      raw: values["detect-concurrency"] ?? values["ocr-concurrency"],
+      kind: "int",
+      min: 1,
+      max: 8,
+    }) ?? DEFAULT_DETECT_CONCURRENCY;
+
+  const detectorFlag = values.detector as string;
+  if (!(DETECTORS as readonly string[]).includes(detectorFlag)) {
+    console.error(
+      `Invalid --detector: must be one of ${DETECTORS.join(", ")}, got "${detectorFlag}"`,
+    );
+    process.exit(1);
+  }
+  // auto keeps the free local OCR path wherever it's already set up.
+  const detector: ResolvedConfig["detector"] =
+    detectorFlag === "auto"
+      ? isVisionOcrUsable(HARVESTER_ROOT)
+        ? "ocr"
+        : "ai"
+      : (detectorFlag as ResolvedConfig["detector"]);
+  const defaultModel = process.env.HARVEST_DETECT_MODEL || getVisionModelSpec();
+  const detectModel =
+    (values["detect-model"] as string | undefined) ?? defaultModel;
+
+  const aiStrideSec = parseFiniteNumber({
+    name: "ai-stride-sec",
+    raw: values["ai-stride-sec"],
+    kind: "float",
+    min: 0,
+  })!;
+  const aiStrideFrames = Math.max(1, Math.round(aiStrideSec * fps));
+  if (detector === "ai" && aiStrideFrames > dedupGap) {
+    console.error(
+      `Invalid --ai-stride-sec: ${aiStrideSec}s is ${aiStrideFrames} frames, more than ` +
+        `--dedup-gap (${dedupGap}), so hits on one scoreboard would split into ` +
+        `separate matches. Use at most ${dedupGap / fps}s or raise --dedup-gap.`,
+    );
+    process.exit(1);
+  }
+  const aiGrid = parseFiniteNumber({
+    name: "ai-grid",
+    raw: values["ai-grid"],
     kind: "int",
     min: 1,
-    max: 8,
+    max: 4,
   })!;
+  const aiMinConfidence = parseFiniteNumber({
+    name: "ai-min-confidence",
+    raw: values["ai-min-confidence"],
+    kind: "float",
+    min: 0,
+    max: 1,
+  })!;
+
+  const draft = Boolean(values.draft) || values["emit-fixtures"] !== undefined;
+  if (draft && profile.appGameId === undefined) {
+    console.error(
+      `--draft needs appGameId on the "${profile.id}" game profile (see games/README.md)`,
+    );
+    process.exit(1);
+  }
+  const players = ((values.players as string | undefined) ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
   const start = parseFiniteNumber({
     name: "start",
     raw: values.start,
@@ -224,7 +322,22 @@ function parseInputs(): ParsedArgs {
     quality,
     sampleWidth,
     jpegQuality,
-    ocrConcurrency,
+    detectConcurrency,
+    detector,
+    detectModel: detector === "ai" ? detectModel : undefined,
+    aiStrideFrames,
+    aiGrid,
+    aiMinConfidence,
+    aiRefine: !values["no-refine"],
+    hwaccel: values.hwaccel as string | undefined,
+    draft,
+    extractModel: draft
+      ? ((values["extract-model"] as string | undefined) ?? detectModel)
+      : undefined,
+    players,
+    emitFixtures: values["emit-fixtures"]
+      ? path.resolve(values["emit-fixtures"] as string)
+      : undefined,
     keepFrames: Boolean(values["keep-frames"]),
     start,
     end,
@@ -263,8 +376,9 @@ function parseInputs(): ParsedArgs {
 
 /**
  * Validates an arbitrary image file and copies it into the reference path.
- * Used by `bootstrap --from <image>` to short-circuit the slow OCR-every-frame
- * path when the caller already has a clean scoreboard screenshot in hand.
+ * Used by `bootstrap --from <image>` to short-circuit the slow
+ * detect-every-frame path when the caller already has a clean scoreboard
+ * screenshot in hand.
  *
  * @param sourcePath - Image file the user wants to use as the reference.
  * @param referencePath - Absolute destination for the reference image.
@@ -325,13 +439,13 @@ function printUsage(): void {
 RDC Scoreboard Harvester
 
 Usage:
-  npx tsx scripts/scoreboard-harvester extract   --game <id> --url <youtube>
-  npx tsx scripts/scoreboard-harvester extract   --game <id> --video ./game.mp4
-  npx tsx scripts/scoreboard-harvester bootstrap --game <id> --from ./shot.png   (fast)
-  npx tsx scripts/scoreboard-harvester bootstrap --game <id> --url <youtube>     (slow)
+  pnpm harvest -- extract   --game <id> --url <youtube>
+  pnpm harvest -- extract   --game <id> --video ./game.mp4 --draft
+  pnpm harvest -- bootstrap --game <id> --from ./shot.png   (fast)
+  pnpm harvest -- bootstrap --game <id> --url <youtube>     (slow)
 
 Commands:
-  extract     (default) Harvest scoreboards using pHash + OCR.
+  extract     (default) Harvest scoreboards (pHash pre-filter + detector).
   bootstrap   Set the pHash reference image for a given --game. Either supply
               your own screenshot via --from, or scan a video with --url/--video
               and we'll save the first detected scoreboard.
@@ -345,16 +459,39 @@ Input source:
   --video <path>          Local video file
   --from <path>           Bootstrap-only: use an existing screenshot
 
+Detector:
+  --detector <kind>       auto (default) | ai | ocr. auto uses ocr on macOS
+                          when the vision-ocr binary is built, else ai
+  --detect-model <spec>   AI model, <provider>:<model> — e.g.
+                          google:gemini-2.5-flash, local:qwen2.5vl:7b,
+                          azure:<deployment>. Default: $HARVEST_DETECT_MODEL,
+                          then $VISION_MODEL, then google:gemini-2.5-flash
+  --detect-concurrency <n>  Classifier calls in flight (default: ${DEFAULT_DETECT_CONCURRENCY};
+                          alias --ocr-concurrency)
+  --ai-stride-sec <n>     AI coarse pass: classify one frame every n seconds
+                          (default: ${DEFAULT_AI_STRIDE_SEC}; must be <= dedup-gap / fps)
+  --ai-grid <n>           AI: frames per request = n×n contact sheet (default:
+                          ${DEFAULT_AI_GRID}; try 2 for small local models, 1 to disable)
+  --ai-min-confidence <n> AI: min confidence for a post-match verdict (default: ${DEFAULT_AI_MIN_CONFIDENCE})
+  --no-refine             AI: skip re-checking every frame around coarse hits
+
+Draft stats:
+  --draft                 Run extraction on each saved match; writes match-NN.json
+  --extract-model <spec>  Model for --draft (default: the detect model)
+  --players <a,b,...>     Session roster for --draft (default: every RDC member)
+  --emit-fixtures <dir>   Also write vision-eval fixtures (implies --draft), e.g.
+                          scripts/vision-eval/fixtures
+
 Detection tuning (defaults come from the active --game profile):
-  --no-phash              Skip pHash pre-filter; OCR every frame (use for
+  --no-phash              Skip pHash pre-filter; classify every frame (use for
                           stream videos with face-cams/overlays)
   --phash-threshold <n>   Hamming distance cutoff 0-64 (default: 12)
-  --ocr-min-keywords <n>  Min game keywords to confirm a frame
-  --require-end-screen    Reject frames missing the game's end-screen sentinel
-                          (e.g., WINNER for Rocket League)
+  --ocr-min-keywords <n>  OCR: min game keywords to confirm a frame
+  --require-end-screen    OCR: reject frames missing the game's end-screen
+                          sentinel (e.g., WINNER for Rocket League)
   --dedup-gap <n>         Max frame gap inside one detected match
   --skip-ahead-sec <n>    After a confirmed run ends, skip ahead this many
-                          seconds before resuming OCR (game-default if omitted)
+                          seconds before resuming detection (game-default if omitted)
   --no-skip-ahead         Disable skip-ahead optimization entirely
 
 I/O:
@@ -363,7 +500,8 @@ I/O:
   --quality <px>          Max download height (default: 720)
   --sample-width <px>     Extracted frame width (default: ${DEFAULT_SAMPLE_WIDTH}; try 960)
   --jpeg-quality <n>      ffmpeg JPEG q value, lower is better (default: ${DEFAULT_JPEG_QUALITY}; try 5)
-  --ocr-concurrency <n>   Persistent OCR workers (default: ${DEFAULT_OCR_CONCURRENCY})
+  --hwaccel <name>        ffmpeg -hwaccel for frame extraction (default:
+                          videotoolbox on macOS, none elsewhere; e.g. cuda, vaapi)
   --start <sec>           Start time slice (debugging)
   --end <sec>             End time slice (debugging)
   --reference <path>      Override pHash reference image
@@ -440,12 +578,13 @@ async function acquireVideo(args: {
 /**
  * Decides whether to run the pHash filter and returns the surviving candidates.
  * In bootstrap mode we always skip pHash (we're trying to *find* the reference).
- * In extract mode we skip if no reference exists yet, falling back to OCR-only.
+ * In extract mode we skip if no reference exists yet, so the detector sees
+ * every frame.
  *
  * @param args.command - extract or bootstrap.
  * @param args.frames - All sampled frames.
  * @param args.config - Resolved config (used for referencePath and threshold).
- * @returns Candidate frames for OCR.
+ * @returns Candidate frames for the detector.
  */
 async function runPhashStage(args: {
   command: Command;
@@ -455,20 +594,20 @@ async function runPhashStage(args: {
   const { command, frames, config } = args;
 
   if (config.noPhash) {
-    console.log("[phash] --no-phash set → OCR will see every frame");
+    console.log("[phash] --no-phash set → the detector will see every frame");
     return frames;
   }
 
   if (command === "bootstrap") {
     console.log(
-      "[phash] bootstrap mode → skipping pHash, OCR will see every frame",
+      "[phash] bootstrap mode → skipping pHash, the detector will see every frame",
     );
     return frames;
   }
 
   if (!fs.existsSync(config.referencePath)) {
     console.warn(
-      `[phash] no reference at ${config.referencePath} → falling back to OCR-only (slow)`,
+      `[phash] no reference at ${config.referencePath} → the detector will see every frame (slow)`,
     );
     console.warn(
       `[phash] hint: run \`bootstrap --game ${config.gameId}\` once to generate the reference image`,
@@ -502,9 +641,7 @@ async function runPhashStage(args: {
       `[phash]   npm run harvest -- extract --game ${config.gameId} --video <path-or-url> --no-phash`,
     );
     console.warn("");
-    console.warn(
-      "[phash] OCR-only is slower (~10–15 min for a 2-hour video at 1 fps) but reliable.",
-    );
+    console.warn("[phash] Classifying every frame is slower but reliable.");
     console.warn("");
   }
   return survivors;
@@ -534,10 +671,13 @@ async function main(): Promise<void> {
 
   console.log(
     `[game] ${profile.displayName} (${profile.id})` +
-      ` keywords=${profile.keywords.length}` +
-      (profile.endScreenSentinel
-        ? ` sentinel=${profile.endScreenSentinel}`
-        : ""),
+      ` detector=${config.detector}` +
+      (config.detector === "ai"
+        ? ` model=${config.detectModel} grid=${config.aiGrid}x${config.aiGrid}`
+        : ` keywords=${profile.keywords.length}` +
+          (profile.endScreenSentinel
+            ? ` sentinel=${profile.endScreenSentinel}`
+            : "")),
   );
   if (config.skipAheadFrames > 0) {
     console.log(
@@ -556,7 +696,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const deps = checkDeps(HARVESTER_ROOT, Boolean(url));
+  const deps = checkDeps(HARVESTER_ROOT, {
+    requireYtDlp: Boolean(url),
+    requireVisionOcr: config.detector === "ocr",
+  });
   if (!deps.ok) {
     console.error("Missing dependencies:");
     for (const e of deps.errors) console.error("  - " + e);
@@ -580,6 +723,7 @@ async function main(): Promise<void> {
     fps: config.fps,
     sampleWidth: config.sampleWidth,
     jpegQuality: config.jpegQuality,
+    hwaccel: config.hwaccel,
     start: config.start,
     end: config.end,
     durationSec,
@@ -588,19 +732,44 @@ async function main(): Promise<void> {
 
   const candidates = await runPhashStage({ command, frames, config });
 
-  const confirmed = await ocrFrames(candidates, {
-    visionOcrPath: deps.visionOcrPath,
-    keywords: profile.keywords,
-    minKeywords: config.ocrMinKeywords,
-    endScreenSentinel: profile.endScreenSentinel,
-    requireEndScreen: config.requireEndScreen,
-    dedupGap: config.dedupGap,
-    skipAheadFrames: config.skipAheadFrames,
-    concurrency: config.ocrConcurrency,
-  });
+  const classifier: FrameClassifier =
+    config.detector === "ocr"
+      ? createOcrClassifier({
+          visionOcrPath: deps.visionOcrPath,
+          keywords: profile.keywords,
+          minKeywords: config.ocrMinKeywords,
+          endScreenSentinel: profile.endScreenSentinel,
+          requireEndScreen: config.requireEndScreen,
+          concurrency: config.detectConcurrency,
+        })
+      : createAiClassifier({
+          profile,
+          modelSpec: config.detectModel!,
+          grid: config.aiGrid,
+          minConfidence: config.aiMinConfidence,
+          cachePath: path.join(workDir, "detections.jsonl"),
+          debugDir: config.keepFrames
+            ? path.join(workDir, "sheets")
+            : undefined,
+        });
+
+  let confirmed: DetectionRecord[];
+  try {
+    confirmed = await runDetection({
+      classifier,
+      candidates,
+      // Only stride over the full sample; pHash survivors are already sparse.
+      coarse: config.detector === "ai" && candidates.length === frames.length,
+      config,
+    });
+  } finally {
+    await classifier.close();
+  }
   console.log(
-    `[ocr] ${confirmed.length} confirmed scoreboard frames` +
-      (config.requireEndScreen ? " (require-end-screen=on)" : ""),
+    `[${config.detector}] ${confirmed.length} confirmed scoreboard frames` +
+      (config.detector === "ocr" && config.requireEndScreen
+        ? " (require-end-screen=on)"
+        : ""),
   );
 
   if (command === "bootstrap") {
@@ -620,8 +789,23 @@ async function main(): Promise<void> {
     confirmed,
     outDir: workDir,
     gapTolerance: config.dedupGap,
+    detection: { detector: config.detector, model: config.detectModel },
   });
   console.log(`[dedup] saved ${matches.length} match screenshot(s)`);
+
+  if (config.draft && matches.length > 0) {
+    const draftModule = await loadDraftModule();
+    if (draftModule)
+      matches = await draftModule.draftMatches({
+        matches,
+        workDir,
+        appGameId: profile.appGameId!,
+        modelSpec: config.extractModel!,
+        players: config.players,
+        emitFixtures: config.emitFixtures,
+        source: { videoId, url: sourceUrl, filePath },
+      });
+  }
 
   if (config.submit && config.sessionId !== undefined) {
     matches = await submitMatches(matches, config.sessionId);
@@ -645,8 +829,84 @@ async function main(): Promise<void> {
 
   cleanup(workDir, config.keepFrames);
   console.log(`[done] runtime=${manifest.runtimeMs}ms output=${workDir}`);
-  // Reference videoId in case future telemetry wants it (unused right now).
-  void videoId;
+}
+
+/**
+ * Lazily loads the --draft stage, which pulls in the app's constants and,
+ * through them, the Prisma typed-SQL client. If it can't load, warn and
+ * return undefined so the detection results still get written.
+ */
+async function loadDraftModule(): Promise<
+  typeof import("./pipeline/draft") | undefined
+> {
+  try {
+    return await import("./pipeline/draft");
+  } catch (err) {
+    console.warn(
+      `[draft] skipped: couldn't load the app's vision pipeline ` +
+        `(${err instanceof Error ? err.message : err}).`,
+    );
+    console.warn(
+      "[draft] --draft loads the app's extraction code, which needs the Prisma " +
+        "client generated with typed SQL (`pnpm prisma generate --sql`, with a " +
+        "reachable DATABASE_URL) and the app's .env. Fix that and re-run — " +
+        "detection is cached, so only extraction will call the model.",
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Runs the detector over the candidates. For the AI detector on the full
+ * sample, that's a coarse pass every `aiStrideFrames` frames (with
+ * skip-ahead), then — unless --no-refine — a pass over the skipped frames
+ * around each coarse run, so dedup's "sharpest frame from the middle of the
+ * run" sees the whole run rather than every Nth frame of it.
+ *
+ * @returns Confirmed frames, ascending frameId.
+ */
+async function runDetection(args: {
+  classifier: FrameClassifier;
+  candidates: FrameRecord[];
+  coarse: boolean;
+  config: ResolvedConfig;
+}): Promise<DetectionRecord[]> {
+  const { classifier, candidates, config } = args;
+  const label = config.detector;
+  const stride = args.coarse ? config.aiStrideFrames : 1;
+  const pass = (
+    frames: FrameRecord[],
+    skipAheadFrames: number,
+    passLabel: string,
+  ) =>
+    detectFrames(frames, classifier, {
+      dedupGap: config.dedupGap,
+      skipAheadFrames,
+      concurrency: config.detectConcurrency,
+      label: passLabel,
+    });
+
+  if (stride <= 1) return pass(candidates, config.skipAheadFrames, label);
+
+  const coarseFrames = candidates.filter((f) => (f.frameId - 1) % stride === 0);
+  console.log(
+    `[${label}] coarse pass: ${coarseFrames.length}/${candidates.length} frames (every ${stride})`,
+  );
+  const coarseHits = await pass(coarseFrames, config.skipAheadFrames, label);
+  if (!config.aiRefine || coarseHits.length === 0) return coarseHits;
+
+  const refineFrames = selectRefineFrames(
+    candidates,
+    clusterConsecutive(coarseHits, config.dedupGap),
+    stride,
+    new Set(coarseFrames.map((f) => f.frameId)),
+  );
+  console.log(
+    `[${label}] refine pass: ${refineFrames.length} frames around coarse hits`,
+  );
+  const refineHits = await pass(refineFrames, 0, `${label}:refine`);
+
+  return [...coarseHits, ...refineHits].sort((a, b) => a.frameId - b.frameId);
 }
 
 main().catch((err) => {

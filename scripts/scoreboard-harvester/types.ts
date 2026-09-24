@@ -29,8 +29,30 @@ export interface ResolvedConfig {
   sampleWidth: number;
   /** ffmpeg JPEG quality for sampled frames. Lower is higher quality. */
   jpegQuality: number;
-  /** Number of persistent OCR workers to run concurrently. */
-  ocrConcurrency: number;
+  /** Classifier calls in flight at once (OCR workers, or concurrent AI requests). */
+  detectConcurrency: number;
+  /** Which detector confirmed the frames. */
+  detector: "ocr" | "ai";
+  /** `<providerId>:<modelId>` spec for the AI detector. */
+  detectModel?: string;
+  /** AI detector: classify one frame every N frames (coarse pass). */
+  aiStrideFrames: number;
+  /** AI detector: tiles per side of each contact sheet. */
+  aiGrid: number;
+  /** AI detector: minimum confidence for a post-match verdict. */
+  aiMinConfidence: number;
+  /** AI detector: re-check every frame around each coarse hit. */
+  aiRefine: boolean;
+  /** Optional ffmpeg `-hwaccel` override ("none" for software decode). */
+  hwaccel?: string;
+  /** Run extraction on each saved match and write draft stats. */
+  draft: boolean;
+  /** `<providerId>:<modelId>` spec for draft extraction. */
+  extractModel?: string;
+  /** Session roster for draft extraction; empty means every known RDC member. */
+  players: string[];
+  /** When set, also write vision-eval fixtures (image + draft expected.json) here. */
+  emitFixtures?: string;
   keepFrames: boolean;
   start?: number;
   end?: number;
@@ -53,11 +75,14 @@ export interface PHashRecord extends FrameRecord {
   distance: number;
 }
 
-export interface OcrRecord extends FrameRecord {
-  /** Raw recognized text lines, top-to-bottom */
-  text: string[];
-  /** Subset of the active game's keywords that matched on this frame */
-  matchedKeywords: string[];
+/** A frame the active detector confirmed as an end-of-match scoreboard. */
+export interface DetectionRecord extends FrameRecord {
+  /**
+   * Why it was confirmed: matched keywords for OCR, `<kind>@<confidence>`
+   * for the AI detector.
+   */
+  evidence: string[];
+  confidence?: number;
 }
 
 export interface MatchManifest {
@@ -66,8 +91,28 @@ export interface MatchManifest {
   timestampStr: string;
   runLengthFrames: number;
   imagePath: string;
+  /** Matched OCR keywords; empty for AI-detected matches. */
   ocrKeywords: string[];
+  detection: {
+    detector: "ocr" | "ai";
+    model?: string;
+    evidence: string[];
+    confidence?: number;
+  };
+  /** Present when --draft ran extraction on this match. */
+  draft?: MatchDraft;
   submission: unknown | null;
+}
+
+export interface MatchDraft {
+  model: string;
+  /** VisionResultCodes value: Success, CheckRequest, or Failed. */
+  status: string;
+  message?: string;
+  /** Path of the match-NN.json draft, relative to the run directory. */
+  draftPath: string;
+  players?: { name: string; stats: { stat: string; statValue: string }[] }[];
+  winners?: string[];
 }
 
 export interface Manifest {

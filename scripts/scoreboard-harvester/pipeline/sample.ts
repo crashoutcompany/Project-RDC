@@ -5,7 +5,8 @@ import { FrameRecord } from "../types";
 
 /**
  * Extracts frames from a video at the given fps into `framesDir` as JPEGs.
- * Uses VideoToolbox hardware acceleration on Apple Silicon for ~3x speedup.
+ * Decodes with VideoToolbox on macOS (~3x speedup on Apple Silicon) and in
+ * software elsewhere, unless `hwaccel` names a specific ffmpeg hwaccel.
  * Frames are normalized to a fixed width so downstream pHash + OCR see a
  * consistent scale. If the directory already has frames, extraction is
  * skipped (resumability) — but the frame count is sanity-checked against
@@ -17,6 +18,8 @@ import { FrameRecord } from "../types";
  * @param args.fps - Sampling rate (frames per second). 1 is plenty for end-game scoreboards.
  * @param args.sampleWidth - Output JPEG width in pixels.
  * @param args.jpegQuality - ffmpeg JPEG quality. Lower is higher quality.
+ * @param args.hwaccel - Optional ffmpeg `-hwaccel` value (e.g. cuda, vaapi,
+ *   auto). "none" forces software decoding. Defaults per platform.
  * @param args.start - Optional start time in seconds (for testing on a slice).
  * @param args.end - Optional end time in seconds.
  * @param args.durationSec - Optional source duration; used to sanity-check
@@ -30,6 +33,7 @@ export async function sampleFrames(args: {
   fps: number;
   sampleWidth: number;
   jpegQuality: number;
+  hwaccel?: string;
   start?: number;
   end?: number;
   durationSec?: number;
@@ -41,6 +45,7 @@ export async function sampleFrames(args: {
     fps,
     sampleWidth,
     jpegQuality,
+    hwaccel = defaultHwaccel(),
     start,
     end,
     durationSec,
@@ -56,14 +61,8 @@ export async function sampleFrames(args: {
     console.log(
       `[sample] extracting frames at ${fps} fps, width=${sampleWidth}, q=${jpegQuality}`,
     );
-    const ffArgs: string[] = [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-stats",
-      "-hwaccel",
-      "videotoolbox",
-    ];
+    const ffArgs: string[] = ["-hide_banner", "-loglevel", "error", "-stats"];
+    if (hwaccel !== "none") ffArgs.push("-hwaccel", hwaccel);
     if (start !== undefined) ffArgs.push("-ss", String(start));
     ffArgs.push("-i", videoPath);
     ffArgs.push("-map", "0:v:0", "-an", "-sn", "-dn");
@@ -119,4 +118,9 @@ export async function sampleFrames(args: {
     filePath: path.join(framesDir, f),
     timestampSec: (start ?? 0) + i / fps,
   }));
+}
+
+/** VideoToolbox is always present on macOS; elsewhere GPU decode setups vary too much to assume one. */
+function defaultHwaccel(): string {
+  return process.platform === "darwin" ? "videotoolbox" : "none";
 }

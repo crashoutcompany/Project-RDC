@@ -1,33 +1,16 @@
 import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
-import { GameProcessor } from "@/lib/game-processors/game-processor-utils";
-import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
-import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcessor";
-import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
+import { getGameProcessor } from "@/lib/game-processors";
 import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { AnalysisResults, Stat, VisionPlayer } from "@/lib/visionTypes";
-import { MarvelRivalsProcessor } from "@/lib/game-processors/MarvelRivalsProcessor";
 import {
   buildRosterHint,
   getVisionProvider,
   toLegacyAnalyzed,
 } from "@/lib/vision";
 
-export const getGameProcessor = (gameId: number): GameProcessor => {
-  switch (gameId) {
-    case 1:
-      return MarioKart8Processor;
-    case 2:
-      return RocketLeagueProcessor;
-    case 3:
-      return CoDGunGameProcessor;
-    case 6:
-      return MarvelRivalsProcessor;
-    default:
-      throw new Error(`Invalid game id: ${gameId}`);
-  }
-};
+export { getGameProcessor };
 
 export const analyzeScreenShot = async (
   base64Source: string,

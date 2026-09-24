@@ -13,6 +13,10 @@ const local = createOpenAICompatible({
   name: "local",
   baseURL: process.env.VISION_OPENAI_BASE_URL || "http://localhost:11434/v1",
   apiKey: process.env.VISION_OPENAI_API_KEY,
+  // Without this the SDK sends a bare `json_object` and the schema never
+  // reaches the model. Ollama/LM Studio/vLLM/llama.cpp all accept the
+  // stricter `json_schema` format this turns on.
+  supportsStructuredOutputs: true,
 });
 
 // Azure OpenAI reads AZURE_API_KEY / AZURE_RESOURCE_NAME itself when not passed explicitly.

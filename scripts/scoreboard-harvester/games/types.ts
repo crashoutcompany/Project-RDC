@@ -44,11 +44,22 @@ export interface GameProfile {
      */
     minMatchIntervalSec: number;
   };
+  /**
+   * Plain-language descriptions for the AI detector's prompt. Describe what
+   * the post-match screen looks like, and what near-misses to reject — the
+   * in-match scoreboard is the usual trap, since it shares the same columns.
+   */
+  ai: {
+    /** What the end-of-match scoreboard looks like. */
+    description: string;
+    /** Screens that look similar but must NOT count. */
+    reject: string;
+  };
   /** Filename inside `reference/<id>/` to use as the pHash reference image. */
   referenceFileName: string;
   /**
-   * Optional game ID to pass into analyzeScreenShot when --submit is wired.
-   * This is the same numeric ID that the existing admin UI uses.
+   * The app's numeric game ID (`GAME_CONFIGS` in src/lib/constants.ts). Needed
+   * by --draft to pick the stat schema and game processor.
    */
-  azureGameId?: number;
+  appGameId?: number;
 }

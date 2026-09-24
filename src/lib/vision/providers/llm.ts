@@ -21,14 +21,15 @@ import type {
 } from "../types";
 
 /** Client-side upload is restricted to jpeg/png, so we only need to tell those apart. */
-const detectImageMediaType = (base64: string): string => {
+export const detectImageMediaType = (base64: string): string => {
   if (base64.startsWith("iVBORw0KGgo")) return "image/png";
   if (base64.startsWith("/9j/")) return "image/jpeg";
   return "image/png";
 };
 
 /** Model ids the registry accepts, e.g. "local:qwen3.8:7b" or "azure:gpt-4.1-mini". */
-type VisionModelId = `google:${string}` | `local:${string}` | `azure:${string}`;
+export type VisionModelId =
+  `google:${string}` | `local:${string}` | `azure:${string}`;
 
 /** Flat `{ name, ...statFields }` -> the normalized `ExtractedPlayer` contract. */
 const toExtractedPlayer = (raw: RawVisionPlayer): ExtractedPlayer => {
@@ -40,6 +41,12 @@ const toExtractedPlayer = (raw: RawVisionPlayer): ExtractedPlayer => {
   return { name, stats: cleanStats };
 };
 
+export interface LlmVisionProviderOptions {
+  scheduleFlush?: (flush: () => Promise<void>) => void;
+}
+
+const scheduleFlushAfterResponse = (flush: () => Promise<void>) => after(flush);
+
 /**
  * LLM-based vision provider: any model reachable through the `ai` SDK
  * provider registry (local OpenAI-compatible server, Azure OpenAI, or
@@ -48,6 +55,7 @@ const toExtractedPlayer = (raw: RawVisionPlayer): ExtractedPlayer => {
  */
 export const createLlmVisionProvider = (
   modelSpec: string = getVisionModelSpec(),
+  { scheduleFlush = scheduleFlushAfterResponse }: LlmVisionProviderOptions = {},
 ): VisionProvider => ({
   id: `llm:${modelSpec}`,
   extract: async ({
@@ -69,8 +77,8 @@ export const createLlmVisionProvider = (
             content: [
               { type: "text", text: prompt },
               {
-                type: "image",
-                image: imageBase64,
+                type: "file",
+                data: imageBase64,
                 mediaType: detectImageMediaType(imageBase64),
               },
             ],
@@ -109,7 +117,7 @@ export const createLlmVisionProvider = (
         players: raw.players?.map(toExtractedPlayer),
       };
     } finally {
-      after(() => flushAiTelemetry());
+      scheduleFlush(() => flushAiTelemetry());
     }
   },
 });
