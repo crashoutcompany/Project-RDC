@@ -28,9 +28,9 @@
     "test:instant:ui": "pnpm test:e2e:ui",
     "prepare": "test -z \"$CI\" && husky || true",
     "update-neon-branch": "tsx scripts/update-neon-branch.ts",
-    "harvest": "tsx scripts/scoreboard-harvester/index.ts",
+    "harvest": "tsx --tsconfig scripts/tsconfig.json scripts/scoreboard-harvester/index.ts",
     "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh",
-    "vision:eval": "tsx scripts/vision-eval/index.ts"
+    "vision:eval": "tsx --tsconfig scripts/tsconfig.json scripts/vision-eval/index.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
