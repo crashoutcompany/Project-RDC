@@ -33,13 +33,38 @@ const sessionNameSchema = z
   .max(100)
   .readonly();
 // TODO Add logic to surface error since other fields aren't being shown
+const YOUTUBE_WATCH_HOSTS = new Set(["www.youtube.com", "youtube.com"]);
+
+/**
+ * YouTube video IDs are case-sensitive. Validate the host without
+ * lowercasing the URL, or stored session links point at the wrong video.
+ */
 const sessionUrlSchema = z
   .url("Session URL must be a valid URL")
-  .toLowerCase()
   .trim()
   .min(1, "Session URL is required")
-  .startsWith("https://www.youtube.com", "Please paste in a valid youtube url.")
-  .max(100);
+  .max(100)
+  .check((ctx) => {
+    try {
+      const parsed = new URL(ctx.value);
+      const host = parsed.hostname.toLowerCase();
+      if (
+        parsed.protocol !== "https:" ||
+        !YOUTUBE_WATCH_HOSTS.has(host)
+      )
+        ctx.issues.push({
+          code: "custom",
+          input: ctx.value,
+          message: "Please paste in a valid youtube url.",
+        });
+    } catch {
+      ctx.issues.push({
+        code: "custom",
+        input: ctx.value,
+        message: "Please paste in a valid youtube url.",
+      });
+    }
+  });
 const videoIdSchema = z.string().trim().min(1).readonly();
 const dateSchema = z.date({ error: "Date is required" }).readonly();
 const thumbnailSchema = z.string().trim().min(1).readonly();

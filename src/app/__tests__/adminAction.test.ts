@@ -123,6 +123,47 @@ describe("adminAction tests", () => {
       expect(result).toEqual({ error: null });
     });
 
+    it("persists mixed-case YouTube video IDs in sessionUrl", async () => {
+      mockGetSession.mockResolvedValue({
+        user: { role: "admin", email: "test@test.com" },
+      });
+      (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
+      (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.session.create as jest.Mock).mockResolvedValue({ sessionId: 1 });
+      (prisma.gameSet.create as jest.Mock).mockResolvedValue({ setId: 1 });
+      (prisma.gameSet.update as jest.Mock).mockResolvedValue({});
+      (prisma.match.create as jest.Mock).mockResolvedValue({ matchId: 1 });
+      (prisma.playerSession.create as jest.Mock).mockResolvedValue({
+        playerSessionId: 1,
+        playerId: 1,
+      });
+      (prisma.playerStat.createMany as jest.Mock).mockResolvedValue({});
+      (prisma.gameStat.findMany as jest.Mock).mockResolvedValue([
+        { statId: 1, statName: "COD_SCORE" },
+        { statId: 2, statName: "COD_POS" },
+      ]);
+      (prisma.player.findUnique as jest.Mock).mockResolvedValue({
+        playerId: 1,
+        playerName: "Ben",
+      });
+
+      const mixedCaseUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+      const session = {
+        ...validSession(),
+        sessionUrl: mixedCaseUrl,
+        videoId: "dQw4w9WgXcQ",
+      };
+
+      const result = await insertNewSessionFromAdmin(session);
+      expect(result).toEqual({ error: null });
+      expect(prisma.session.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionUrl: mixedCaseUrl,
+          videoId: "dQw4w9WgXcQ",
+        }),
+      });
+    });
+
     it("should return an error if not authenticated", async () => {
       mockGetSession.mockResolvedValue(null);
 
