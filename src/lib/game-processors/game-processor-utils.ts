@@ -77,26 +77,27 @@ export const processTeam = (
 
   // Process Players
   try {
-    const processedPlayers =
-      teamData.players.valueArray?.map((player) => {
-        console.log(
-          `Processing Player: ${player.valueObject.PlayerName.content} for ${teamData.teamName}`,
-        );
-        const processedPlayer = processPlayer(player, teamData.teamName);
-        console.log("Processed Player: ", processedPlayer);
-        const validatedPlayerData = validateProcessedPlayer(
-          processedPlayer,
-          sessionPlayers,
-        );
-        console.log("Validated Player: ", validatedPlayerData);
+    const processedPlayers: VisionPlayer[] = [];
+    teamData.players.valueArray?.forEach((player) => {
+      console.log(
+        `Processing Player: ${player.valueObject.PlayerName.content} for ${teamData.teamName}`,
+      );
+      const processedPlayer = processPlayer(player, teamData.teamName);
+      console.log("Processed Player: ", processedPlayer);
+      const validatedPlayerData = validateProcessedPlayer(
+        processedPlayer,
+        sessionPlayers,
+      );
+      console.log("Validated Player: ", validatedPlayerData);
 
-        reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
-        if (!validatedPlayerData) {
-          console.error("Player validation failed: ", processPlayer);
-          return {} as VisionPlayer;
-        }
-        return validatedPlayerData;
-      }) || [];
+      reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
+      if (!validatedPlayerData) {
+        console.error("Player validation failed: ", processedPlayer);
+        reqCheckFlag = true;
+        return;
+      }
+      processedPlayers.push(validatedPlayerData);
+    });
     return { processedPlayers, reqCheckFlag };
   } catch (error) {
     console.error("Error processing team: ", error);

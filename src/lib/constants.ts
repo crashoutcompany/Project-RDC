@@ -98,6 +98,8 @@ export const statDescriptions: { [key in StatName]: string } = {
   [StatName.MR_DMG_BLOCKED]: "Marvel Rivals Damage Blocked",
   [StatName.MR_HEALING]: "Marvel Rivals Healing",
   [StatName.MR_ACCURACY]: "Marvel Rivals Accuracy",
+  [StatName.MR_MVP]: "Marvel Rivals MVP",
+  [StatName.MR_SVP]: "Marvel Rivals SVP",
 };
 
 export enum errorCodes {

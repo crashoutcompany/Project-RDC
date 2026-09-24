@@ -140,6 +140,8 @@ const marvelRivalsStats = z
       StatName.MR_DMG_BLOCKED,
       StatName.MR_HEALING,
       StatName.MR_ACCURACY,
+      StatName.MR_MVP,
+      StatName.MR_SVP,
     ]),
     statValue: z.string().trim(),
   })

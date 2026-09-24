@@ -1,5 +1,10 @@
 /**
  * Vision Action Tests
+ *
+ * Azure Document Intelligence-specific mechanics (the analyze call, the
+ * poller, raw field shapes) now live in `src/lib/vision/providers/azure-di.ts`
+ * and are covered by `azure-di.test.ts`. This file only exercises
+ * `analyzeScreenShot`'s own orchestration, against a mocked provider.
  */
 import { vi } from "vitest";
 
@@ -17,39 +22,18 @@ vi.mock("@/lib/game-processors/MarioKart8Processor");
 vi.mock("@/lib/game-processors/RocketLeagueProcessor");
 vi.mock("@/lib/game-processors/CoDGunGameProcessor");
 
-vi.mock("@/lib/config", () => ({
-  __esModule: true,
-  default: {
-    DOCUMENT_INTELLIGENCE_ENDPOINT: "https://example.test",
-    DOCUMENT_INTELLIGENCE_API_KEY: "test-key",
-  },
+const visionMocks = vi.hoisted(() => ({
+  extract: vi.fn(),
 }));
 
-// Store mock functions in a mutable object that can be accessed after hoisting
-const azureMocks = vi.hoisted(() => ({
-  post: vi.fn(),
-  pollUntilDone: vi.fn(),
+vi.mock("@/lib/vision", () => ({
+  getVisionProvider: vi.fn(() => ({
+    id: "test-provider",
+    extract: visionMocks.extract,
+  })),
+  toLegacyAnalyzed: vi.fn(() => []),
+  buildRosterHint: vi.fn(() => []),
 }));
-
-// Mock Azure SDK
-vi.mock("@azure-rest/ai-document-intelligence", () => {
-  // Use a closure to capture the mocks object reference
-  return {
-    __esModule: true,
-    default: vi.fn(() => ({
-      path: vi.fn(() => ({
-        post: (...args: unknown[]) => azureMocks.post(...args),
-      })),
-    })),
-    getLongRunningPoller: vi.fn(() => ({
-      get body() {
-        return azureMocks.pollUntilDone().then((res: { body: unknown }) => res.body);
-      },
-      pollUntilDone: (...args: unknown[]) => azureMocks.pollUntilDone(...args),
-    })),
-    isUnexpected: vi.fn(() => false),
-  };
-});
 
 import { analyzeScreenShot, getGameProcessor } from "../actions/visionAction";
 import { VisionResultCodes } from "@/lib/constants";
@@ -59,10 +43,7 @@ import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
 import { Player } from "@/generated/prisma/client";
 
 const mockMK8Processor = vi.mocked(MarioKart8Processor);
-
-// Expose mock functions for test usage
-const mockPostFn = azureMocks.post;
-const mockPollUntilDoneFn = azureMocks.pollUntilDone;
+const mockExtract = visionMocks.extract;
 
 describe("Vision Action Tests", () => {
   const mockBase64 = "mockBase64String";
@@ -70,14 +51,9 @@ describe("Vision Action Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default mock implementations for a successful path
-    mockPostFn.mockResolvedValue({});
-    mockPollUntilDoneFn.mockResolvedValue({
-      body: {
-        analyzeResult: {
-          documents: [{ fields: { player1: { content: "Player1" } } }],
-        },
-      },
+    // Default mock implementation for a successful path
+    mockExtract.mockResolvedValue({
+      players: [{ name: "Player1", stats: {} }],
     });
   });
 
@@ -102,41 +78,12 @@ describe("Vision Action Tests", () => {
       });
     });
 
-    it("handles API errors gracefully", async () => {
-      mockPostFn.mockRejectedValueOnce(new Error("API Error"));
+    it("handles provider extraction errors gracefully", async () => {
+      mockExtract.mockRejectedValueOnce(new Error("Provider Error"));
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result).toEqual({
         status: VisionResultCodes.Failed,
-        message: "API Error",
-      });
-    });
-
-    it("handles poller errors gracefully", async () => {
-      mockPollUntilDoneFn.mockRejectedValueOnce(new Error("Poller Error"));
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Poller Error",
-      });
-    });
-
-    it("handles missing analyze result", async () => {
-      mockPollUntilDoneFn.mockResolvedValueOnce({ body: {} });
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Analyze result or documents are undefined",
-      });
-    });
-
-    it("handles undefined vision analysis results", async () => {
-      mockPollUntilDoneFn.mockResolvedValueOnce({
-        body: { analyzeResult: { documents: [{ fields: undefined }] } },
-      });
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Vision Analysis Player Results are undefined",
+        message: "Provider Error",
       });
     });
 
@@ -159,6 +106,33 @@ describe("Vision Action Tests", () => {
 
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result.status).toBe(VisionResultCodes.Success);
+    });
+
+    it("flags CheckRequest when a stat requires manual review", async () => {
+      const mockProcessedData = {
+        processedPlayers: [
+          { name: "Dylan" as const, stats: [{ statId: 1, stat: "MK8_POS", statValue: "Z" }] },
+        ],
+        reqCheckFlag: false,
+      };
+      mockMK8Processor.processPlayers.mockReturnValue(mockProcessedData);
+      mockMK8Processor.validateStats.mockReturnValue({
+        statValue: "0",
+        reqCheck: true,
+      });
+      mockMK8Processor.calculateWinners.mockReturnValue([]);
+      mockMK8Processor.validateResults.mockImplementation(
+        (players, winners, requiresCheck) => ({
+          status: requiresCheck
+            ? VisionResultCodes.CheckRequest
+            : VisionResultCodes.Success,
+          data: { players, winner: winners },
+          message: "",
+        }),
+      );
+
+      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
+      expect(result.status).toBe(VisionResultCodes.CheckRequest);
     });
   });
 });

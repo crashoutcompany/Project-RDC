@@ -29,13 +29,16 @@
     "prepare": "test -z \"$CI\" && husky || true",
     "update-neon-branch": "tsx scripts/update-neon-branch.ts",
     "harvest": "tsx scripts/scoreboard-harvester/index.ts",
-    "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh"
+    "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh",
+    "vision:eval": "tsx scripts/vision-eval/index.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/azure": "^4.0.78",
     "@ai-sdk/google": "^4.0.56",
+    "@ai-sdk/openai-compatible": "^3.0.55",
     "@ai-sdk/otel": "^1.0.85",
     "@azure-rest/ai-document-intelligence": "^1.0.0-beta.3",
     "@azure-rest/ai-vision-image-analysis": "^1.0.0-beta.3",

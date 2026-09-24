@@ -72,7 +72,11 @@ export default defineConfig({
           globals: true,
           env: testEnv,
           setupFiles: ["./vitest.setup.ts"],
-          include: ["src/lib/**/*.test.ts", "src/lib/**/__tests__/**/*.test.ts"],
+          include: [
+            "src/lib/**/*.test.ts",
+            "src/lib/**/__tests__/**/*.test.ts",
+            "scripts/**/*.test.ts",
+          ],
         },
       },
       {

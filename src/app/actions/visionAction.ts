@@ -1,9 +1,4 @@
 import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
-import DocumentIntelligence, {
-  getLongRunningPoller,
-  AnalyzeOperationOutput,
-  isUnexpected,
-} from "@azure-rest/ai-document-intelligence";
 import { Player } from "@/generated/prisma/client";
 import { GameProcessor } from "@/lib/game-processors/game-processor-utils";
 import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
@@ -13,11 +8,11 @@ import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { AnalysisResults, Stat, VisionPlayer } from "@/lib/visionTypes";
 import { MarvelRivalsProcessor } from "@/lib/game-processors/MarvelRivalsProcessor";
-import config from "@/lib/config";
-
-const client = DocumentIntelligence(config.DOCUMENT_INTELLIGENCE_ENDPOINT!, {
-  key: config.DOCUMENT_INTELLIGENCE_API_KEY!,
-});
+import {
+  buildRosterHint,
+  getVisionProvider,
+  toLegacyAnalyzed,
+} from "@/lib/vision";
 
 export const getGameProcessor = (gameId: number): GameProcessor => {
   switch (gameId) {
@@ -40,6 +35,7 @@ export const analyzeScreenShot = async (
   gameId: number,
 ): Promise<AnalysisResults> => {
   const startTime = performance.now();
+  let providerId = "unknown";
   try {
     const gameProcessor = getGameProcessor(gameId);
     const gameConfig = GAME_CONFIGS[gameId];
@@ -48,79 +44,26 @@ export const analyzeScreenShot = async (
       throw new Error(`Game config not found for gameId: ${gameId}`);
     }
 
-    console.log("Analyzing Screenshot with config: ", gameConfig);
+    const provider = getVisionProvider();
+    providerId = provider.id;
 
-    const response = await client
-      .path("/documentModels/{modelId}:analyze", gameConfig.modelId)
-      .post({
-        contentType: "application/json",
-        body: {
-          base64Source: base64Source,
-        },
-        queryParameters: {
-          locale: "en-US",
-        },
-      });
+    const scoreboard = await provider.extract({
+      imageBase64: base64Source,
+      gameId,
+      rosterHint: buildRosterHint(sessionPlayers),
+    });
+    console.log("Extracted scoreboard: ", scoreboard);
 
-    if (isUnexpected(response)) {
-      after(() => logVisionError(response.body.error));
-      throw response.body.error;
-    }
-
-    const poller = await getLongRunningPoller(client, response);
-
-    const result = (await poller.body) as AnalyzeOperationOutput;
-
-    if (!result.analyzeResult || !result.analyzeResult.documents) {
-      return {
-        status: VisionResultCodes.Failed,
-        message: "Analyze result or documents are undefined",
-      };
-    }
-
-    // Analyzed Result should differ depdending on model
-    // Team based models should return players grouped by team
-    // Individual player models should return all players in one array
-
-    // Each player object from appropriate vision model should have all stats associated with players
-    // , may or may not be broken up into teams depending on model
-    // RL: Blue Team, Orange Team
-    // MK: Yoshi, Mario, Luigi, Peach, etc...
-    const analyzedPlayers = result.analyzeResult.documents[0].fields;
-    // Returns an object containing players (1-grouped by team if applicable)
-    console.log("Analyzed Players: ", analyzedPlayers);
-
-    if (!analyzedPlayers) {
-      throw new Error("Vision Analysis Player Results are undefined");
-    }
-
-    // Go into individual game checks -- if its not a team game we can skip this
-    // and just return the players
-
-    let teamsArray: AnalyzedTeamData[] = [];
-    let playersData: AnalyzedPlayersObj[] = [];
-
-    if (gameConfig.type === "TEAM") {
-      teamsArray = Object.entries(analyzedPlayers).map(
-        ([teamName, teamData]) => ({
-          teamName,
-          players: teamData as unknown as AnalyzedPlayersObj,
-        }),
-      );
-      console.log("Teams Array: ", teamsArray);
-    } else {
-      playersData = Object.values(
-        analyzedPlayers,
-      ) as unknown as AnalyzedPlayersObj[];
-      console.log("Players Data: ", playersData);
-    }
+    // Translated back to the Azure-shaped types
+    const legacyData = toLegacyAnalyzed(scoreboard, gameId);
 
     const processedPlayers = gameProcessor.processPlayers(
-      gameConfig.type === "TEAM" ? teamsArray : playersData,
+      legacyData,
       sessionPlayers,
     );
     console.log("Processed Players: ", processedPlayers);
 
+    let statsReqCheck = false;
     const validatedPlayers: VisionPlayer[] =
       processedPlayers.processedPlayers.map((player) => {
         const validatedStats = player.stats.map((stat: Stat) => {
@@ -128,6 +71,7 @@ export const analyzeScreenShot = async (
             stat.statValue,
             sessionPlayers.length,
           );
+          if (validatedStat.reqCheck) statsReqCheck = true;
 
           return {
             ...stat,
@@ -147,20 +91,19 @@ export const analyzeScreenShot = async (
     const validatedResult: AnalysisResults = gameProcessor.validateResults(
       validatedPlayers,
       winners,
-      processedPlayers.reqCheckFlag,
+      processedPlayers.reqCheckFlag || statsReqCheck,
     );
 
-    console.log("Teams Array: ", teamsArray);
     console.log("Validated Result: ", validatedResult);
 
     const duration = performance.now() - startTime;
-    after(() => logVisionSuccess(gameId, duration));
+    after(() => logVisionSuccess(gameId, duration, providerId));
 
     return validatedResult;
   } catch (error) {
     console.error(error);
     const e = error instanceof Error ? error.message : "Unknown error";
-    logVisionError(error);
+    after(() => logVisionError(error, providerId));
     return { status: VisionResultCodes.Failed, message: e };
   }
 };

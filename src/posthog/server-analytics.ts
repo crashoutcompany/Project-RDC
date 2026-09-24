@@ -104,11 +104,13 @@ export const logFormSuccess = async (
 
 export const logVisionError = async (
   error: typeof ErrorModelOutput | unknown,
+  provider?: string,
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4(), {
+    provider,
     ...withSessionReplay(sessionReplayId),
   });
 };
@@ -250,6 +252,7 @@ export const logAdminAction = async (
 export const logVisionSuccess = async (
   gameId: number,
   durationMs: number,
+  provider?: string,
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
@@ -260,6 +263,7 @@ export const logVisionSuccess = async (
     properties: {
       gameId,
       durationMs,
+      provider,
       ...withSessionReplay(sessionReplayId),
     },
   });

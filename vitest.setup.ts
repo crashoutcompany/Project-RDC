@@ -19,6 +19,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The real package unconditionally throws — it's a Next.js build-time guard
+// against a module reaching a client bundle, irrelevant to unit tests.
+vi.mock("server-only", () => ({}));
+
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
   revalidatePath: vi.fn(),

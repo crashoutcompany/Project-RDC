@@ -232,6 +232,8 @@ async function seedGames() {
           { statName: StatName.MR_DMG_BLOCKED },
           { statName: StatName.MR_HEALING },
           { statName: StatName.MR_ACCURACY },
+          { statName: StatName.MR_MVP },
+          { statName: StatName.MR_SVP },
         ],
       },
     },
