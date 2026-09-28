@@ -6,6 +6,7 @@ import {
   APP_NAME,
   PREVIEW_ORIGIN,
   PRODUCTION_URL,
+  userAdditionalFields,
 } from "@/lib/auth/config";
 import {
   createAuth,
@@ -28,13 +29,7 @@ export const auth = createAuth({
     AUTH_ORIGINS.vercelProject,
   ],
   sessionModelName: "UserSession",
-  userAdditionalFields: {
-    role: {
-      type: "string",
-      required: false,
-      defaultValue: "user",
-    },
-  },
+  userAdditionalFields,
   onError(error) {
     console.error(error);
     posthog.captureException(error, "auth-error");
