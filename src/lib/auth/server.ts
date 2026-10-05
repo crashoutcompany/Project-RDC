@@ -1,4 +1,3 @@
-// shared:auth-session-rsc v2
 import { headers } from "next/headers";
 
 import { auth as betterAuth } from "@/lib/auth";
@@ -18,7 +17,7 @@ async function readSession(
   });
 }
 
-/** RSC-safe session read — never refreshes cookies (pair with auth-proxy v2). */
+/** RSC-safe session read — never refreshes cookies (pair with the auth proxy). */
 export async function getRscSession(requestHeaders?: Headers) {
   return readSession(requestHeaders, { disableRefresh: true });
 }

@@ -16,7 +16,7 @@
     "start": "next start",
     "lint": "eslint .",
     "dbcrashout": "npx prisma db push --force-reset && npx prisma db push && npx tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -105,7 +105,7 @@
   },
   "devDependencies": {
     "@next/playwright": "^16.3.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",

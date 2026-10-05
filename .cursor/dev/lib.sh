@@ -105,6 +105,8 @@ EOF
       printf '\nTEST_AUTH_SECRET="local-test-auth-secret-not-for-production"\n' >>"$REPO_ROOT/.env"
     grep -q '^BETTER_AUTH_SECRET=' "$REPO_ROOT/.env" || \
       printf '\nBETTER_AUTH_SECRET="local-dev-secret-not-for-production-0123456789abcdef"\n' >>"$REPO_ROOT/.env"
+    grep -q '^EXPOSE_TESTING_API=' "$REPO_ROOT/.env" || \
+      printf 'EXPOSE_TESTING_API="1"\n' >>"$REPO_ROOT/.env"
   fi
 
   if [ ! -f "$REPO_ROOT/.env.development.local" ]; then

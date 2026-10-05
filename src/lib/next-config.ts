@@ -1,5 +1,3 @@
-// shared:next-config v1
-
 import type { NextConfig } from "next";
 
 import { isTestingApiExposed } from "./e2e-env";
