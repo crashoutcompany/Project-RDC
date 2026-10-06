@@ -128,8 +128,10 @@ function getConnectionString(
   pooled: boolean,
 ): string | null {
   const pooledFlag = pooled ? "--pooled" : "";
+  // neonctl >=8 takes the branch positionally; an unknown --branch flag is ignored
+  // and silently yields the default branch.
   const command =
-    `npx neonctl connection-string --project-id ${projectId} --branch "${branchName}" ${pooledFlag}`.trim();
+    `npx neonctl connection-string "${branchName}" --project-id ${projectId} ${pooledFlag}`.trim();
 
   const connectionString = execCommand(command);
   if (!connectionString) {
