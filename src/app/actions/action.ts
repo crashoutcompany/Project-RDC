@@ -2,23 +2,11 @@
 
 import prisma from "prisma/db";
 import config from "@/lib/config";
-import { auth, Session } from "@/lib/auth";
 import { getAuthoritativeSession } from "@/lib/auth/server";
-import { headers } from "next/headers";
 import { errorCodes } from "@/lib/constants";
-import { redirect } from "next/navigation";
 import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
-import { revalidatePath } from "next/cache";
 import { buildYouTubeVideosListUrl } from "@/lib/youtube";
-
-export const updateAuthStatus = async (session: Session | null) => {
-  if (session) {
-    revalidatePath("/", "layout");
-    await auth.api.signOut({ headers: await headers() });
-    redirect("/");
-  } else redirect("/signin");
-};
 
 type AdminUser = NonNullable<
   Awaited<ReturnType<typeof getAuthoritativeSession>>
