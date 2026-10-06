@@ -4,6 +4,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
 import { StatName } from "@/lib/stat-names";
 import { getSumOfStat } from "@/generated/prisma/sql";
+import { approvedSession, inApprovedPlayerStat } from "./approved";
 
 export type StatEndsWith<
   Suffix extends string,
@@ -39,7 +40,7 @@ export const getSumPerStat = async (playerId: number, statName: StatName) =>
 export const getSetsPerPlayer = async (gameId: number) =>
   await handlePrismaOperation((prisma) =>
     prisma.session.findMany({
-      where: { gameId },
+      where: { gameId, ...approvedSession },
       include: { sets: { select: { _count: true, matches: true } } },
     }),
   );
@@ -50,6 +51,7 @@ export const getWinsPerPlayer = async (gameId: number) =>
       where: { gameId },
       select: {
         sessions: {
+          where: approvedSession,
           select: {
             sessionId: true,
             sessionName: true,
@@ -73,7 +75,7 @@ export const getMatchesPerGame = async <T extends StatName = StatName>(
 ) =>
   await handlePrismaOperation((prisma) =>
     prisma.session.findMany({
-      where: { gameId },
+      where: { gameId, ...approvedSession },
       select: {
         sets: {
           select: {
@@ -103,7 +105,7 @@ export const getMatchesPerGame = async <T extends StatName = StatName>(
 export const getStatPerPlayer = async (gameId: number, statName: StatName) =>
   await handlePrismaOperation((prisma) =>
     prisma.playerStat.findMany({
-      where: { gameId, AND: { gameStat: { statName } } },
+      where: { gameId, gameStat: { statName }, ...inApprovedPlayerStat },
       select: { player: true, value: true, statId: true },
     }),
   );

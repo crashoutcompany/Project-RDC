@@ -7,6 +7,8 @@ import { handlePrismaOperation } from "prisma/db";
 
 export type FeedbackType = "bug" | "feature" | "general" | "other";
 
+const MAX_FEEDBACK_LENGTH = 2000;
+
 export const submitFeedback = async (
   state: { error: string | null } | undefined,
   formData: FormData,
@@ -19,7 +21,7 @@ export const submitFeedback = async (
     }
 
     const feedback: FeedbackType = formData.get("type") as FeedbackType;
-    const message = formData.get("message") as string;
+    const message = String(formData.get("message") ?? "");
     const userEmail = session?.user?.email;
 
     switch (feedback) {
@@ -35,6 +37,11 @@ export const submitFeedback = async (
     if (message.trim().length === 0) {
       return { error: "Message cannot be empty" };
     }
+
+    if (message.length > MAX_FEEDBACK_LENGTH)
+      return {
+        error: `Message must be ${MAX_FEEDBACK_LENGTH} characters or fewer`,
+      };
 
     const res = await handlePrismaOperation((prisma) =>
       prisma.feedback.create({

@@ -102,14 +102,18 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### How agents sign in
 
-- Build and start with `EXPOSE_TESTING_API=1`. Never set that flag on Vercel Production.
+- Tester login is **local / CI / Cloud Agent only**. It is unavailable on every
+  Vercel deployment, Preview included: `src/lib/e2e-env.ts` requires
+  `VERCEL !== "1"`, and Vercel sets `VERCEL=1` at runtime.
+- Build and start with `EXPOSE_TESTING_API=1`.
 - Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with header
   `x-test-auth-secret: <secret>`.
 - The route upserts the seeded admin tester and mints a real Better Auth session.
-  Production always 404s.
+  Every Vercel deployment 404s.
 - Playwright `e2e/global-setup.ts` writes `e2e/.auth/tester.json`.
-- If Deployment Protection is on, also send
-  `x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET`.
+- `x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET` only helps
+  unauthenticated checks against a protected deployment; the login route still
+  404s there.
 
 ### Neon Managed Better Auth revisit
 
@@ -132,6 +136,10 @@ move, not a rewrite.
 - `.env` used by Prisma and SSG builds
 - `.env.development.local` used in development mode
 - `.env.production.local` used for production builds
+- CI (shared `crashoutcompany/.github` workflow) needs the Actions variable
+  `NEON_CI_PARENT_BRANCH`: a seeded/scrubbed Neon branch with no real users,
+  sessions, or OAuth tokens. PR e2e branches are copied from it, and CI fails
+  without it. Never point it at production.
 
 ### Development Workflow
 
