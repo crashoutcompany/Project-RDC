@@ -31,6 +31,21 @@ export function isLocalE2EAuthOverride(
 }
 
 /**
+ * Exact origins of the running Vercel preview (branch alias + per-deployment
+ * URL). Never a wildcard: `*.vercel.app` is shared by every Vercel account, so
+ * trusting it would let any third-party deployment act as a trusted origin.
+ */
+export function resolvePreviewOrigins(
+  env: AuthBaseUrlEnv = process.env,
+): string[] {
+  if (env.VERCEL_ENV !== "preview") return [];
+  return [env.VERCEL_BRANCH_URL, env.VERCEL_URL]
+    .map((host) => host?.trim())
+    .filter((host): host is string => Boolean(host))
+    .map((host) => `https://${host}`);
+}
+
+/**
  * Resolves the URL Better Auth uses for cookies and OAuth redirect URIs.
  * A loopback override is ignored in production builds so a stale local value
  * cannot break a deployed sign-in flow — except local/CI e2e builds that set
