@@ -97,21 +97,6 @@ export const MVP = ({
                     stats as ProcessedSet[],
                     session.sessionId,
                   );
-                  const mapped = findPlayer(mvp.player);
-                  const player = mapped
-                    ? {
-                        playerId: mapped.playerId,
-                        playerName: mapped.playerName,
-                      }
-                    : undefined;
-                  // Update the in memory record of a session to keep mvp in state.
-                  // TODO Maybe pass proper set to keep session state in sync
-                  session.mvp = {
-                    playerName: mvp.player,
-                    playerId: player?.playerId ?? 1,
-                  };
-                  session.mvpDescription = mvp.description;
-                  session.mvpStats = mvp.stats;
                   setMvp(mvp);
                 } catch (error) {
                   console.log("Unexpected error", error);

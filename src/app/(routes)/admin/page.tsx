@@ -8,7 +8,7 @@ import { NoMembers } from "../(groups)/members/_components/members";
 export default function Page() {
   return (
     <div>
-      <H1 data-testid="admin-shell-marker">Admin</H1>
+      <H1>Admin</H1>
       <Suspense fallback={<Skelly />}>
         <AdminForm />
       </Suspense>

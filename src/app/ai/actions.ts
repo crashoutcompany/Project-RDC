@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import { google } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
 import type { ProcessedSet } from "../(routes)/(groups)/games/[slug]/_components/match-data";
@@ -21,10 +21,9 @@ import { after } from "next/server";
 import { revalidateTag } from "next/cache";
 import { MvpOutput, mvpSchema } from "./types";
 import { errorCodes } from "@/lib/constants";
-import { headers } from "next/headers";
 
 type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
 >["user"] & { role?: string };
 
 export const analyzeMvp = async (
@@ -32,7 +31,7 @@ export const analyzeMvp = async (
   sessionId: number,
 ): Promise<MvpOutput> => {
   try {
-    const authSession = await auth.api.getSession({ headers: await headers() });
+    const authSession = await getAuthoritativeSession();
     const user = authSession?.user as AdminUser | undefined;
     if (!authSession || user?.role !== "admin")
       throw new Error(errorCodes.NotAuthenticated);

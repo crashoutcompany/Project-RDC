@@ -1,9 +1,8 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import { logFormSuccess } from "@/posthog/server-analytics";
 import { checkBotId } from "botid/server";
-import { headers } from "next/headers";
 import { handlePrismaOperation } from "prisma/db";
 
 export type FeedbackType = "bug" | "feature" | "general" | "other";
@@ -14,7 +13,7 @@ export const submitFeedback = async (
 ) => {
   try {
     const verification = await checkBotId();
-    const session = await auth.api.getSession({ headers: await headers() });
+    const session = await getAuthoritativeSession();
     if (verification.isBot || !session) {
       return { error: "Access denied" };
     }

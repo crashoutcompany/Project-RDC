@@ -43,6 +43,7 @@ export enum GamesEnum {
   CallOfDuty = "callofduty",
   MarioKart8 = "mariokart8",
   SpeedRunners = "speedrunners",
+  MarvelRivals = "marvelrivals",
 }
 
 const gamesNav = new Map<GamesEnum, string>([
@@ -51,6 +52,7 @@ const gamesNav = new Map<GamesEnum, string>([
   [GamesEnum.CallOfDuty, "Stats for FFA's and who sells the most online."],
   [GamesEnum.MarioKart8, "Stats that tell you who races the hardest."],
   [GamesEnum.SpeedRunners, "Stats that tell you who races the hardest."],
+  [GamesEnum.MarvelRivals, "Stats that tell you who sells the most in ranked."],
 ]);
 
 export const gameImages = {
@@ -59,6 +61,7 @@ export const gameImages = {
   [GamesEnum.MarioKart8]: "mk8.jpg",
   [GamesEnum.SpeedRunners]: "speedrunners.jpeg",
   [GamesEnum.CallOfDuty]: "callofduty.jpeg",
+  [GamesEnum.MarvelRivals]: "marvel_rvials.jpg",
 };
 export const statDescriptions: { [key in StatName]: string } = {
   [StatName.MK8_DAY]: "Mario Kart 8 Days",

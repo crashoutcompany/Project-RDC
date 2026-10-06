@@ -24,10 +24,9 @@ import {
 import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { getGamesNav } from "@/lib/constants";
 import { getMembersNav } from "prisma/lib/members";
-import { auth } from "@/lib/auth";
+import { getRscSession } from "@/lib/auth/server";
 import { AuthButton, ToggleThemeButton } from "./client-buttons";
 import { Skeleton } from "./ui/skeleton";
-import { headers } from "next/headers";
 
 export const Navbar = async () => {
   return (
@@ -190,7 +189,7 @@ const ListItem = React.forwardRef<
 ListItem.displayName = "ListItem";
 
 const AuthSection = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRscSession();
   return (
     <>
       {session && <ListItem href="/admin">Admin</ListItem>}
@@ -200,7 +199,7 @@ const AuthSection = async () => {
 };
 
 const ProfileSection = async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRscSession();
   return (
     <>
       <NavigationMenuItem className="hidden sm:block">

@@ -1,28 +1,28 @@
-// All mocks must be defined inline because jest.mock is hoisted
-// Define mock prisma types to avoid self-referential type issues
+import { vi, type Mock } from "vitest";
+
 interface MockPrismaClient {
-  game: { findFirst: jest.Mock };
-  session: { findFirst: jest.Mock; create: jest.Mock };
-  gameSet: { create: jest.Mock; update: jest.Mock };
-  match: { create: jest.Mock };
-  playerSession: { create: jest.Mock };
-  playerStat: { create: jest.Mock; createMany: jest.Mock };
-  gameStat: { findMany: jest.Mock };
-  player: { findUnique: jest.Mock };
-  $transaction: jest.Mock;
+  game: { findFirst: Mock };
+  session: { findFirst: Mock; create: Mock };
+  gameSet: { create: Mock; update: Mock };
+  match: { create: Mock };
+  playerSession: { create: Mock };
+  playerStat: { create: Mock; createMany: Mock };
+  gameStat: { findMany: Mock };
+  player: { findUnique: Mock };
+  $transaction: Mock;
 }
 
-jest.mock("prisma/db", () => {
+vi.mock("prisma/db", () => {
   const mockPrisma: MockPrismaClient = {
-    game: { findFirst: jest.fn() },
-    session: { findFirst: jest.fn(), create: jest.fn() },
-    gameSet: { create: jest.fn(), update: jest.fn() },
-    match: { create: jest.fn() },
-    playerSession: { create: jest.fn() },
-    playerStat: { create: jest.fn(), createMany: jest.fn() },
-    gameStat: { findMany: jest.fn() },
-    player: { findUnique: jest.fn() },
-    $transaction: jest.fn(
+    game: { findFirst: vi.fn() },
+    session: { findFirst: vi.fn(), create: vi.fn() },
+    gameSet: { create: vi.fn(), update: vi.fn() },
+    match: { create: vi.fn() },
+    playerSession: { create: vi.fn() },
+    playerStat: { create: vi.fn(), createMany: vi.fn() },
+    gameStat: { findMany: vi.fn() },
+    player: { findUnique: vi.fn() },
+    $transaction: vi.fn(
       (callback: (tx: MockPrismaClient) => Promise<unknown>) =>
         callback(mockPrisma),
     ),
@@ -30,7 +30,7 @@ jest.mock("prisma/db", () => {
   return {
     __esModule: true,
     default: mockPrisma,
-    handlePrismaOperation: jest.fn(
+    handlePrismaOperation: vi.fn(
       (callback: (prisma: MockPrismaClient) => Promise<unknown>) =>
         callback(mockPrisma)
           .then((data) => ({ success: true, data }))
@@ -39,10 +39,10 @@ jest.mock("prisma/db", () => {
   };
 });
 
-jest.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
@@ -54,7 +54,7 @@ import { errorCodes } from "@/lib/constants";
 import { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import { StatName } from "@/lib/stat-names";
 
-const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as Mock;
 
 const validSession = (): FormValues => ({
   game: "Call of Duty",
@@ -89,7 +89,7 @@ const validSession = (): FormValues => ({
 
 describe("adminAction tests", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("insertNewSessionFromAdmin", () => {
@@ -97,22 +97,22 @@ describe("adminAction tests", () => {
       mockGetSession.mockResolvedValue({
         user: { role: "admin", email: "test@test.com" },
       });
-      (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
-      (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.session.create as jest.Mock).mockResolvedValue({ sessionId: 1 });
-      (prisma.gameSet.create as jest.Mock).mockResolvedValue({ setId: 1 });
-      (prisma.gameSet.update as jest.Mock).mockResolvedValue({});
-      (prisma.match.create as jest.Mock).mockResolvedValue({ matchId: 1 });
-      (prisma.playerSession.create as jest.Mock).mockResolvedValue({
+      (prisma.game.findFirst as Mock).mockResolvedValue({ gameId: 1 });
+      (prisma.session.findFirst as Mock).mockResolvedValue(null);
+      (prisma.session.create as Mock).mockResolvedValue({ sessionId: 1 });
+      (prisma.gameSet.create as Mock).mockResolvedValue({ setId: 1 });
+      (prisma.gameSet.update as Mock).mockResolvedValue({});
+      (prisma.match.create as Mock).mockResolvedValue({ matchId: 1 });
+      (prisma.playerSession.create as Mock).mockResolvedValue({
         playerSessionId: 1,
         playerId: 1,
       });
-      (prisma.playerStat.createMany as jest.Mock).mockResolvedValue({});
-      (prisma.gameStat.findMany as jest.Mock).mockResolvedValue([
+      (prisma.playerStat.createMany as Mock).mockResolvedValue({});
+      (prisma.gameStat.findMany as Mock).mockResolvedValue([
         { statId: 1, statName: "COD_SCORE" },
         { statId: 2, statName: "COD_POS" },
       ]);
-      (prisma.player.findUnique as jest.Mock).mockResolvedValue({
+      (prisma.player.findUnique as Mock).mockResolvedValue({
         playerId: 1,
         playerName: "Ben",
       });
@@ -143,7 +143,7 @@ describe("adminAction tests", () => {
 
     it("should return an error if game not found", async () => {
       mockGetSession.mockResolvedValue({ user: { role: "admin" } });
-      (prisma.game.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.game.findFirst as Mock).mockResolvedValue(null);
 
       const result = await insertNewSessionFromAdmin(validSession());
       expect(result).toEqual({ error: "Game not found." });
@@ -151,8 +151,8 @@ describe("adminAction tests", () => {
 
     it("should return an error if video already exists", async () => {
       mockGetSession.mockResolvedValue({ user: { role: "admin" } });
-      (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
-      (prisma.session.findFirst as jest.Mock).mockResolvedValue({});
+      (prisma.game.findFirst as Mock).mockResolvedValue({ gameId: 1 });
+      (prisma.session.findFirst as Mock).mockResolvedValue({});
 
       const result = await insertNewSessionFromAdmin(validSession());
       expect(result).toEqual({ error: "Video already exists." });
@@ -160,7 +160,7 @@ describe("adminAction tests", () => {
 
     it("should return a generic error if an exception is thrown", async () => {
       mockGetSession.mockResolvedValue({ user: { role: "admin" } });
-      (prisma.game.findFirst as jest.Mock).mockImplementation(() => {
+      (prisma.game.findFirst as Mock).mockImplementation(() => {
         throw new Error("Unexpected error");
       });
 

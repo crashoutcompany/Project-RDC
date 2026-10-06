@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Icon from "@/app/favicon.ico";
 import { H1 } from "@/components/headings";
@@ -18,7 +17,7 @@ import { redirect } from "next/navigation";
 import prisma from "prisma/db";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { headers } from "next/headers";
+import { getRscSession } from "@/lib/auth/server";
 
 export default function Page() {
   return (
@@ -34,7 +33,7 @@ export default function Page() {
 }
 
 async function ProfileContent() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getRscSession();
   if (!session) redirect("/");
 
   const maskedEmail = session?.user?.email

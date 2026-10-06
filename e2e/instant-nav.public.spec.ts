@@ -1,14 +1,37 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { instant } from "@next/playwright";
 
 /** Suite origin; keeps initial-load `instant()` aligned with Playwright `baseURL`. */
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
+const BASE_URL =
+  process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 
 /** Known seeded game slug from generateStaticParams / production data. */
 const GAME_FIXTURE_PATH = "/games/mariokart8";
 
 /** Known seeded member slug from generateStaticParams / production data. */
 const MEMBER_FIXTURE_PATH = "/members/mark";
+
+/**
+ * Resolves once the router has prefetched the segment data for `pathname`
+ * (the request after the `/_tree` route lookup). instant() only commits from
+ * prefetched data, so clicking before this lands can hang the navigation.
+ * Call before the link enters the viewport so the response isn't missed.
+ */
+function waitForSegmentPrefetch(page: Page, pathname: string) {
+  return page
+    .waitForResponse(
+      (response) => {
+        const request = response.request();
+        return (
+          new URL(request.url()).pathname === pathname &&
+          request.headers()["next-router-prefetch"] !== undefined &&
+          request.headers()["next-router-segment-prefetch"] !== "/_tree"
+        );
+      },
+      { timeout: 20000 },
+    )
+    .then((response) => response.finished());
+}
 
 /**
  * Soft-navigation instant() guards for public routes.
@@ -94,6 +117,7 @@ test.describe("instant nav: public soft navigations", () => {
   });
 
   test("Game detail shell commits under instant()", async ({ page }) => {
+    const prefetched = waitForSegmentPrefetch(page, GAME_FIXTURE_PATH);
     await page.goto("/games");
     await expect(page.getByTestId("games-shell-marker")).toBeVisible({
       timeout: 20000,
@@ -106,7 +130,7 @@ test.describe("instant nav: public soft navigations", () => {
     // Viewport entry triggers Partial Prefetch (hover is a no-op on mobile).
     await gameLink.scrollIntoViewIfNeeded();
     await gameLink.focus();
-    await page.waitForTimeout(2000);
+    await prefetched;
 
     await instant(page, async () => {
       await Promise.all([
@@ -124,6 +148,7 @@ test.describe("instant nav: public soft navigations", () => {
   });
 
   test("Member detail shell commits under instant()", async ({ page }) => {
+    const prefetched = waitForSegmentPrefetch(page, MEMBER_FIXTURE_PATH);
     await page.goto("/members");
     await expect(page.getByTestId("members-shell-marker")).toBeVisible({
       timeout: 20000,
@@ -140,7 +165,7 @@ test.describe("instant nav: public soft navigations", () => {
     await memberLink.evaluate((el) =>
       el.scrollIntoView({ block: "center", inline: "nearest" }),
     );
-    await page.waitForTimeout(2000);
+    await prefetched;
     await page.keyboard.press("Escape");
 
     await instant(page, async () => {

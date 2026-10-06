@@ -10,17 +10,17 @@ Video → ffmpeg sample → pHash filter (optional) → Apple Vision OCR → ded
 
 ```bash
 # One-time setup
-npm install
-npm run harvest:build-ocr           # compiles the Swift Vision CLI (~5s)
+pnpm install --frozen-lockfile
+pnpm harvest:build-ocr               # compiles the Swift Vision CLI (~5s)
 
 # Bootstrap a reference image for Rocket League (one-time per game)
-npm run harvest -- bootstrap --game rocket-league --from ~/Pictures/clean-scoreboard.png
+pnpm harvest -- bootstrap --game rocket-league --from ~/Pictures/clean-scoreboard.png
 
 # Extract scoreboards from a YouTube video
-npm run harvest -- extract --game rocket-league --url 'https://youtu.be/<id>'
+pnpm harvest -- extract --game rocket-league --url 'https://youtu.be/<id>'
 
 # ...or a local file
-npm run harvest -- extract --game rocket-league --video ./session.mp4
+pnpm harvest -- extract --game rocket-league --video ./session.mp4
 ```
 
 Output goes to `out/<game-id>/<video-id>/`. For YouTube the `<video-id>` is the 11-char watch ID; for local files it's the filename minus extension.
@@ -111,17 +111,17 @@ Frame extraction now exposes the pixel and JPEG quality knobs that usually matte
 Recommended slice benchmark:
 
 ```bash
-npm run harvest:build-ocr
+pnpm harvest:build-ocr
 
-npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
   --out ./out/bench-c1 --start 600 --end 900 --keep-frames \
   --no-phash --ocr-concurrency 1
 
-npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
   --out ./out/bench-c2 --start 600 --end 900 --keep-frames \
   --no-phash --ocr-concurrency 2
 
-npm run harvest -- extract --game rocket-league --video ./game.mp4 \
+pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
   --out ./out/bench-c4-960 --start 600 --end 900 --keep-frames \
   --no-phash --ocr-concurrency 4 --sample-width 960 --jpeg-quality 5
 ```
@@ -178,7 +178,7 @@ When wired, the harvester will pass `GameProfile.azureGameId` automatically. For
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
 | `yt-dlp not found`                 | `brew install yt-dlp`                                                                        |
 | `ffmpeg not found`                 | `brew install ffmpeg`                                                                        |
-| `vision-ocr binary not built`      | `npm run harvest:build-ocr`                                                                  |
+| `vision-ocr binary not built`      | `pnpm harvest:build-ocr`                                                                      |
 | `[phash] 0 frames survived filter` | Stream overlays make pHash unreliable. Use `--no-phash` (see below).                         |
 | No matches detected                | Lower `--ocr-min-keywords` (try 3) or `--quality 1080`                                       |
 | Reference image missing            | Run `bootstrap --game <id>` once, or drop your own at `reference/<id>/scoreboard.png`        |
@@ -194,7 +194,7 @@ The pHash pre-filter is great for **clean game captures** where every frame eith
 **Solution: skip pHash and let OCR alone do the gatekeeping.**
 
 ```bash
-npm run harvest -- extract --game rocket-league --video ./game.mp4 --no-phash
+pnpm harvest -- extract --game rocket-league --video ./game.mp4 --no-phash
 ```
 
 OCR is ~100ms/frame on Apple Silicon Vision, so:

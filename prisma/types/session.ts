@@ -27,6 +27,8 @@ const enrichedSession = {
 export type EnrichedSession = Prisma.SessionGetPayload<typeof enrichedSession>;
 
 declare global {
+  // Prisma JSON type extension surface.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace PrismaJson {
     type MvpOutput = {
       statName: string;

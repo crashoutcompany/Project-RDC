@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Player } from "@/generated/prisma/client";
 import { useFormContext, useFieldArray } from "react-hook-form";
-import { v4 as uuidv4 } from "uuid";
 import { Input } from "@/components/ui/input";
 import { useAdmin } from "@/lib/adminContext";
 import { FormValues } from "../../_utils/form-helpers";
@@ -64,7 +63,10 @@ const PlayerStatManager = (props: Props) => {
   useEffect(() => {
     let ignore = false;
     const matchFields = getValues(`${curPlayerSession}.playerStats`);
-    gameStats.forEach((stat, index) => {
+    type PlayerStatRow =
+      FormValues["sets"][number]["matches"][number]["playerSessions"][number]["playerStats"][number];
+
+    gameStats.forEach((stat) => {
       const isMatch = matchFields.some((f) => f.stat === stat.statName); // Need to do this in dev because useEffect renders twice.
       const isToggleStat =
         isMarvelRivals &&
@@ -74,15 +76,16 @@ const PlayerStatManager = (props: Props) => {
       if (!ignore && !isMatch)
         append({
           statId: stat.statId,
-          stat: stat.statName as any, // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type
+          // Runtime: gameStats filtered by game. Validation: Zod schema ensures correct type.
+          stat: stat.statName as PlayerStatRow["stat"],
           statValue: isToggleStat ? "0" : "",
-        });
+        } as PlayerStatRow);
     });
 
     return () => {
       ignore = true;
     };
-  }, [gameStats, append, curPlayerSession, getValues]);
+  }, [gameStats, append, curPlayerSession, getValues, isMarvelRivals]);
 
   // Separate fields into regular and expandable for Marvel Rivals
   const regularFields = isMarvelRivals
