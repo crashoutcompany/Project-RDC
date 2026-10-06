@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { PRODUCTION_URL } from "./config";
-import { isLoopbackUrl, resolveAuthBaseUrl } from "./base-url";
+import {
+  isLoopbackUrl,
+  resolveAuthBaseUrl,
+  resolvePreviewOrigins,
+} from "./base-url";
 
 describe("isLoopbackUrl", () => {
   it("detects localhost variants", () => {
@@ -94,5 +98,39 @@ describe("resolveAuthBaseUrl", () => {
     expect(resolveAuthBaseUrl(PRODUCTION_URL, { NODE_ENV: "production" })).toBe(
       PRODUCTION_URL,
     );
+  });
+});
+
+describe("resolvePreviewOrigins", () => {
+  const branchHost =
+    "project-rdc-git-dependabot-npmandya-f59065-crashoutcos-projects.vercel.app";
+  const deploymentHost = "project-rdc-abc123xyz-crashoutcos-projects.vercel.app";
+
+  it("trusts only this preview's exact branch and deployment hosts", () => {
+    expect(
+      resolvePreviewOrigins({
+        VERCEL_ENV: "preview",
+        VERCEL_BRANCH_URL: branchHost,
+        VERCEL_URL: deploymentHost,
+      }),
+    ).toEqual([`https://${branchHost}`, `https://${deploymentHost}`]);
+  });
+
+  it("never returns a wildcard origin", () => {
+    const origins = resolvePreviewOrigins({
+      VERCEL_ENV: "preview",
+      VERCEL_BRANCH_URL: branchHost,
+    });
+    expect(origins.some((origin) => origin.includes("*"))).toBe(false);
+  });
+
+  it("adds nothing outside Vercel previews", () => {
+    expect(
+      resolvePreviewOrigins({
+        VERCEL_ENV: "production",
+        VERCEL_URL: deploymentHost,
+      }),
+    ).toEqual([]);
+    expect(resolvePreviewOrigins({ NODE_ENV: "development" })).toEqual([]);
   });
 });

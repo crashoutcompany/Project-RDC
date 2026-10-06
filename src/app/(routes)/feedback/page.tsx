@@ -65,6 +65,7 @@ export default function Page() {
             required
             id="message"
             name="message"
+            maxLength={2000}
             rows={6}
             className="min-h-[140px]"
           />
