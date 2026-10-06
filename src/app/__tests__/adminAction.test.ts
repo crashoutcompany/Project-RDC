@@ -127,22 +127,22 @@ describe("adminAction tests", () => {
       mockGetSession.mockResolvedValue({
         user: { role: "admin", email: "test@test.com" },
       });
-      (prisma.game.findFirst as jest.Mock).mockResolvedValue({ gameId: 1 });
-      (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.session.create as jest.Mock).mockResolvedValue({ sessionId: 1 });
-      (prisma.gameSet.create as jest.Mock).mockResolvedValue({ setId: 1 });
-      (prisma.gameSet.update as jest.Mock).mockResolvedValue({});
-      (prisma.match.create as jest.Mock).mockResolvedValue({ matchId: 1 });
-      (prisma.playerSession.create as jest.Mock).mockResolvedValue({
+      (prisma.game.findFirst as Mock).mockResolvedValue({ gameId: 1 });
+      (prisma.session.findFirst as Mock).mockResolvedValue(null);
+      (prisma.session.create as Mock).mockResolvedValue({ sessionId: 1 });
+      (prisma.gameSet.create as Mock).mockResolvedValue({ setId: 1 });
+      (prisma.gameSet.update as Mock).mockResolvedValue({});
+      (prisma.match.create as Mock).mockResolvedValue({ matchId: 1 });
+      (prisma.playerSession.create as Mock).mockResolvedValue({
         playerSessionId: 1,
         playerId: 1,
       });
-      (prisma.playerStat.createMany as jest.Mock).mockResolvedValue({});
-      (prisma.gameStat.findMany as jest.Mock).mockResolvedValue([
+      (prisma.playerStat.createMany as Mock).mockResolvedValue({});
+      (prisma.gameStat.findMany as Mock).mockResolvedValue([
         { statId: 1, statName: "COD_SCORE" },
         { statId: 2, statName: "COD_POS" },
       ]);
-      (prisma.player.findUnique as jest.Mock).mockResolvedValue({
+      (prisma.player.findUnique as Mock).mockResolvedValue({
         playerId: 1,
         playerName: "Ben",
       });
