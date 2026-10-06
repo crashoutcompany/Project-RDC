@@ -21,21 +21,41 @@ import {
 import {
   ColumnDef,
   ColumnFiltersState,
+  columnFilteringFeature,
+  createFilteredRowModel,
+  createPaginatedRowModel,
+  createSortedRowModel,
+  filterFn_includesString,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
+  RowData,
+  RowSelectionState,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
   SortingState,
-  useReactTable,
+  sortFn_alphanumeric,
+  tableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EnrichedSession } from "prisma/types/session";
 
-type DataTableProps<TData, TValue> = {
-  columns: ColumnDef<TData, TValue>[];
+const features = tableFeatures({
+  columnFilteringFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  filterFns: { includesString: filterFn_includesString },
+  sortFns: { alphanumeric: sortFn_alphanumeric },
+});
+
+type DataTableProps<TData extends RowData> = {
+  columns: ColumnDef<typeof features, TData>[];
   data: TData[];
 };
 
@@ -46,14 +66,16 @@ export type Submission = {
   url: string;
 };
 
-export const columns: ColumnDef<EnrichedSession>[] = [
+export const columns: ColumnDef<typeof features, EnrichedSession>[] = [
   {
     id: "select",
     header: ({ table }) => (
       <Checkbox
         checked={
           table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
+          (table.getIsSomePageRowsSelected() &&
+            !table.getIsAllPageRowsSelected() &&
+            "indeterminate")
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select All"
@@ -67,7 +89,6 @@ export const columns: ColumnDef<EnrichedSession>[] = [
       />
     ),
     enableSorting: false,
-    enableHiding: false,
   },
   { accessorKey: "session", header: "Session" },
   {
@@ -121,22 +142,19 @@ export const columns: ColumnDef<EnrichedSession>[] = [
   },
 ];
 
-export const DataTable = <TData, TValue>({
+export const DataTable = <TData extends RowData>({
   columns,
   data,
-}: DataTableProps<TData, TValue>) => {
+}: DataTableProps<TData>) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [rowSelection, setRowSelection] = useState({});
-  const table = useReactTable({
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const table = useTable({
+    features,
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
     state: { sorting, columnFilters, rowSelection },
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
   });
@@ -184,7 +202,7 @@ export const DataTable = <TData, TValue>({
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getAllCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
