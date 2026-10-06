@@ -133,13 +133,13 @@
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"
   },
-  "overrides": {
-    "@types/react": "19.2.15",
-    "@types/react-dom": "19.2.3",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "deepmerge-ts": "^8.0.2",
-    "@azure/ms-rest-js": {
-      "uuid": "^11.1.1"
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.2.15",
+      "@types/react-dom": "19.2.3",
+      "@modelcontextprotocol/sdk": "^1.30.0",
+      "deepmerge-ts": "^8.0.2",
+      "@azure/ms-rest-js>uuid": "^11.1.1"
     }
   }
 }
