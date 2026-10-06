@@ -8,11 +8,9 @@ export const AUTH_ORIGINS = {
   production: "https://rdcstats.com",
   productionWww: "https://www.rdcstats.com",
   vercelProject: "https://project-rdc.vercel.app",
-  vercelPreviewWildcard: "https://*.vercel.app",
 } as const;
 
 export const PRODUCTION_URL = AUTH_ORIGINS.production;
-export const PREVIEW_ORIGIN = AUTH_ORIGINS.vercelPreviewWildcard;
 
 export const TEST_AUTH_USER = {
   id: "project-rdc-e2e-tester",

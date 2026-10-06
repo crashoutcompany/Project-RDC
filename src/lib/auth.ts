@@ -4,7 +4,6 @@ import posthog from "@/posthog/server-init";
 import {
   AUTH_ORIGINS,
   APP_NAME,
-  PREVIEW_ORIGIN,
   PRODUCTION_URL,
   userAdditionalFields,
 } from "@/lib/auth/config";
@@ -23,7 +22,6 @@ export const auth = createAuth({
     provider: "postgresql",
   }),
   productionUrl: PRODUCTION_URL,
-  previewOrigin: PREVIEW_ORIGIN,
   extraTrustedOrigins: [
     AUTH_ORIGINS.productionWww,
     AUTH_ORIGINS.vercelProject,

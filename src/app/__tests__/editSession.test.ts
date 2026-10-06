@@ -7,7 +7,7 @@ import {
   vi,
   type Mock,
 } from "vitest";
-import { approveEditRequest } from "../actions/editSession";
+import { approveEditRequest, rejectEditRequest } from "../actions/editSession";
 import { auth } from "@/lib/auth";
 import type { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import prisma from "prisma/db";
@@ -15,7 +15,7 @@ import { errorCodes } from "@/lib/constants";
 
 type PrismaMock = {
   session: { findUnique: Mock };
-  sessionEditRequest: { findUnique: Mock };
+  sessionEditRequest: { findUnique: Mock; updateMany: Mock };
   gameSet: { create: Mock };
   match: { create: Mock };
   playerSession: { create: Mock };
@@ -300,8 +300,8 @@ describe("approveEditRequest", () => {
     const note = "Changes look good";
     await approveEditRequest(editRequest.id, note);
 
-    expect(prisma.sessionEditRequest.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: editRequest.id },
+    expect(prisma.sessionEditRequest.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: editRequest.id, status: "PENDING" },
       data: expect.objectContaining({
         status: "APPROVED",
         reviewerId: mockUser.user!.id,
@@ -322,5 +322,92 @@ describe("approveEditRequest", () => {
     if (!editRequest) throw new Error("Edit request should be defined");
     const result = await approveEditRequest(editRequest.id);
     expect(result.error).toBe("Error: Edit request is not pending");
+  });
+
+  it("loses the race cleanly when another reviewer already claimed the request", async () => {
+    const { editRequest } = await setupTest({
+      editData: { sessionName: "New Name" },
+      dirtyFields: { sessionName: true },
+    });
+    if (!editRequest) throw new Error("Edit request should be defined");
+    prismaMock.sessionEditRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await approveEditRequest(editRequest.id);
+
+    expect(result.error).toBe("Error: Edit request is not pending");
+    expect(prisma.session.update).not.toHaveBeenCalled();
+    expect(prisma.sessionRevision.create).not.toHaveBeenCalled();
+  });
+
+  it("replaces all sets when the count matches but set IDs do not", async () => {
+    const { session } = await setupTest({ withSets: true });
+    const swappedSetForm: FormValues = {
+      ...baseFormValues,
+      sessionId: session.sessionId,
+      sets: [{ ...baseFormValues.sets[0], setId: 99 }],
+    };
+    prismaMock.sessionEditRequest.findUnique.mockResolvedValue({
+      id: 1,
+      sessionId: session.sessionId,
+      proposerId: mockUser.user.id,
+      proposedData: JSON.stringify({
+        proposedData: swappedSetForm,
+        dirtyFields: { sets: true },
+      }),
+      status: "PENDING",
+    });
+
+    const result = await approveEditRequest(1);
+
+    expect(result.error).toBeNull();
+    expect(prisma.gameSet.deleteMany).toHaveBeenCalledWith({
+      where: { sessionId: session.sessionId },
+    });
+    expect(prisma.gameSet.create).toHaveBeenCalled();
+    expect(prisma.match.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("applies an edited date to the session and recreated stats", async () => {
+    const newDate = new Date("2025-06-15T00:00:00.000Z");
+    const { session } = await setupTest({
+      withSets: true,
+      editData: { date: newDate },
+      dirtyFields: { date: true, sets: true },
+    });
+
+    const result = await approveEditRequest(1);
+
+    expect(result.error).toBeNull();
+    expect(prisma.session.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionId: session.sessionId },
+        data: expect.objectContaining({ date: newDate }),
+      }),
+    );
+    expect(prisma.playerStat.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ date: newDate })],
+    });
+  });
+});
+
+describe("rejectEditRequest", () => {
+  it("only rejects pending requests", async () => {
+    const result = await rejectEditRequest(1, "nope");
+
+    expect(result.error).toBeNull();
+    expect(prisma.sessionEditRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1, status: "PENDING" },
+        data: expect.objectContaining({ status: "REJECTED" }),
+      }),
+    );
+  });
+
+  it("refuses to reject an already reviewed request", async () => {
+    prismaMock.sessionEditRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await rejectEditRequest(1);
+
+    expect(result.error).toBe("Edit request not found or is not pending");
   });
 });

@@ -1,7 +1,11 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 
-import { resolveAuthBaseUrl, type AuthBaseUrlEnv } from "./base-url";
+import {
+  resolveAuthBaseUrl,
+  resolvePreviewOrigins,
+  type AuthBaseUrlEnv,
+} from "./base-url";
 
 export type SocialProviderId = "github" | "google";
 
@@ -34,7 +38,6 @@ type CreateAuthOptions<TFields extends UserAdditionalFields = UserAdditionalFiel
     database: NonNullable<BetterAuthOptions["database"]>;
     env?: AuthEnv;
     productionUrl: string;
-    previewOrigin: string;
     extraTrustedOrigins?: readonly string[];
     sessionModelName?: string;
     userAdditionalFields?: TFields;
@@ -116,7 +119,6 @@ export function createAuth<const TFields extends UserAdditionalFields>({
   database,
   env = process.env,
   productionUrl,
-  previewOrigin,
   extraTrustedOrigins = [],
   sessionModelName,
   userAdditionalFields,
@@ -128,7 +130,11 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     appName,
     baseURL: resolveAuthBaseUrl(productionUrl, env),
     trustedOrigins: [
-      ...new Set([productionUrl, previewOrigin, ...extraTrustedOrigins]),
+      ...new Set([
+        productionUrl,
+        ...resolvePreviewOrigins(env),
+        ...extraTrustedOrigins,
+      ]),
     ],
     database,
     secret,
