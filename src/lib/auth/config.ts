@@ -20,3 +20,16 @@ export const TEST_AUTH_USER = {
   email: "e2e-tester@rdcstats.test",
   role: "admin",
 } as const;
+
+/**
+ * `input: false` keeps `role` server-assigned. Better Auth's
+ * POST /api/auth/update-user otherwise persists whatever the client sends.
+ */
+export const userAdditionalFields = {
+  role: {
+    type: "string",
+    required: false,
+    defaultValue: "user",
+    input: false,
+  },
+} as const;
