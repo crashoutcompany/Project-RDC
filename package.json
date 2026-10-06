@@ -15,8 +15,9 @@
     "build-prerender": "next build --debug-prerender",
     "start": "next start",
     "lint": "eslint .",
+    "doctor": "react-doctor",
     "dbcrashout": "npx prisma db push --force-reset && npx prisma db push && npx tsx prisma/seed.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -80,7 +81,7 @@
     "dotenv": "^18.0.0",
     "googleapis": "^159.0.0",
     "lucide-react": "^0.560.0",
-    "motion": "^12.5.0",
+    "motion": "^14.0.0",
     "next": "16.3.3",
     "next-themes": "^0.4.6",
     "posthog-js": "^1.425.0",
@@ -105,7 +106,7 @@
   },
   "devDependencies": {
     "@next/playwright": "^16.3.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -127,17 +128,18 @@
     "prettier-plugin-tailwindcss": "^0.6.12",
     "prisma": "^7.8.0",
     "prisma-json-types-generator": "^5.1.1",
+    "react-doctor": "^0.9.17",
     "tsx": "^4.20.5",
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"
   },
-  "overrides": {
-    "@types/react": "19.2.15",
-    "@types/react-dom": "19.2.3",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "deepmerge-ts": "^8.0.2",
-    "@azure/ms-rest-js": {
-      "uuid": "^11.1.1"
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.2.15",
+      "@types/react-dom": "19.2.3",
+      "@modelcontextprotocol/sdk": "^1.30.0",
+      "deepmerge-ts": "^8.0.2",
+      "@azure/ms-rest-js>uuid": "^11.1.1"
     }
   }
 }

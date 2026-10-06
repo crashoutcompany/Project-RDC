@@ -1,4 +1,3 @@
-// shared:playwright-auth-setup v1
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { request, type FullConfig } from "@playwright/test";
