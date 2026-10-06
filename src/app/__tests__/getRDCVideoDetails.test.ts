@@ -1,12 +1,19 @@
-jest.mock("@/lib/auth", () => ({
+import { vi, type Mock } from "vitest";
+
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
 
-jest.mock("@/lib/config", () => ({
+vi.mock("@/posthog/server-init", () => ({
+  __esModule: true,
+  default: { capture: vi.fn(), captureException: vi.fn() },
+}));
+
+vi.mock("@/lib/config", () => ({
   __esModule: true,
   default: {
     YOUTUBE_API_KEY: "test-youtube-key",
@@ -18,7 +25,7 @@ import { auth } from "@/lib/auth";
 import prisma from "prisma/db";
 import { errorCodes } from "@/lib/constants";
 
-const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as Mock;
 
 const rdcVideoResponse = {
   items: [
@@ -45,12 +52,12 @@ describe("getRDCVideoDetails", () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetSession.mockResolvedValue({
       user: { role: "admin", email: "admin@test.com" },
     });
-    (prisma.session.findFirst as jest.Mock).mockResolvedValue(null);
-    global.fetch = jest.fn();
+    (prisma.session.findFirst as Mock).mockResolvedValue(null);
+    global.fetch = vi.fn();
   });
 
   afterEach(() => {
@@ -58,7 +65,7 @@ describe("getRDCVideoDetails", () => {
   });
 
   it("requests snippet metadata so RDC Live videos can be linked", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => rdcVideoResponse,
     });
@@ -70,7 +77,7 @@ describe("getRDCVideoDetails", () => {
     );
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    const requestedUrl = new URL((global.fetch as jest.Mock).mock.calls[0][0]);
+    const requestedUrl = new URL((global.fetch as Mock).mock.calls[0][0]);
     expect(requestedUrl.searchParams.get("part")).toBe("snippet,player");
     expect(result.error).toBeUndefined();
     expect(result.video).toMatchObject({
@@ -80,7 +87,7 @@ describe("getRDCVideoDetails", () => {
   });
 
   it("does not treat missing snippet as a successful RDC Live video", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => ({
         items: [
