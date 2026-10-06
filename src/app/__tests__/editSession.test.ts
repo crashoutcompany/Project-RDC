@@ -3,18 +3,25 @@ import {
   describe,
   expect,
   beforeEach,
-  afterEach,
   it,
-  jest,
-} from "@jest/globals";
+  vi,
+  type Mock,
+} from "vitest";
 import { approveEditRequest } from "../actions/editSession";
 import { auth } from "@/lib/auth";
 import type { FormValues } from "../(routes)/admin/_utils/form-helpers";
 import prisma from "prisma/db";
 import { errorCodes } from "@/lib/constants";
 
-// Cast prisma to any to avoid complex mock typing issues in tests
-const prismaMock = prisma as any;
+type PrismaMock = {
+  session: { findUnique: Mock };
+  sessionEditRequest: { findUnique: Mock };
+  gameSet: { create: Mock };
+  match: { create: Mock };
+  playerSession: { create: Mock };
+};
+
+const prismaMock = prisma as unknown as PrismaMock;
 
 // Auth mock type matching better-auth Session type
 interface MockSession {
@@ -36,15 +43,15 @@ const mockUser: MockSession = {
 };
 
 // Mock auth
-jest.mock("@/lib/auth", () => ({
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
 
-const mockGetSession = auth.api.getSession as unknown as jest.Mock<
+const mockGetSession = auth.api.getSession as unknown as Mock<
   () => Promise<MockSession | null>
 >;
 
@@ -124,7 +131,7 @@ const setupTest = async (options: SetupTestOptions = {}) => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockGetSession.mockResolvedValue(mockUser);
 });
 

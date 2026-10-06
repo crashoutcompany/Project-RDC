@@ -3,6 +3,7 @@ import * as fs from "fs";
 import prisma from "./db";
 import { capitalizeFirst } from "@/lib/utils";
 import { EnrichedSession } from "./types/session";
+import { TEST_AUTH_USER } from "@/lib/auth/config";
 
 /** Local copy so seed does not import `@/lib/constants` (pulls Next `"use server"` helpers). */
 enum MembersEnum {
@@ -21,6 +22,7 @@ async function main() {
   console.time("Seeding Time");
   try {
     await seedRDCMembers();
+    await seedTestAuthUser();
     await seedGames();
     await importSessions();
     console.log("Database seeded successfully");
@@ -31,6 +33,21 @@ async function main() {
     console.timeEnd("Seeding Time");
     console.groupEnd();
   }
+}
+
+async function seedTestAuthUser() {
+  await prisma.user.upsert({
+    where: { email: TEST_AUTH_USER.email },
+    update: {
+      name: TEST_AUTH_USER.name,
+      emailVerified: true,
+      role: TEST_AUTH_USER.role,
+    },
+    create: {
+      ...TEST_AUTH_USER,
+      emailVerified: true,
+    },
+  });
 }
 
 // Seed RDC Members

@@ -1,22 +1,24 @@
-jest.mock("@/lib/auth", () => ({
+import { vi, type Mock } from "vitest";
+
+vi.mock("@/lib/auth", () => ({
   auth: {
     api: {
-      getSession: jest.fn(),
+      getSession: vi.fn(),
     },
   },
 }));
 
-jest.mock("prisma/db", () => ({
+vi.mock("prisma/db", () => ({
   __esModule: true,
   default: {
     game: {
-      findFirst: jest.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
 
-jest.mock("@/app/actions/visionAction", () => ({
-  analyzeScreenShot: jest.fn(),
+vi.mock("@/app/actions/visionAction", () => ({
+  analyzeScreenShot: vi.fn(),
 }));
 
 import { handleAnalyzeBtnClick } from "@/app/(routes)/admin/_utils/rdc-vision-helpers";
@@ -24,13 +26,13 @@ import { auth } from "@/lib/auth";
 import { VisionResultCodes, errorCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
 
-const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as Mock;
 
 describe("handleAnalyzeBtnClick", () => {
   const players = [{ playerId: 1, playerName: "Ben" }] as Player[];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("denies unauthenticated users", async () => {

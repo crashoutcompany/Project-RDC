@@ -1,14 +1,13 @@
 "use server";
 
 import prisma, { handlePrismaOperation } from "prisma/db";
-import { auth } from "@/lib/auth";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { UseFormReturn } from "react-hook-form";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { Prisma } from "@/generated/prisma/client";
-import { headers } from "next/headers";
 
 type CreateEditResult = { error: string | null };
 
@@ -18,7 +17,7 @@ export type ProposedData = {
 };
 
 type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
 >["user"] & { role?: string };
 
 /**
@@ -29,7 +28,7 @@ export async function createSessionEditRequest(
   proposedData: FormValues,
   dirtyFields: UseFormReturn<FormValues>["formState"]["dirtyFields"],
 ): Promise<CreateEditResult> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthoritativeSession();
   const user = session?.user as AdminUser | undefined;
   if (!session || user?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -69,7 +68,7 @@ export async function createSessionEditRequest(
 }
 
 export async function listPendingEdits() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthoritativeSession();
   const user = session?.user as AdminUser | undefined;
   if (!session || user?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -102,7 +101,7 @@ export async function approveEditRequest(editId: number, note?: string) {
     }[];
     gameId: number;
   };
-  const user = await auth.api.getSession({ headers: await headers() });
+  const user = await getAuthoritativeSession();
   const adminUser = user?.user as AdminUser | undefined;
   if (!user || adminUser?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -127,7 +126,7 @@ export async function approveEditRequest(editId: number, note?: string) {
   async function markRequestApproved(
     tx: Prisma.TransactionClient,
     id: number,
-    reviewer: any,
+    reviewer: { user?: { id?: string; email?: string | null } },
     reviewNote?: string,
   ) {
     await tx.sessionEditRequest.update({
@@ -337,7 +336,7 @@ export async function approveEditRequest(editId: number, note?: string) {
 }
 
 export async function rejectEditRequest(editId: number, note?: string) {
-  const user = await auth.api.getSession({ headers: await headers() });
+  const user = await getAuthoritativeSession();
   const adminUser = user?.user as AdminUser | undefined;
   if (!user || adminUser?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };

@@ -12,7 +12,7 @@ This document provides essential context and guidelines for AI coding assistants
 - **Language**: TypeScript
 - **UI Library**: React 19
 - **Database**: PostgreSQL (Neon) with Prisma ORM
-- **Authentication**: NextAuth.js
+- **Authentication**: Self-hosted Better Auth
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **Data Fetching**: Server Actions pattern
 - **Analytics**: PostHog
@@ -67,7 +67,7 @@ This document provides essential context and guidelines for AI coding assistants
 ### Prisma Usage
 
 - **Schema**: Defined in `prisma/schema.prisma`
-- **Client Location**: Custom location at `prisma/generated/`
+- **Client Location**: Generated at `src/generated/prisma/`
 - **Import Pattern**: Always import Prisma client from `prisma/db.ts`
 - **Error Handling**: Wrap operations with `handlePrismaOperation` for consistent error handling
 
@@ -92,9 +92,31 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Authentication
 
-- Admin functionality requires authentication checks using `auth()` from `@/auth`
+- Better Auth configuration lives in `src/lib/auth.ts`; shared factories live in
+  `src/lib/auth/{create-auth,base-url,client,proxy}.ts`
+- Read server sessions with `auth.api.getSession({ headers: await headers() })`
 - Check for authenticated user before performing admin operations
+- Admin routes and actions require `session.user.role === "admin"`
+- The sign-in page is `/signin`
 - Return error codes from `src/lib/constants` for consistent error handling
+
+### How agents sign in
+
+- Build and start with `EXPOSE_TESTING_API=1`. Never set that flag on Vercel Production.
+- Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with header
+  `x-test-auth-secret: <secret>`.
+- The route upserts the seeded admin tester and mints a real Better Auth session.
+  Production always 404s.
+- Playwright `e2e/global-setup.ts` writes `e2e/.auth/tester.json`.
+- If Deployment Protection is on, also send
+  `x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+### Neon Managed Better Auth revisit
+
+Revisit Neon Managed Better Auth only after all of: GA; SDK ≥1.0 with a changelog;
+documented http-dev cookie story or configurable cookie names; API to seed a tester
+per branch. Users already live in this Neon database, so a later switch is a schema
+move, not a rewrite.
 
 ### Stat Tracking
 
@@ -113,16 +135,17 @@ This document provides essential context and guidelines for AI coding assistants
 
 ### Development Workflow
 
-- **Dev Server**: `npm run dev` (uses Turbopack)
-- **Build**: `npm run build` for production builds
-- **Post-install**: Automatically runs `prisma generate --sql` after npm install
-- **Testing**: Jest with React Testing Library (`npm test`)
+- **Toolchain**: Node.js 24 and pnpm 10
+- **Dev Server**: `pnpm dev` (uses Turbopack)
+- **Build**: `pnpm build` for production builds
+- **Post-install**: Automatically runs `prisma generate --sql` after `pnpm install`
+- **Testing**: Vitest with React Testing Library (`pnpm test`)
 
 ### Key Dependencies
 
 - **UI**: React, Next.js, Tailwind CSS, shadcn/ui, Recharts
 - **Forms**: React Hook Form, Zod
-- **Auth**: NextAuth.js
+- **Auth**: Better Auth
 - **Database**: Prisma, Neon (serverless Postgres)
 - **Analytics**: PostHog
 

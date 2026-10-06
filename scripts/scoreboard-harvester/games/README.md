@@ -61,7 +61,7 @@ export const GAME_PROFILES: readonly GameProfile[] = [
 ## 3. Bootstrap a reference image
 
 ```bash
-npm run harvest -- bootstrap --game your-game --from /path/to/clean-scoreboard.png
+pnpm harvest -- bootstrap --game your-game --from /path/to/clean-scoreboard.png
 ```
 
 Saves to `reference/<id>/<referenceFileName>`. Future `extract` runs with `--game your-game` will use it for the pHash pre-filter.
@@ -69,7 +69,7 @@ Saves to `reference/<id>/<referenceFileName>`. Future `extract` runs with `--gam
 ## 4. Run
 
 ```bash
-npm run harvest -- extract --game your-game --url <youtube>
+pnpm harvest -- extract --game your-game --url <youtube>
 ```
 
 Output lands in `out/<game-id>/<video-id>/`.

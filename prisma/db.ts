@@ -42,18 +42,22 @@ export async function handlePrismaOperation<T>(
   try {
     const data = await operation(prisma);
     return { success: true, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code: unknown }).code)
+        : undefined;
     // Lazy-load so scripts (prisma seed via tsx) can use this module without
     // pulling in `server-only` via PostHog/config.
     try {
       const { default: posthog } = await import("@/posthog/server-init");
       posthog.captureException(error, "database-error", {
-        code: error?.code,
+        code: errorCode,
       });
     } catch {
       // ignore analytics failures outside the Next server runtime
     }
-    if (error?.code === "P1000")
+    if (errorCode === "P1000")
       console.warn("Database connection error. Database may be expired.");
     if (error instanceof PrismaClientKnownRequestError) {
       return {
@@ -85,21 +89,6 @@ export async function handlePrismaOperation<T>(
   }
 }
 const connectionString = process.env.DATABASE_URL;
-
-// Local development: when DATABASE_URL points at a local Postgres, route the
-// Neon serverless driver through a local wsproxy instead of Neon's cloud. This
-// keeps the app code path identical to production while allowing a plain local
-// database. In production DATABASE_URL is a Neon host, so this block is skipped.
-if (
-  connectionString?.includes("localhost") ||
-  connectionString?.includes("127.0.0.1")
-) {
-  neonConfig.wsProxy = (host) => `${host}:5433/v1`;
-  neonConfig.useSecureWebSocket = false;
-  neonConfig.pipelineTLS = false;
-  neonConfig.pipelineConnect = false;
-  neonConfig.poolQueryViaFetch = false;
-}
 
 const adapter = new PrismaNeon({ connectionString });
 
