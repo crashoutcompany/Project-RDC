@@ -1,4 +1,3 @@
-// shared:test-auth v2
 import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import prisma from "prisma/db";
 import { auth } from "@/lib/auth";
