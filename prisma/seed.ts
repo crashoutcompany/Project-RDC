@@ -297,6 +297,8 @@ async function importSessions() {
           mvpId: sessionData.mvpId,
           mvpDescription: sessionData.mvpDescription,
           mvpStats: sessionData.mvpStats ?? undefined,
+          // Seeded sessions mirror published data, so show them on public pages.
+          isApproved: true,
         },
       });
 

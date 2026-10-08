@@ -1,5 +1,3 @@
-// shared:auth-proxy v2
-
 import { parseSetCookieHeader, toCookieOptions } from "better-auth/cookies";
 import { NextRequest, NextResponse } from "next/server";
 

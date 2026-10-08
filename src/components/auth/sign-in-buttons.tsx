@@ -1,4 +1,3 @@
-// shared:sign-in-buttons v2
 "use client";
 
 import { useState } from "react";

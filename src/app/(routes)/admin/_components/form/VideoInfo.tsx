@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { FormValues } from "../../_utils/form-helpers";
 import Image from "next/image";
@@ -13,6 +14,10 @@ export const VideoInfo = ({
   const thumbnail = form.watch("thumbnail");
   const sessionName = form.watch("sessionName");
   const date = form.watch("date");
+  // Track which URL failed so the fallback survives re-renders (form.watch
+  // re-renders constantly) and a new thumbnail gets a fresh attempt.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === thumbnail;
 
   if (!thumbnail) {
     return null;
@@ -31,13 +36,13 @@ export const VideoInfo = ({
         className="bg-background absolute h-[216px] w-[384px]"
       />
       <Image
-        src={thumbnail}
+        src={failed ? "/images/leland_rdc.jpg" : thumbnail} // TODO get default image
         height={216} // 16:9 aspect ratio
         width={384}
-        alt="RDC Youtube Video Thumbnail"
-        onError={(e) => {
-          e.currentTarget.src = "/images/leland_rdc.jpg"; // TODO get default image
-          e.currentTarget.alt = "Leland from RDC";
+        alt={failed ? "Leland from RDC" : "RDC Youtube Video Thumbnail"}
+        onError={() => {
+          if (failed) return;
+          setFailedSrc(thumbnail);
           toast.warning("Image failed to load, here's a picture of leland.", {
             richColors: true,
           });

@@ -15,6 +15,7 @@ import { NoMembers } from "../../members/_components/members";
 import { calcWinsPerPlayer } from "./_helpers/stats";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
 export type Members = NonNullable<
@@ -86,7 +87,8 @@ async function GameDetailContent({
 
   const game = games.data.find(
     (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
-  )!;
+  );
+  if (!game) notFound();
 
   const [sessionsResult, membersResult, winsResult] = await Promise.all([
     getAllSessionsByGame(game.gameId),

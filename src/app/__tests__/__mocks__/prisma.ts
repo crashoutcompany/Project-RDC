@@ -30,6 +30,7 @@ const mockPrisma = {
     create: vi.fn().mockResolvedValue({ id: 1 }), 
     findUnique: vi.fn(), 
     update: vi.fn().mockResolvedValue({ id: 1 }), 
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     deleteMany: vi.fn() 
   },
   sessionRevision: { 

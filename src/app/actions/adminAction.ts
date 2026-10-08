@@ -12,6 +12,7 @@ import {
   logFormSuccess,
 } from "@/posthog/server-analytics";
 import { after } from "next/server";
+import { revalidateSessionData } from "@/lib/revalidate";
 import { PostHogEvents } from "@/posthog/events";
 
 type AdminUser = NonNullable<
@@ -40,7 +41,7 @@ export async function approveSession(sessionId: number) {
     after(() =>
       logAdminAction(PostHogEvents.SESSION_APPROVED, { sessionId }, authUser),
     );
-    revalidateTag("getAllSessions", "max");
+    revalidateSessionData();
     return { error: null };
   } catch (error) {
     console.error("Error approving session:", error);
@@ -291,7 +292,7 @@ export const insertNewSessionFromAdmin = async (
       );
     });
     after(() => logFormSuccess("ADMIN_FORM", user));
-    revalidateTag("getAllSessions", "max");
+    revalidateSessionData();
     return { error: null };
   } catch (err) {
     after(() => logFormError(err, session));

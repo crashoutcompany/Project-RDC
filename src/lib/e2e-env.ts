@@ -1,5 +1,3 @@
-// shared:e2e-env v1
-
 export type E2EEnvironment = {
   EXPOSE_TESTING_API?: string;
   VERCEL?: string;

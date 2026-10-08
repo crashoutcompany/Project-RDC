@@ -1,6 +1,13 @@
 import { handlePrismaOperation } from "prisma/db";
 import { cacheLife, cacheTag } from "next/cache";
 import "server-only";
+import {
+  approvedSession,
+  inApprovedMatch,
+  inApprovedPlayerSession,
+  inApprovedPlayerStat,
+  inApprovedSet,
+} from "prisma/lib/approved";
 
 export const getMember = async (slug: string) => {
   "use cache";
@@ -15,16 +22,18 @@ export const getMember = async (slug: string) => {
         },
       },
       include: {
-        matchWins: true,
-        setWins: true,
-        dayWins: true,
+        matchWins: { where: inApprovedMatch },
+        setWins: { where: inApprovedSet },
+        dayWins: { where: approvedSession },
         playerStats: {
+          where: inApprovedPlayerStat,
           include: {
             game: true,
             gameStat: true,
           },
         },
         playerSessions: {
+          where: inApprovedPlayerSession,
           include: {
             playerStats: true,
           },

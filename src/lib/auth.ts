@@ -4,8 +4,8 @@ import posthog from "@/posthog/server-init";
 import {
   AUTH_ORIGINS,
   APP_NAME,
-  PREVIEW_ORIGIN,
   PRODUCTION_URL,
+  userAdditionalFields,
 } from "@/lib/auth/config";
 import {
   createAuth,
@@ -22,19 +22,12 @@ export const auth = createAuth({
     provider: "postgresql",
   }),
   productionUrl: PRODUCTION_URL,
-  previewOrigin: PREVIEW_ORIGIN,
   extraTrustedOrigins: [
     AUTH_ORIGINS.productionWww,
     AUTH_ORIGINS.vercelProject,
   ],
   sessionModelName: "UserSession",
-  userAdditionalFields: {
-    role: {
-      type: "string",
-      required: false,
-      defaultValue: "user",
-    },
-  },
+  userAdditionalFields,
   onError(error) {
     console.error(error);
     posthog.captureException(error, "auth-error");

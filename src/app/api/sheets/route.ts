@@ -89,9 +89,10 @@ export async function GET(req: NextRequest) {
     ]);
 
     // A lot of this is dependent on rows not being deleted.
-    if (truth.data.values && truth.data.values.length > 0) {
-      // maybe filter out rows that were added to db
-      const { items } = parseTruthRows(truth.data.values || []);
+    // The range re-reads the last processed row (or the header on the first
+    // run); parseTruthRows drops it, so only `items` are new.
+    const { items } = parseTruthRows(truth.data.values ?? []);
+    if (items.length > 0) {
       const dashboardRows = dashboard.data.values || [];
       const newLastRow = startRow + items.length - 1;
       // optionally compute lastVideoId from the final row
@@ -152,7 +153,7 @@ export async function GET(req: NextRequest) {
 
     logDriveCronJobSuccess("Successfully retrieved rows");
 
-    return NextResponse.json({ ok: true }, { status: 204 });
+    return NextResponse.json({ ok: true, rowCount: 0 });
   } catch (err) {
     logDriveCronJobError("Error reading google sheet", { err });
     return NextResponse.json(
