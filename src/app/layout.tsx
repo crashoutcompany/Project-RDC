@@ -1,6 +1,7 @@
 // import { ReactScan } from "@/components/ReactScan";
 
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -10,11 +11,7 @@ import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/ui/sonner";
 import { DbSwitchNotifier } from "@/components/DbSwitchNotifier";
 import { CSPostHogProvider } from "@/posthog/client-init";
-// import { SessionProvider } from "next-auth/react";
 import PostHogIdentify from "@/posthog/PosthogIdentify";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ReactScan } from "@/components/ReactScan";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -30,33 +27,29 @@ export default function RootLayout({
 }>) {
   return (
     <html className="h-screen" lang="en" suppressHydrationWarning>
-      <head>
-        {process.env.NODE_ENV === "development" && (
-          <script
-            async
-            src="https://unpkg.com/react-scan/dist/auto.global.js"
-          />
-        )}
-      </head>
       {/* <ReactScan /> */}
       <body className={inter.className}>
+        {process.env.NODE_ENV === "development" ? (
+          <Script
+            src="https://unpkg.com/react-scan/dist/auto.global.js"
+            strategy="lazyOnload"
+          />
+        ) : null}
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-            <CSPostHogProvider>
-              <PostHogIdentify />
-              {/* Comment this out to see ssg */}
-              <Navbar />
-              <main>{children}</main>
-              <Toaster />
-              {process.env.NODE_ENV === "development" && (
-                <DbSwitchNotifier />
-              )}
-              <Footer />
-            </CSPostHogProvider>
+          <CSPostHogProvider>
+            <PostHogIdentify />
+            {/* Comment this out to see ssg */}
+            <Navbar />
+            <main>{children}</main>
+            <Toaster />
+            {process.env.NODE_ENV === "development" && <DbSwitchNotifier />}
+            <Footer />
+          </CSPostHogProvider>
         </ThemeProvider>
       </body>
     </html>

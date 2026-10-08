@@ -1,36 +1,25 @@
 import posthog from "@/posthog/server-init";
-import { auth, Session } from "@/lib/auth";
+import type { Session } from "@/lib/auth";
+import { getRscSession } from "@/lib/auth/server";
 import { FormValues } from "@/app/(routes)/admin/_utils/form-helpers";
 import ErrorModelOutput from "@azure-rest/ai-document-intelligence";
-// import { Session } from "next-auth";
 import { v4 } from "uuid";
 import type { MvpOutput } from "@/app/ai/types";
 import { after } from "next/server";
 import { PostHogEvents } from "@/posthog/events";
-import { headers } from "next/headers";
 
 const getSession = async () => {
   try {
-    return await auth.api.getSession({ headers: await headers() });
+    return await getRscSession();
   } catch (e) {
     return null;
   }
 };
 
-/**
- * Helper to include session replay ID in properties if provided.
- * @param sessionReplayId - The PostHog session ID from the client
- * @returns Object with $session_id if provided, empty object otherwise
- */
+/** Includes `$session_id` when a client replay id is passed. */
 const withSessionReplay = (sessionReplayId?: string) =>
   sessionReplayId ? { $session_id: sessionReplayId } : {};
 
-/**
- * Logs an authentication error to PostHog
- * @param error - The error to log
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logAuthError = async (
   error: Error,
   userSession?: Session | null,
@@ -51,12 +40,6 @@ export const logAuthError = async (
   }
 };
 
-/**
- * Logs an authentication event to PostHog
- * @param event - The name of the event to log
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logAuthEvent = async (
   event: PostHogEvents.SIGN_IN | PostHogEvents.SIGN_OUT,
   userSession?: Session | null,
@@ -83,13 +66,6 @@ export const logNAN = async (
   );
 };
 
-/**
- * Logs a form error to PostHog
- * @param err - The error to log
- * @param session - The form values
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logFormError = async (
   err: unknown,
   session: FormValues,
@@ -104,12 +80,6 @@ export const logFormError = async (
 };
 
 type Forms = "ADMIN_FORM" | "FEEDBACK_FORM";
-/**
- * Logs a successful form submission to PostHog
- * @param event - The form type
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logFormSuccess = async (
   event: Forms,
   userSession?: Session | null,
@@ -132,19 +102,15 @@ export const logFormSuccess = async (
   });
 };
 
-/**
- * Logs a vision analysis error to PostHog
- * @param error - The error to log
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logVisionError = async (
   error: typeof ErrorModelOutput | unknown,
+  provider?: string,
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4(), {
+    provider,
     ...withSessionReplay(sessionReplayId),
   });
 };
@@ -263,13 +229,6 @@ export const logAiGenFailure = (
   });
 };
 
-/**
- * Logs an admin action to PostHog
- * @param event - The admin action event type
- * @param details - Additional details about the action
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logAdminAction = async (
   event:
     | PostHogEvents.SESSION_APPROVED
@@ -290,16 +249,10 @@ export const logAdminAction = async (
   });
 };
 
-/**
- * Logs a successful vision analysis to PostHog
- * @param gameId - The game ID being analyzed
- * @param durationMs - Duration of the analysis in milliseconds
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logVisionSuccess = async (
   gameId: number,
   durationMs: number,
+  provider?: string,
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
@@ -310,17 +263,12 @@ export const logVisionSuccess = async (
     properties: {
       gameId,
       durationMs,
+      provider,
       ...withSessionReplay(sessionReplayId),
     },
   });
 };
 
-/**
- * Logs a database error to PostHog
- * @param error - The error to log
- * @param userSession - Optional user session
- * @param sessionReplayId - Optional PostHog session ID for linking to session replay
- */
 export const logDatabaseError = async (
   error: unknown,
   userSession?: Session | null,

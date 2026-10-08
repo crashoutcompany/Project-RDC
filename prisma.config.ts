@@ -2,19 +2,11 @@ import path from "node:path";
 import { defineConfig, env } from "prisma/config";
 import "dotenv/config";
 
-/**
- * Prisma 7 configuration file.
- * Defines database connection URLs for migrations and schema operations.
- */
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations", seed: "tsx prisma/seed.ts" },
 
-  /**
-   * Datasource configuration for TypedSQL and CLI operations.
-   * Uses .env file in the project root for DATABASE_URL.
-   * @see https://pris.ly/d/config-datasource
-   */
+  /** CLI/TypedSQL datasource — uses DIRECT_URL from `.env` (not DATABASE_URL). */
   datasource: { url: env("DIRECT_URL") },
   typedSql: { path: "./prisma/sql" },
 });

@@ -1,33 +1,19 @@
-import type { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
+import { SIGN_IN_PATH } from "@/lib/auth/config";
+import { createAuthProxy } from "@/lib/auth/proxy";
 
-/**
- * Proxies requests to enforce basic authentication rules.
- *
- * - Redirects authenticated users away from the sign-in page.
- * - Redirects unauthenticated users away from admin/submission pages.
- *
- * @param {NextRequest} request - The incoming request object.
- * @returns {Promise<Response | void>} A redirect response or void to continue.
- */
-export async function proxy(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  const path = request.nextUrl.pathname;
+const authProxy = createAuthProxy({
+  auth,
+  publicPaths: ["/", SIGN_IN_PATH],
+  rules: [{ path: "/admin/*", access: "role:admin" }],
+  signInPath: SIGN_IN_PATH,
+});
 
-  if (session && path === "/signin")
-    return Response.redirect(new URL("/", request.url));
-
-  if ((path === "/admin" || path === "/submission") && !session)
-    return Response.redirect(new URL("/", request.url));
-}
+export default authProxy;
+export { authProxy as proxy };
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|.*\\.png$).*)",
-    "/admin",
-    "/submission",
+    "/((?!api(?:/|$)|_next(?:/|$)|favicon\\.ico$|.*\\.(?:avif|gif|ico|jpe?g|png|svg|webp)$).*)",
   ],
 };
-
-// this will update the session expiry every time its called.
-// export { auth as middleware } from "@/lib/auth"

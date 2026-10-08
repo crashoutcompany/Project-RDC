@@ -1,77 +1,31 @@
-import { auth } from "@/lib/auth";
+import { Suspense } from "react";
+import { enabledSocialProviders } from "@/lib/auth";
+import { getRscSession } from "@/lib/auth/server";
+import { SignInButtons } from "@/components/auth/sign-in-buttons";
 import { H1 } from "@/components/headings";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 
-export default async function Page() {
+/** Shell commits under instant(); session gate streams in separately. */
+export default function Page() {
   return (
     <div className="m-10">
-      <H1>Sign in Page</H1>
+      <H1 data-testid="signin-shell-marker">Sign in Page</H1>
       <div className="text-center">
         In order to submit scores you must be logged in. Please login with one
         of the providers below.
       </div>
       <div className="mx-auto mt-4 w-fit">
-        <form
-          action={async (fd) => {
-            "use server";
-            const rawProvider = fd.get("provider");
-            if (typeof rawProvider !== "string") {
-              console.error("Invalid provider");
-              redirect("/");
-            }
-
-            const provider = rawProvider.slice(13).toLowerCase();
-            console.log(provider);
-            const requestHeaders = await headers();
-
-            if (provider === "github" || provider === "google") {
-              const data = await auth.api.signInSocial({
-                body: {
-                  provider: provider as "github" | "google",
-                  callbackURL: "/",
-                  errorCallbackURL: "/",
-                },
-                headers: requestHeaders,
-              });
-              if (data?.url) {
-                redirect(data.url);
-              }
-            } else {
-              console.error("Invalid provider");
-              redirect("/");
-            }
-          }}
-        >
-          <div className="flex flex-col space-y-4">
-            <Button
-              type="submit"
-              className="focus-visible:bg-primary/90 cursor-pointer text-white"
-              asChild
-            >
-              <Input
-                name="provider"
-                type="submit"
-                value="Sign in with Github"
-              />
-              {/* <GitHubLogoIcon /> */}
-            </Button>
-            <Button
-              type="submit"
-              className="focus-visible:bg-primary/90 cursor-pointer text-white"
-              asChild
-            >
-              <Input
-                name="provider"
-                type="submit"
-                value="Sign in with Google"
-              />
-            </Button>
-          </div>
-        </form>
+        <Suspense fallback={null}>
+          <SignInControls />
+        </Suspense>
       </div>
     </div>
   );
+}
+
+async function SignInControls() {
+  const session = await getRscSession();
+  if (session) redirect("/");
+
+  return <SignInButtons providers={enabledSocialProviders} />;
 }

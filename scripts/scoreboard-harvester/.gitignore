@@ -1,0 +1,6 @@
+# Compiled Swift binary — rebuild on each machine via ocr-tool/build.sh
+bin/
+
+# Reference images can be committed if you want to share them across machines;
+# uncomment to keep them local-only:
+# reference/*/scoreboard.png

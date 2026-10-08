@@ -73,7 +73,7 @@ export const FormSummary = ({ defaultValues }: FormSummaryProps) => {
                           {set.matches
                             .at(0)
                             ?.playerSessions.at(0)
-                            ?.playerStats.sort(
+                            ?.playerStats.toSorted(
                               (a, b) => Number(a.statId) - Number(b.statId),
                             )
                             .map((stat) => (
@@ -104,7 +104,7 @@ export const FormSummary = ({ defaultValues }: FormSummaryProps) => {
                               <span>{ps.playerSessionName}</span>
                             </TableCell>
                             {ps.playerStats
-                              .sort(
+                              .toSorted(
                                 (a, b) => Number(a.statId) - Number(b.statId),
                               )
                               .map((stat) => (

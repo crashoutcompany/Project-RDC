@@ -26,15 +26,16 @@ reviews:
   poem: false
   labeling_instructions: []
   path_filters:
-    - "prisma/migrations/**"
-    - "package-lock.json"
+    - "!prisma/migrations/**"
+    - "!pnpm-lock.yaml"
+    - "!.agents/**"
   path_instructions: []
   abort_on_close: true
   disable_cache: false
   auto_review:
     enabled: true
     auto_incremental_review: true
-    ignore_title_keywords: ["Draft, Wip"]
+    ignore_title_keywords: ["Draft", "Wip"]
     labels: []
     drafts: false
     base_branches: []

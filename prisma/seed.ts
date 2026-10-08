@@ -2,19 +2,27 @@ import { StatName } from "@/lib/stat-names";
 import * as fs from "fs";
 import prisma from "./db";
 import { capitalizeFirst } from "@/lib/utils";
-import { MembersEnum } from "@/lib/constants";
 import { EnrichedSession } from "./types/session";
+import { TEST_AUTH_USER } from "@/lib/auth/config";
 
-/**
- * Seeds the database with RDC members, games, and sessions.
- *
- * Runs all seeding steps and logs progress and errors.
- */
+/** Local copy so seed does not import `@/lib/constants` (pulls Next `"use server"` helpers). */
+enum MembersEnum {
+  Mark = "mark",
+  Ipi = "ipi",
+  John = "john",
+  Aff = "aff",
+  Lee = "lee",
+  Dylan = "dylan",
+  Ben = "ben",
+  Des = "des",
+}
+
 async function main() {
   console.group("Begin seeding database");
   console.time("Seeding Time");
   try {
     await seedRDCMembers();
+    await seedTestAuthUser();
     await seedGames();
     await importSessions();
     console.log("Database seeded successfully");
@@ -27,11 +35,23 @@ async function main() {
   }
 }
 
+async function seedTestAuthUser() {
+  await prisma.user.upsert({
+    where: { email: TEST_AUTH_USER.email },
+    update: {
+      name: TEST_AUTH_USER.name,
+      emailVerified: true,
+      role: TEST_AUTH_USER.role,
+    },
+    create: {
+      ...TEST_AUTH_USER,
+      emailVerified: true,
+    },
+  });
+}
+
 // Seed RDC Members
 async function seedRDCMembers() {
-  /**
-   * Seeds RDC members into the database.
-   */
   console.log("--- Seeding RDC Members ---");
 
   await prisma.player.upsert({
@@ -111,9 +131,6 @@ async function seedRDCMembers() {
 
 // Seed Games
 async function seedGames() {
-  /**
-   * Seeds games and their stats into the database.
-   */
   console.log("--- Seeding Games ---");
 
   await prisma.game.upsert({
@@ -215,6 +232,8 @@ async function seedGames() {
           { statName: StatName.MR_DMG_BLOCKED },
           { statName: StatName.MR_HEALING },
           { statName: StatName.MR_ACCURACY },
+          { statName: StatName.MR_MVP },
+          { statName: StatName.MR_SVP },
         ],
       },
     },
@@ -224,11 +243,6 @@ async function seedGames() {
 
 // Import and Process Sessions
 async function importSessions() {
-  /**
-   * Imports sessions from a JSON file and populates the database.
-   *
-   * Reads sessions.json, processes each session, and logs progress/errors.
-   */
 
   // Read the sessions.json file
   // ! Add File Path Here

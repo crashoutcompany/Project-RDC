@@ -30,14 +30,6 @@ const MatchManager = (props: Props) => {
   const players = getValues(`players`);
   const gameName = getValues(`game`);
 
-  /**
-   * Handles the creation of a new match by creating player sessions from the available players.
-   * Maps each player to a new player session object containing their ID, name, and empty stats array.
-   * Appends the new match data with empty winners array and created player sessions to the form.
-   *
-   * @returns {void}
-   *
-   */
   const handleNewMatchClick = () => {
     console.log("Handling New Match click", players);
     // Explicitly type the playerSessions constant.

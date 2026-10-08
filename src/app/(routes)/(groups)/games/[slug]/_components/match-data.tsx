@@ -231,7 +231,7 @@ const processRocketLeagueData = (sets: GameSet[]): ProcessedSet[] => {
           player: playerName,
           ...stats,
         }))
-        .sort((a, b) => {
+        .toSorted((a, b) => {
           const aIsWinner = matchWinnersSet.has(a.player);
           const bIsWinner = matchWinnersSet.has(b.player);
 
@@ -289,7 +289,7 @@ const processMarioKartData = (sets: GameSet[]): ProcessedSet[] => {
           player: playerName,
           ...stats,
         }))
-        .sort((a, b) => a.position - b.position);
+        .toSorted((a, b) => a.position - b.position);
 
       return {
         matchWinners,

@@ -1,13 +1,6 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
 
-/**
- * Retrieves all video sessions from the database, including associated game names.
- *
- * Uses cache for 1 week (604800 seconds), tagged with "getAllSessions".
- *
- * @returns Promise resolving to an array of video sessions with game names.
- */
 export const getAllSessions = async () => {
   "use cache";
   cacheLife("max");
@@ -19,19 +12,6 @@ export const getAllSessions = async () => {
   );
 };
 
-/**
- * Retrieves all sessions for a specific game.
- *
- * @param gameId - Game ID
- * @returns Promise resolving to an array of session objects, each including the game name.
- *
- * @remarks
- * Uses cache for 1 week (604800 seconds), tagged with "getAllSessions".
- *
- * @example
- * const sessions = await getAllSessionsByGame(1);
- * console.log(sessions);
- */
 export const getAllSessionsByGame = async (gameId: number) => {
   "use cache";
   cacheLife("max");

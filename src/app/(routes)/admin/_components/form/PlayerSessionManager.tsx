@@ -26,7 +26,8 @@ const PlayerSessionManager = (props: Props) => {
     // Add new PlayerSession for each Player
     players.forEach((player) => {
       const playerExists = finalPlayerSessionValues.some(
-        (playerSession: any) => player.playerId === playerSession.playerId,
+        (playerSession: { playerId?: number }) =>
+          player.playerId === playerSession.playerId,
       );
       if (!playerExists) {
         append({
@@ -39,7 +40,8 @@ const PlayerSessionManager = (props: Props) => {
 
     // Remove player sessions for players that are no longer in the players array
 
-    finalPlayerSessionValues.forEach((playerSession: any, index: number) => {
+    finalPlayerSessionValues.forEach(
+      (playerSession: { playerId?: number }, index: number) => {
       const playerExists = players.some(
         (player) => player.playerId === playerSession.playerId,
       );
@@ -47,10 +49,13 @@ const PlayerSessionManager = (props: Props) => {
         remove(index);
       }
     });
-  }, [props.players, append, getValues, setIndex, matchIndex, players, remove]);
+  }, [players, append, getValues, setIndex, matchIndex, remove]);
 
-  const getPlayerNameFromField = (field: any): boolean => {
-    return field?.playerSessionName ?? 0; // Discrepancy in what is being assigned to playerSessionName
+  const getPlayerNameFromField = (field: {
+    id: string;
+    playerSessionName?: string;
+  }): string => {
+    return field.playerSessionName ?? "";
   };
 
   console.log("PlayerSessionManager Fields: ", fields);

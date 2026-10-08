@@ -44,28 +44,11 @@ export interface WinnerConfig {
 }
 
 export type GameProcessor = {
-  /**
-   * Process players from the vision data and return a list of processed players (VisionPlayer)
-   * @param playerData - The player data to process
-   * @param sessionPlayers - The session players to validate against
-   * @returns An object containing processed players and a flag indicating if a check is required
-   */
   processPlayers: (
     playerData: AnalyzedTeamData[] | AnalyzedPlayersObj[], // Use a union type here
     sessionPlayers: Player[],
   ) => { processedPlayers: VisionPlayer[]; reqCheckFlag: boolean };
-  /**
-   * Calculate winners based on the processed players' stats and the game configuration
-   * @param players - The processed players
-   * @returns An array of winning players
-   */
   calculateWinners: (players: VisionPlayer[]) => VisionPlayer[];
-  /**
-   * To be used for validating stats of processed players (VisionPlayer)
-   * @param statValue
-   * @param numPlayers = number of players in the match for validations based on player count/team size
-   * @returns
-   */
   validateStats: (
     statValue: string | undefined,
     numPlayers?: number,
@@ -73,13 +56,6 @@ export type GameProcessor = {
     statValue: string;
     reqCheck: boolean;
   };
-  /**
-   * Final check Validate the results of the game based on the processed players and winners
-   * @param visionPlayers - The processed players
-   * @param winners - The winning players
-   * @param requiresCheck - Flag indicating if a check is required
-   * @returns An object containing the status, data, and message
-   */
   validateResults: (
     visionPlayers: VisionPlayer[],
     winners: VisionPlayer[],
@@ -87,7 +63,7 @@ export type GameProcessor = {
   ) => {
     status: VisionResultCodes;
 
-    data: any;
+    data: { players: VisionPlayer[]; winner: VisionPlayer[] };
     message: string;
   };
 };
@@ -101,26 +77,27 @@ export const processTeam = (
 
   // Process Players
   try {
-    const processedPlayers =
-      teamData.players.valueArray?.map((player) => {
-        console.log(
-          `Processing Player: ${player.valueObject.PlayerName.content} for ${teamData.teamName}`,
-        );
-        const processedPlayer = processPlayer(player, teamData.teamName);
-        console.log("Processed Player: ", processedPlayer);
-        const validatedPlayerData = validateProcessedPlayer(
-          processedPlayer,
-          sessionPlayers,
-        );
-        console.log("Validated Player: ", validatedPlayerData);
+    const processedPlayers: VisionPlayer[] = [];
+    teamData.players.valueArray?.forEach((player) => {
+      console.log(
+        `Processing Player: ${player.valueObject.PlayerName.content} for ${teamData.teamName}`,
+      );
+      const processedPlayer = processPlayer(player, teamData.teamName);
+      console.log("Processed Player: ", processedPlayer);
+      const validatedPlayerData = validateProcessedPlayer(
+        processedPlayer,
+        sessionPlayers,
+      );
+      console.log("Validated Player: ", validatedPlayerData);
 
-        reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
-        if (!validatedPlayerData) {
-          console.error("Player validation failed: ", processPlayer);
-          return {} as VisionPlayer;
-        }
-        return validatedPlayerData;
-      }) || [];
+      reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
+      if (!validatedPlayerData) {
+        console.error("Player validation failed: ", processedPlayer);
+        reqCheckFlag = true;
+        return;
+      }
+      processedPlayers.push(validatedPlayerData);
+    });
     return { processedPlayers, reqCheckFlag };
   } catch (error) {
     console.error("Error processing team: ", error);

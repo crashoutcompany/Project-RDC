@@ -5,16 +5,24 @@ import { getAllMembers } from "prisma/lib/members";
 import EntryCreatorForm from "./_components/form/EntryCreatorForm";
 import { NoMembers } from "../(groups)/members/_components/members";
 
-export default async function Page() {
-  const members = await getAllMembers();
-  if (!members.success || !members.data || members.data.length === 0)
-    return <NoMembers />;
+export default function Page() {
   return (
     <div>
       <H1>Admin</H1>
       <Suspense fallback={<Skelly />}>
-        <EntryCreatorForm rdcMembers={members.data} type="create" />
+        <AdminForm />
       </Suspense>
+    </div>
+  );
+}
+
+async function AdminForm() {
+  const members = await getAllMembers();
+  if (!members.success || !members.data || members.data.length === 0)
+    return <NoMembers />;
+  return (
+    <div data-testid="admin-content">
+      <EntryCreatorForm rdcMembers={members.data} type="create" />
     </div>
   );
 }

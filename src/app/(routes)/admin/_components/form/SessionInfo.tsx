@@ -35,21 +35,6 @@ export const SessionInfo = ({
   const posthog = usePostHog();
   const { data: session } = authClient.useSession();
 
-  /**
-   * Handles the URL update process for a session.
-   *
-   * @description
-   * This function performs the following steps:
-   * 1. Validates that the video ID is not already linked
-   * 2. Validates the URL format and ensures it's different from default values
-   * 3. Fetches video details from the YouTube API
-   * 4. Updates form fields with video metadata (title, thumbnail, date)
-   * 5. Handles error cases including authentication failures
-   *
-   * @async
-   * @function handleUrlUpdated
-   * @returns {void} A promise that resolves when the URL update process is complete.
-   */
   const handleUrlUpdated = (): void => {
     startTransition(async () => {
       // TODO Debounce/Rate limit

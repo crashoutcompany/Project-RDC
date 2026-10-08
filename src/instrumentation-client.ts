@@ -9,6 +9,10 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
   defaults: "2025-11-30",
   capture_exceptions: true, // This enables capturing exceptions using Error Tracking
   debug: process.env.NODE_ENV === "development",
+  // Disable web vitals - the external script has callback registration issues
+  capture_performance: {
+    web_vitals: false,
+  },
   // Session Replay configuration
   disable_session_recording: false,
   session_recording: {
@@ -17,10 +21,7 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
   },
 });
 
-/**
- * Gets the current PostHog session ID for linking server-side events to session replays.
- * @returns The current session ID or undefined if not available
- */
+/** PostHog session id for linking server events to replay. */
 export const getPostHogSessionId = (): string | undefined => {
   return posthog.get_session_id();
 };

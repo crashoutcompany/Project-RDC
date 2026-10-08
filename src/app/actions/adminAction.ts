@@ -2,8 +2,8 @@
 
 import { GameStat } from "@/generated/prisma/client";
 import prisma, { handlePrismaOperation } from "prisma/db";
-import { FormValues } from "../(routes)/admin/_utils/form-helpers";
-import { auth } from "@/lib/auth";
+import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
+import { getAuthoritativeSession } from "@/lib/auth/server";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import {
@@ -13,15 +13,14 @@ import {
 } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { PostHogEvents } from "@/posthog/events";
-import { headers } from "next/headers";
 
 type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
 >["user"] & { role?: string };
 
 export async function approveSession(sessionId: number) {
   try {
-    const authUser = await auth.api.getSession({ headers: await headers() });
+    const authUser = await getAuthoritativeSession();
     const user = authUser?.user as AdminUser | undefined;
     if (!authUser || user?.role !== "admin")
       return { error: errorCodes.NotAuthenticated };
@@ -49,16 +48,14 @@ export async function approveSession(sessionId: number) {
   }
 }
 
-/**
- * Retrieves the statistics for a specified game.
- *
- * @param {string} gameName - The name of the game to retrieve statistics for.
- * @returns {Promise<GameStat[]>} A promise that resolves to an array of game statistics.
- * @throws {Error} If the game with the specified name is not found.
- * @returns {Promise<GameStat[]>} Returns an empty array if the game is not found.
- * @throws {Error} If the game statistics cannot be retrieved.
- */
-export async function getGameStats(gameName: string): Promise<GameStat[]> {
+export async function getGameStats(
+  gameName: string,
+): Promise<GameStat[] | { error: string }> {
+  const authUser = await getAuthoritativeSession();
+  const user = authUser?.user as AdminUser | undefined;
+  if (!authUser || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
+
   console.log("Looking for gameStats for ", gameName);
   const game = await handlePrismaOperation((prisma) =>
     prisma.game.findFirst({ where: { gameName } }),
@@ -81,61 +78,13 @@ export async function getGameStats(gameName: string): Promise<GameStat[]> {
   return gameStats.data;
 }
 
-export async function getGameIdFromName(gameName: string) {
-  const game = await prisma.game.findFirst({
-    where: {
-      gameName: gameName,
-    },
-  });
-
-  if (!game) {
-    throw new Error(`Game with name ${gameName} not found`);
-  }
-
-  return game.gameId;
-}
-
-/**
- * Inserts a new session from the admin form.
- *
- * @param {FormValues} session - The session details to be inserted.
- * @returns {Promise<{ error: null | string }>}
- *
- * @example
- * const session = {
- *   game: "Game Name",
- *   sessionName: "Session Name",
- *   sessionUrl: "http://example.com",
- *   thumbnail: "http://example.com/thumbnail.jpg",
- *   date: "2023-10-01",
- *   sets: [
- *     {
- *       setWinners: [{ playerId: 1 }],
- *       matches: [
- *         {
- *           matchWinners: [{ playerId: 1 }],
- *           playerSessions: [
- *             {
- *               playerId: 1,
- *               playerStats: [{ stat: "RL_SCORE", statValue: 100 }],
- *             },
- *           ],
- *         },
- *       ],
- *     },
- *   ],
- * };
- * const result = await insertNewSessionFromAdmin(session);
- * console.log(result); // { error: null }
- *
- */
 export const insertNewSessionFromAdmin = async (
   session: FormValues,
 ): Promise<{ error: null | string }> => {
   console.group("insertNewSessionFromAdmin");
   console.log("Inserting New Session: ", session);
 
-  const user = await auth.api.getSession({ headers: await headers() });
+  const user = await getAuthoritativeSession();
   let error: null | string = null;
 
   const adminUser = user?.user as AdminUser | undefined;
@@ -144,39 +93,47 @@ export const insertNewSessionFromAdmin = async (
     if (!user || adminUser?.role !== "admin")
       return { error: errorCodes.NotAuthenticated };
 
+    const parsed = formSchema.safeParse(session);
+    if (!parsed.success)
+      return { error: "Invalid session data. Please review the form." };
+
+    const validatedSession = parsed.data;
+
     const sessionGame = await prisma.game.findFirst({
-      where: { gameName: session.game },
+      where: { gameName: validatedSession.game },
     });
 
     if (!sessionGame) return { error: "Game not found." };
-    else {
-      const videoAlreadyExists = await prisma.session.findFirst({
+
+    // Parallelize independent queries - both only depend on sessionGame.gameId
+    const [videoAlreadyExists, allGameStats] = await Promise.all([
+      prisma.session.findFirst({
         where: {
           gameId: sessionGame.gameId,
-          AND: { videoId: session.videoId },
+          AND: { videoId: validatedSession.videoId },
         },
-      });
+      }),
+      prisma.gameStat.findMany({
+        where: { gameId: sessionGame.gameId },
+      }),
+    ]);
 
-      console.log(videoAlreadyExists);
+    console.log(videoAlreadyExists);
 
-      if (videoAlreadyExists) return { error: "Video already exists." };
-    }
+    if (videoAlreadyExists) return { error: "Video already exists." };
 
-    // Pre-fetch all gameStats for this game and build a lookup map
-    const allGameStats = await prisma.gameStat.findMany({
-      where: { gameId: sessionGame.gameId },
-    });
+    // Build a lookup map for gameStats
     const gameStatMap = new Map(allGameStats.map((gs) => [gs.statName, gs]));
 
     await prisma.$transaction(async (prismaTx) => {
       const newSession = await prismaTx.session.create({
         data: {
           gameId: sessionGame.gameId,
-          sessionName: session.sessionName,
-          sessionUrl: session.sessionUrl,
-          thumbnail: session.thumbnail,
-          date: session.date,
-          videoId: session.videoId,
+          sessionName: validatedSession.sessionName,
+          sessionUrl: validatedSession.sessionUrl,
+          thumbnail: validatedSession.thumbnail,
+          date: validatedSession.date,
+          videoId: validatedSession.videoId,
           createdBy: user.user?.email || "SYSTEM",
         },
       });
@@ -185,7 +142,7 @@ export const insertNewSessionFromAdmin = async (
 
       // For each set in the session assign to parent session
       await Promise.all(
-        session.sets.map(async (set, i) => {
+        validatedSession.sets.map(async (set, i) => {
           console.log(
             "\n-- Creating Set From Admin Form Submission:  -- \n",
             set,
@@ -308,7 +265,7 @@ export const insertNewSessionFromAdmin = async (
                       console.log("StatId: ", gameStat!.statId);
                       console.log("Date: ", session.date);
 
-                      const sessionDate = new Date(session.date);
+                      const sessionDate = new Date(validatedSession.date);
                       console.log("Session Date: ", sessionDate);
 
                       return {
@@ -345,13 +302,10 @@ export const insertNewSessionFromAdmin = async (
   }
 };
 
-export const revalidateAction = async (path: string) =>
-  revalidateTag(path, "max");
-
 export async function addGame(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthoritativeSession();
   const user = session?.user as AdminUser | undefined;
   if (!session || user?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -374,7 +328,7 @@ export async function addGame(
 export async function addPlayer(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthoritativeSession();
   const user = session?.user as AdminUser | undefined;
   if (!session || user?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -399,7 +353,7 @@ export async function addPlayer(
 export async function addGameStat(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthoritativeSession();
   const user = session?.user as AdminUser | undefined;
   if (!session || user?.role !== "admin")
     return { error: errorCodes.NotAuthenticated };
@@ -411,16 +365,17 @@ export async function addGameStat(
   if (!statName || !gameId || !type)
     return { error: "Missing required fields." };
 
-  // const res = await handlePrismaOperation(() =>
-  //   prisma.gameStat.create({
-  //     data: {
-  //       statName: statName, // TODO Refactor
-  //       gameId: gameId,
-  //       type: type === "INT" ? "INT" : "STRING",
-  //     },
-  //   }),
-  // );
-  // if (!res.success) return { error: res.error || "Failed to add game stat." };
-  // revalidateTag("getAllGameStats");
+  const res = await handlePrismaOperation((prisma) =>
+    prisma.gameStat.create({
+      data: {
+        statName,
+        gameId,
+        type: type === "INT" ? "INT" : "STRING",
+      },
+    }),
+  );
+  if (!res.success) return { error: res.error || "Failed to add game stat." };
+
+  revalidateTag("getAllGameStats", "max");
   return { error: null };
 }

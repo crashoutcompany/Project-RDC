@@ -3,14 +3,7 @@
 import posthog from "posthog-js";
 import { PostHogEvents } from "./events";
 
-/**
- * Gets the current PostHog session ID for linking server-side events to session replays.
- * Use this when calling server actions to pass the session ID.
- * @returns The current session ID or undefined if not available
- * @example
- * const sessionId = getSessionReplayId();
- * await myServerAction(data, sessionId);
- */
+/** PostHog session id for linking server events to replay. */
 export const getSessionReplayId = (): string | undefined => {
   return posthog.get_session_id();
 };

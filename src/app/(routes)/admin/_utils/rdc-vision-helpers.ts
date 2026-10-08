@@ -1,49 +1,63 @@
 "use server";
 
-import { VisionResultCodes } from "@/lib/constants";
+import { VisionResultCodes, errorCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
 import { analyzeScreenShot } from "@/app/actions/visionAction";
-import { getGameIdFromName } from "@/app/actions/adminAction";
 import { VisionResult } from "@/lib/visionTypes";
+import { getAuthoritativeSession } from "@/lib/auth/server";
+import prisma from "prisma/db";
 
-/**x
- * Handles the analysis of a screenshot using vision recognition
- *
- * @description
- * This function orchestrates the vision analysis process:
- * 1. Converts selected file to base64 format
- * 2. Sends image for vision analysis
- * 3. Returns results for the client to handle
- *
- * @param state - Current state of the vision analysis UI
- * @param sessionPlayers - Array of players in the current session for validation
- * @returns Promise that resolves with the vision analysis results
- */
+type AdminUser = NonNullable<
+  Awaited<ReturnType<typeof getAuthoritativeSession>>
+>["user"] & { role?: string };
+
 export const handleAnalyzeBtnClick = async (
   base64FileContent: string,
   sessionPlayers: Player[],
   gameName: string,
 ): Promise<FnReturnType> => {
   try {
-    // Get game ID with error handling
-    let gameId: number;
-    try {
-      gameId = await getGameIdFromName(gameName);
-      if (!gameId) {
-        throw new Error(`Game "${gameName}" not found`);
-      }
-    } catch (error) {
-      console.error("Failed to get game ID:", error);
+    const authUser = await getAuthoritativeSession();
+    const user = authUser?.user as AdminUser | undefined;
+    if (!authUser || user?.role !== "admin")
+      return {
+        status: VisionResultCodes.Failed,
+        message: errorCodes.NotAuthenticated,
+      };
+
+    if (!base64FileContent?.trim())
+      return {
+        status: VisionResultCodes.Failed,
+        message: "No screenshot provided.",
+      };
+
+    if (!gameName?.trim())
+      return {
+        status: VisionResultCodes.Failed,
+        message: "Game name is required.",
+      };
+
+    if (!sessionPlayers?.length)
+      return {
+        status: VisionResultCodes.Failed,
+        message: "At least one player is required.",
+      };
+
+    const game = await prisma.game.findFirst({
+      where: { gameName },
+      select: { gameId: true },
+    });
+
+    if (!game)
       return {
         status: VisionResultCodes.Failed,
         message: `Unable to find game "${gameName}". Please verify the game name is correct.`,
       };
-    }
 
     const analysisResults = await analyzeScreenShot(
       base64FileContent,
       sessionPlayers,
-      gameId, // TODO: This should be from the selected game
+      game.gameId,
     );
 
     console.log("Analysis results", { analysisResults });

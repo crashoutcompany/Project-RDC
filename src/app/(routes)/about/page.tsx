@@ -1,11 +1,12 @@
-"use cache";
 import { H1 } from "@/components/headings";
 import Link from "next/link";
 
-export default async function AboutPage() {
+export default function AboutPage() {
   return (
     <div className="container mx-auto py-8">
-      <H1 className="mb-6 text-center">About Us</H1>
+      <H1 className="mb-6 text-center" data-testid="about-shell-marker">
+        About Us
+      </H1>
       <div className="prose dark:prose-invert mx-auto max-w-2xl text-lg leading-relaxed">
         <p className="mb-4">
           Welcome to Project RDC! We are dedicated to providing a platform for

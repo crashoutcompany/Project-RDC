@@ -34,7 +34,9 @@ export default function Page() {
 
   return (
     <div className="mx-auto max-w-xl p-6">
-      <h1 className="mb-4 text-2xl font-semibold">Feedback</h1>
+      <h1 className="mb-4 text-2xl font-semibold" data-testid="feedback-shell-marker">
+        Feedback
+      </h1>
       <form
         ref={formRef}
         action={action}

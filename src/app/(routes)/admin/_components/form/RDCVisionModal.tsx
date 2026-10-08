@@ -54,26 +54,6 @@ const initialState = {
   previewUrl: null as string | null,
 };
 
-/**
- * State reducer for RDC Vision modal
- *
- * @description
- * This reducer handles:
- * 1. File selection and preview state updates
- * 2. Vision processing status management
- * 3. Loading state control
- * 4. State reset functionality
- *
- * Actions:
- * - UPDATE_FILE: Updates selected file and preview URL
- * - UPDATE_VISION: Updates vision processing status and message
- * - UPDATE_LOADING: Controls loading state
- * - RESET: Resets state to initial values
- *
- * @param state - Current state object
- * @param action - Action to process
- * @returns Updated state object
- */
 const zodFile = z
   .file({ error: "File is required." })
   .mime(["image/jpeg", "image/png", "image/jpg"], {
@@ -104,20 +84,6 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
-/**
- * Converts a File object to a base64 encoded string
- *
- * @description
- * This function:
- * 1. Creates a FileReader to read the file as an ArrayBuffer
- * 2. Returns a Promise that resolves with the base64 encoded content
- * 3. Handles errors during file reading
- * 4. Converts ArrayBuffer to base64 string using Buffer
- *
- * @param selectedFile - The File object to convert
- * @returns Promise that resolves with the base64 encoded string, or undefined if reading fails
- * @throws Logs error if file reading fails
- */
 const getFileAsBase64 = async (selectedFile: File) => {
   const reader = new FileReader();
 

@@ -1,3 +1,40 @@
+/**
+ * Vision Action Tests
+ *
+ * Azure Document Intelligence-specific mechanics (the analyze call, the
+ * poller, raw field shapes) now live in `src/lib/vision/providers/azure-di.ts`
+ * and are covered by `azure-di.test.ts`. This file only exercises
+ * `analyzeScreenShot`'s own orchestration, against a mocked provider.
+ */
+import { vi } from "vitest";
+
+// Mock modules that import ESM packages
+vi.mock("@/lib/auth", () => ({
+  auth: {
+    api: {
+      getSession: vi.fn(),
+    },
+  },
+}));
+
+// Mock the game processor modules
+vi.mock("@/lib/game-processors/MarioKart8Processor");
+vi.mock("@/lib/game-processors/RocketLeagueProcessor");
+vi.mock("@/lib/game-processors/CoDGunGameProcessor");
+
+const visionMocks = vi.hoisted(() => ({
+  extract: vi.fn(),
+}));
+
+vi.mock("@/lib/vision", () => ({
+  getVisionProvider: vi.fn(() => ({
+    id: "test-provider",
+    extract: visionMocks.extract,
+  })),
+  toLegacyAnalyzed: vi.fn(() => []),
+  buildRosterHint: vi.fn(() => []),
+}));
+
 import { analyzeScreenShot, getGameProcessor } from "../actions/visionAction";
 import { VisionResultCodes } from "@/lib/constants";
 import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
@@ -5,41 +42,18 @@ import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcess
 import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
 import { Player } from "@/generated/prisma/client";
 
-// Mock the game processor modules
-jest.mock("@/lib/game-processors/MarioKart8Processor");
-jest.mock("@/lib/game-processors/RocketLeagueProcessor");
-jest.mock("@/lib/game-processors/CoDGunGameProcessor");
-
-const mockMK8Processor = MarioKart8Processor as jest.Mocked<
-  typeof MarioKart8Processor
->;
-
-// Mock Azure SDK
-const mockPost = jest.fn();
-const mockPollUntilDone = jest.fn();
-jest.mock("@azure-rest/ai-document-intelligence", () => ({
-  __esModule: true,
-  default: jest.fn(() => ({
-    path: jest.fn(() => ({ post: mockPost })),
-  })),
-  getLongRunningPoller: jest.fn(() => ({ pollUntilDone: mockPollUntilDone })),
-  isUnexpected: jest.fn(() => false),
-}));
+const mockMK8Processor = vi.mocked(MarioKart8Processor);
+const mockExtract = visionMocks.extract;
 
 describe("Vision Action Tests", () => {
   const mockBase64 = "mockBase64String";
   const mockPlayers = [{ playerId: 1, playerName: "Player1" }] as Player[];
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Default mock implementations for a successful path
-    mockPost.mockResolvedValue({});
-    mockPollUntilDone.mockResolvedValue({
-      body: {
-        analyzeResult: {
-          documents: [{ fields: { player1: { content: "Player1" } } }],
-        },
-      },
+    vi.clearAllMocks();
+    // Default mock implementation for a successful path
+    mockExtract.mockResolvedValue({
+      players: [{ name: "Player1", stats: {} }],
     });
   });
 
@@ -64,41 +78,12 @@ describe("Vision Action Tests", () => {
       });
     });
 
-    it("handles API errors gracefully", async () => {
-      mockPost.mockRejectedValueOnce(new Error("API Error"));
+    it("handles provider extraction errors gracefully", async () => {
+      mockExtract.mockRejectedValueOnce(new Error("Provider Error"));
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result).toEqual({
         status: VisionResultCodes.Failed,
-        message: "API Error",
-      });
-    });
-
-    it("handles poller errors gracefully", async () => {
-      mockPollUntilDone.mockRejectedValueOnce(new Error("Poller Error"));
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Poller Error",
-      });
-    });
-
-    it("handles missing analyze result", async () => {
-      mockPollUntilDone.mockResolvedValueOnce({ body: {} });
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Analyze result or documents are undefined",
-      });
-    });
-
-    it("handles undefined vision analysis results", async () => {
-      mockPollUntilDone.mockResolvedValueOnce({
-        body: { analyzeResult: { documents: [{ fields: undefined }] } },
-      });
-      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
-      expect(result).toEqual({
-        status: VisionResultCodes.Failed,
-        message: "Vision Analysis Player Results are undefined",
+        message: "Provider Error",
       });
     });
 
@@ -121,6 +106,33 @@ describe("Vision Action Tests", () => {
 
       const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
       expect(result.status).toBe(VisionResultCodes.Success);
+    });
+
+    it("flags CheckRequest when a stat requires manual review", async () => {
+      const mockProcessedData = {
+        processedPlayers: [
+          { name: "Dylan" as const, stats: [{ statId: 1, stat: "MK8_POS", statValue: "Z" }] },
+        ],
+        reqCheckFlag: false,
+      };
+      mockMK8Processor.processPlayers.mockReturnValue(mockProcessedData);
+      mockMK8Processor.validateStats.mockReturnValue({
+        statValue: "0",
+        reqCheck: true,
+      });
+      mockMK8Processor.calculateWinners.mockReturnValue([]);
+      mockMK8Processor.validateResults.mockImplementation(
+        (players, winners, requiresCheck) => ({
+          status: requiresCheck
+            ? VisionResultCodes.CheckRequest
+            : VisionResultCodes.Success,
+          data: { players, winner: winners },
+          message: "",
+        }),
+      );
+
+      const result = await analyzeScreenShot(mockBase64, mockPlayers, 1);
+      expect(result.status).toBe(VisionResultCodes.CheckRequest);
     });
   });
 });

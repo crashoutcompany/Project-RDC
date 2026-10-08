@@ -5,9 +5,6 @@ import path from "path";
 
 const LOG_FILE = ".neon-switch.log";
 
-/**
- * Represents a database switch log entry
- */
 export type DbSwitchEntry = {
   timestamp: string;
   gitBranch: string;
@@ -15,11 +12,6 @@ export type DbSwitchEntry = {
   endpoint: string;
 };
 
-/**
- * Parses a log entry line into a structured object
- * @param line - The log line to parse
- * @returns The parsed DbSwitchEntry or null if parsing fails
- */
 function parseLogEntry(line: string): DbSwitchEntry | null {
   // Format: [timestamp] Switched branches: git="branch" -> neon="branch" (endpoint: name)
   const match = line.match(
@@ -36,13 +28,7 @@ function parseLogEntry(line: string): DbSwitchEntry | null {
   };
 }
 
-/**
- * Gets the latest database switch entry from the log file.
- * This is used to detect when the database URL has changed after a git branch switch.
- * Only returns data in development mode.
- *
- * @returns The latest DbSwitchEntry or null if no entry exists or not in development
- */
+/** Latest Neon branch-switch log entry; dev-only (null in production). */
 export async function getLatestDbSwitchEntry(): Promise<DbSwitchEntry | null> {
   // Only run in development mode
   if (process.env.NODE_ENV !== "development") return null;

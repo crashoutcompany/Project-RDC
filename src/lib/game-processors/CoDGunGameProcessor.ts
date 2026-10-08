@@ -18,7 +18,7 @@ import { getStatConfigByFieldKey } from "../stat-configs";
 // Helper function to rank players by COD_KILLS and set COD_POS
 const rankPlayersByScore = (players: VisionPlayer[]): VisionPlayer[] => {
   // Sort players by COD_KILLS in descending order (highest kills first)
-  const sortedPlayers = [...players].sort((a, b) => {
+  const sortedPlayers = [...players].toSorted((a, b) => {
     const aKills = parseInt(
       a.stats.find((stat) => stat.stat === "COD_SCORE")?.statValue || "0",
     );

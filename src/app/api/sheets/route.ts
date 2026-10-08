@@ -1,12 +1,15 @@
 import { google } from "googleapis";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import config from "../../../lib/config";
 import { getVideoId } from "@/app/(routes)/admin/_utils/helper-functions";
 import prisma from "prisma/db";
 import { generateText } from "ai";
 import { google as aiGoogle } from "@ai-sdk/google";
-import { withTracing } from "@posthog/ai";
-import posthog from "@/posthog/server-init";
+import {
+  AI_TELEMETRY_INCLUDE_RUNTIME_CONTEXT,
+  AiTelemetryProperty,
+  flushAiTelemetry,
+} from "@/posthog/ai-telemetry";
 import {
   logAiGenFailure,
   logAiGenSuccess,
@@ -95,20 +98,25 @@ export async function GET(req: NextRequest) {
       const lastVideoId = getVideoId(items.at(-1)?.videoId || "");
       let summary: string | null = null;
       try {
-        const model = withTracing(aiGoogle("gemini-2.5-flash"), posthog, {
-          posthogDistinctId: "cron-job",
-          posthogProperties: {
-            source: "google-drive-sync",
-          },
-        });
-
         const { text } = await generateText({
-          model: model,
+          model: aiGoogle("gemini-2.5-flash"),
           system:
             "You are a concise summarizer. Produce a short summary highlighting the new rows inserted",
           prompt: `Summarize the following ${items.length} new sheet rows into a short, human-readable summary. Rows: ${JSON.stringify(
             items,
           )}`,
+          runtimeContext: {
+            distinctId: "cron-job",
+            traceName: "google-drive-summary",
+            properties: {
+              [AiTelemetryProperty.ENVIRONMENT]: process.env.NODE_ENV,
+              [AiTelemetryProperty.SOURCE]: "google-drive-sync",
+            },
+          },
+          telemetry: {
+            functionId: "google-drive-summary",
+            includeRuntimeContext: AI_TELEMETRY_INCLUDE_RUNTIME_CONTEXT,
+          },
         });
 
         summary = text;
@@ -124,6 +132,8 @@ export async function GET(req: NextRequest) {
       } catch (aiErr) {
         logAiGenFailure(aiErr, "cron-job");
         summary = null;
+      } finally {
+        after(() => flushAiTelemetry());
       }
 
       await prisma.sheetSync.upsert({

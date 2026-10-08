@@ -3,11 +3,6 @@ import { handlePrismaOperation } from "../db";
 import { cacheLife, cacheTag } from "next/cache";
 import "server-only";
 
-/**
- * Retrieves all members from the database.
- *
- * @returns Promise resolving to an array of player objects.
- */
 export const getAllMembers = async () => {
   "use cache";
   cacheLife("max");
@@ -15,11 +10,6 @@ export const getAllMembers = async () => {
   return await handlePrismaOperation((prisma) => prisma.player.findMany());
 };
 
-/**
- * Returns navigation data for all RDC members.
- *
- * @returns Promise resolving to an array of member navigation objects.
- */
 export const getMembersNav = async () => {
   const members = await getAllMembers();
 

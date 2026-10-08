@@ -72,7 +72,7 @@ export const NavigationButtons = ({
         richColors: true,
       });
     setModifier(1);
-    setStep(step + 1);
+    setStep((prev) => prev + 1);
   };
 
   return (

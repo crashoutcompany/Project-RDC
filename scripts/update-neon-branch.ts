@@ -18,11 +18,6 @@ const NEON_CONFIG_FILE = ".neon";
 const LOG_FILE = ".neon-switch.log";
 const MAX_LOG_ENTRIES = 50;
 
-/**
- * Executes a shell command and returns the output
- * @param command - The command to execute
- * @returns The command output or null if it failed
- */
 function execCommand(command: string): string | null {
   try {
     return execSync(command, {
@@ -34,20 +29,12 @@ function execCommand(command: string): string | null {
   }
 }
 
-/**
- * Gets the current git branch name
- * @returns The current branch name
- */
 function getCurrentBranch(): string {
   const branch = execCommand("git rev-parse --abbrev-ref HEAD");
   if (!branch) throw new Error("Failed to get current git branch");
   return branch;
 }
 
-/**
- * Reads the Neon project ID from environment or .neon config file
- * @returns The Neon project ID or null if not found
- */
 function getProjectId(): string | null {
   // First check environment variable
   if (process.env.NEON_PROJECT_ID) return process.env.NEON_PROJECT_ID;
@@ -66,12 +53,7 @@ function getProjectId(): string | null {
   return null;
 }
 
-/**
- * Lists all Neon branches and finds one matching the current git branch pattern
- * @param projectId - The Neon project ID
- * @param gitBranch - The current git branch name
- * @returns The matching Neon branch name or null
- */
+/** Neon `preview/pr-{n}-{gitBranch}` matching current git branch. */
 function findNeonBranch(projectId: string, gitBranch: string): string | null {
   // List all branches in JSON format
   const output = execCommand(
@@ -102,21 +84,11 @@ function findNeonBranch(projectId: string, gitBranch: string): string | null {
   return null;
 }
 
-/**
- * Escapes special regex characters in a string
- * @param str - The string to escape
- * @returns The escaped string
- */
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Extracts the Neon endpoint name from a connection string
- * Pattern: @ep-{name}-{name2}-{id}... -> returns "{name}-{name2}"
- * @param connectionString - The full connection string
- * @returns The extracted endpoint name or "unknown"
- */
+/** Parse `@ep-{a}-{b}-…` from a connection string → `{a}-{b}`. */
 function extractEndpointName(connectionString: string): string {
   // Match @ep-{word}-{word}- pattern
   const match = connectionString.match(/@ep-([a-z]+)-([a-z]+)-/i);
@@ -124,12 +96,7 @@ function extractEndpointName(connectionString: string): string {
   return "unknown";
 }
 
-/**
- * Writes a log entry to the log file, keeping only the last MAX_LOG_ENTRIES
- * @param gitBranch - The git branch name
- * @param neonBranch - The Neon branch name
- * @param endpointName - The extracted endpoint name from the connection string
- */
+/** Append a switch entry; keep the last MAX_LOG_ENTRIES. */
 function writeLog(
   gitBranch: string,
   neonBranch: string,
@@ -155,13 +122,6 @@ function writeLog(
   fs.writeFileSync(logPath, entries.join("\n") + "\n");
 }
 
-/**
- * Gets the connection string for a Neon branch
- * @param projectId - The Neon project ID
- * @param branchName - The Neon branch name
- * @param pooled - Whether to get the pooled connection string
- * @returns The connection string or null
- */
 function getConnectionString(
   projectId: string,
   branchName: string,
@@ -182,11 +142,6 @@ function getConnectionString(
   return connectionString;
 }
 
-/**
- * Updates the .env.development.local file with new database URLs
- * @param databaseUrl - The pooled connection string for DATABASE_URL
- * @param directUrl - The direct connection string for DIRECT_URL
- */
 function updateEnvFile(databaseUrl: string, directUrl: string): void {
   const envPath = path.join(process.cwd(), ENV_FILE);
 
@@ -217,9 +172,6 @@ function updateEnvFile(databaseUrl: string, directUrl: string): void {
   console.log(`Updated ${ENV_FILE} with new database URLs`);
 }
 
-/**
- * Main function to update Neon branch connection strings
- */
 async function main(): Promise<void> {
   console.log("\n🔄 Checking for Neon preview branch...\n");
 

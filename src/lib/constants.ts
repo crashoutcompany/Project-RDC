@@ -1,9 +1,6 @@
 import { StatName } from "@/lib/stat-names";
 import { getAllGames } from "prisma/lib/games";
 
-/**
- * Enum of RDC member names.
- */
 export enum MembersEnum {
   Mark = "mark",
   Ipi = "ipi",
@@ -15,11 +12,6 @@ export enum MembersEnum {
   Des = "des",
 }
 
-/**
- * Returns navigation data for all games.
- *
- * @returns Promise resolving to an array of game navigation objects.
- */
 export const getGamesNav = async () => {
   const games = await getAllGames();
 
@@ -51,6 +43,7 @@ export enum GamesEnum {
   CallOfDuty = "callofduty",
   MarioKart8 = "mariokart8",
   SpeedRunners = "speedrunners",
+  MarvelRivals = "marvelrivals",
 }
 
 const gamesNav = new Map<GamesEnum, string>([
@@ -59,6 +52,7 @@ const gamesNav = new Map<GamesEnum, string>([
   [GamesEnum.CallOfDuty, "Stats for FFA's and who sells the most online."],
   [GamesEnum.MarioKart8, "Stats that tell you who races the hardest."],
   [GamesEnum.SpeedRunners, "Stats that tell you who races the hardest."],
+  [GamesEnum.MarvelRivals, "Stats that tell you who sells the most in ranked."],
 ]);
 
 export const gameImages = {
@@ -67,6 +61,7 @@ export const gameImages = {
   [GamesEnum.MarioKart8]: "mk8.jpg",
   [GamesEnum.SpeedRunners]: "speedrunners.jpeg",
   [GamesEnum.CallOfDuty]: "callofduty.jpeg",
+  [GamesEnum.MarvelRivals]: "marvel_rvials.jpg",
 };
 export const statDescriptions: { [key in StatName]: string } = {
   [StatName.MK8_DAY]: "Mario Kart 8 Days",
@@ -103,6 +98,8 @@ export const statDescriptions: { [key in StatName]: string } = {
   [StatName.MR_DMG_BLOCKED]: "Marvel Rivals Damage Blocked",
   [StatName.MR_HEALING]: "Marvel Rivals Healing",
   [StatName.MR_ACCURACY]: "Marvel Rivals Accuracy",
+  [StatName.MR_MVP]: "Marvel Rivals MVP",
+  [StatName.MR_SVP]: "Marvel Rivals SVP",
 };
 
 export enum errorCodes {
