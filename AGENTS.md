@@ -139,7 +139,17 @@ move, not a rewrite.
 - **Dev Server**: `pnpm dev` (uses Turbopack)
 - **Build**: `pnpm build` for production builds
 - **Post-install**: Automatically runs `prisma generate --sql` after `pnpm install`
-- **Testing**: Vitest with React Testing Library (`pnpm test`)
+- **Testing**: Vitest unit tests (`pnpm test`) + Playwright e2e (`pnpm test:e2e`)
+
+### Testing Strategy
+
+- **Server actions → Vitest** in `src/app/actions/__tests__/`. Prisma (`src/test/mocks/prisma.ts`)
+  and `getAuthoritativeSession` are mocked globally; set the caller with `signInAs("admin" | "user" | null)`
+  from `src/test/session.ts`. Assert what gets written and what gets rejected, not log calls.
+- **Every new admin action** must be added to the table in `admin-guards.test.ts`.
+- **Security boundaries** (`src/lib/auth/*`, `src/lib/test-auth.ts`) keep their own unit tests.
+- **UX flows → Playwright** in `e2e/`. Instant-nav specs guard shell/streaming behavior; `access-control.spec.ts`
+  covers who can reach what. Don't add component render tests for content e2e already loads.
 
 ### Key Dependencies
 

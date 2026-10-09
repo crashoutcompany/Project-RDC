@@ -121,6 +121,8 @@ export const analyzeScreenShot = async (
     );
     console.log("Processed Players: ", processedPlayers);
 
+    // Game-specific corrections (e.g. MK8 7th -> 1st) must still flag review.
+    let statsRequireCheck = false;
     const validatedPlayers: VisionPlayer[] =
       processedPlayers.processedPlayers.map((player) => {
         const validatedStats = player.stats.map((stat: Stat) => {
@@ -128,6 +130,7 @@ export const analyzeScreenShot = async (
             stat.statValue,
             sessionPlayers.length,
           );
+          if (validatedStat.reqCheck) statsRequireCheck = true;
 
           return {
             ...stat,
@@ -147,7 +150,7 @@ export const analyzeScreenShot = async (
     const validatedResult: AnalysisResults = gameProcessor.validateResults(
       validatedPlayers,
       winners,
-      processedPlayers.reqCheckFlag,
+      processedPlayers.reqCheckFlag || statsRequireCheck,
     );
 
     console.log("Teams Array: ", teamsArray);

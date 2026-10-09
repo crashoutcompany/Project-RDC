@@ -260,10 +260,10 @@ const rocketLeagueSchema = baseSessionSchema.extend({
                 message: "Winning team must have more goals than losing team.",
               });
           }),
-        ),
+        ).nonempty("At least one match is required"),
       }),
     )
-    .nonempty(),
+    .nonempty("At least one set is required"),
 });
 
 const marioKart8MatchSchema = baseSessionSchema.extend({
@@ -313,9 +313,9 @@ const marioKart8MatchSchema = baseSessionSchema.extend({
               input: ctx.value,
             });
         }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 const lethalCompanySchema = baseSessionSchema.extend({
@@ -334,9 +334,9 @@ const marvelRivalsSchema = baseSessionSchema.extend({
         matchSchema.extend({
           matchWinners: z.array(playerSchema),
         }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 const codSchema = baseSessionSchema.extend({
@@ -406,9 +406,9 @@ const codSchema = baseSessionSchema.extend({
               input: ctx.value,
             });
         }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 // ! End of Game specific schemas
