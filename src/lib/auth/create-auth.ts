@@ -171,8 +171,8 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     },
     ...(onError ? { onAPIError: { onError } } : {}),
     plugins: [
-      nextCookies(),
       ...(emailOtp ? createEmailOtpPlugins(emailOtp, appName) : []),
+      nextCookies(),
     ],
   });
 }

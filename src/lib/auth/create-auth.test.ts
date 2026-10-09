@@ -64,7 +64,7 @@ describe("resolveAuthEnvironment", () => {
 });
 
 describe("createAuth", () => {
-  it("registers the email OTP plugins only when OTP is fully configured", () => {
+  it("registers the email OTP plugins only when email OTP is configured", () => {
     vi.mocked(nextCookies).mockReturnValue({ id: "next-cookies" } as never);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const pluginIds = (env: Record<string, string>) => {
@@ -95,7 +95,7 @@ describe("createAuth", () => {
         RESEND_API_KEY: "re_test",
         AUTH_EMAIL_FROM: "auth@rdcstats.com",
       }),
-    ).toEqual(["next-cookies", "email-otp", "email-otp-allowlist"]);
+    ).toEqual(["email-otp", "email-otp-allowlist", "next-cookies"]);
 
     warn.mockRestore();
   });

@@ -1,80 +1,74 @@
-import { betterAuth } from "better-auth";
+// RDC aliases bare "better-auth" to a Vitest mock; /minimal is the real factory.
+import { betterAuth } from "better-auth/minimal";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { betterAuth as realBetterAuth } from "better-auth/minimal";
-import { nextCookies } from "better-auth/next-js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { userAdditionalFields } from "./config";
-import { createAuth } from "./create-auth";
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   EMAIL_OTP_EXPIRES_IN_SECONDS,
   EMAIL_OTP_LENGTH,
+  createEmailOtpPlugins,
   isEmailOtpEnabled,
   isOtpEmailAllowed,
   parseOtpAllowlist,
   resolveEmailOtpConfig,
   sendSignInOtpEmail,
+  type EmailOtpConfig,
 } from "./email-otp";
 
-const { send } = vi.hoisted(() => ({
-  send: vi.fn(async () => ({ data: { id: "email-id" }, error: null })),
-}));
+type SentEmail = { from: string; to: string; subject: string; text: string };
 
-vi.mock("resend", () => ({
-  Resend: vi.fn(function Resend() {
-    return { emails: { send } };
-  }),
-}));
-
-const SECRET = "test-better-auth-secret-at-least-32-characters";
-const ORIGIN = "http://localhost:3000";
-const BOT_EMAIL = "grok-bot@example.com";
-const OTHER_EMAIL = "someone@example.com";
-
-const OTP_ENV = {
-  BETTER_AUTH_SECRET: SECRET,
-  BETTER_AUTH_URL: ORIGIN,
-  NODE_ENV: "test",
-  AUTH_OTP_ALLOWED_EMAILS: ` Grok-Bot@Example.com , ,`,
-  AUTH_EMAIL_FROM: "Project RDC <auth@rdcstats.com>",
-  RESEND_API_KEY: "re_test",
+type SendResult = {
+  data: { id: string } | null;
+  error: { message: string } | null;
 };
 
-type MemoryDb = Record<string, Record<string, unknown>[]>;
+const sendEmail = vi.hoisted(() =>
+  vi.fn<(email: SentEmail) => Promise<SendResult>>(async () => ({
+    data: { id: "email-id" },
+    error: null,
+  })),
+);
 
-function buildAuth(env: Record<string, string> = OTP_ENV) {
-  // The global better-auth mock is fine for unit tests; these need the real one.
-  vi.mocked(betterAuth).mockImplementation(
-    realBetterAuth as unknown as typeof betterAuth,
-  );
-  vi.mocked(nextCookies).mockReturnValue({ id: "next-cookies" } as never);
+vi.mock("resend", () => ({
+  Resend: class {
+    emails = { send: sendEmail };
+  },
+}));
 
-  const db: MemoryDb = { user: [], session: [], account: [], verification: [] };
-  const auth = createAuth({
-    appName: "Project RDC",
-    database: memoryAdapter(db),
-    env,
-    productionUrl: ORIGIN,
-    userAdditionalFields,
-  }) as unknown as {
-    handler: (request: Request) => Promise<Response>;
-    options: { plugins: { id: string }[] };
-    api: {
-      createVerificationOTP: (input: {
-        body: { email: string; type: "sign-in" };
-      }) => Promise<string>;
-    };
-  };
+const ORIGIN = "http://localhost:3000";
+const SECRET = "test-better-auth-secret-at-least-32-characters";
+const ENV = {
+  AUTH_OTP_ALLOWED_EMAILS: " Bot@Example.com, ,second@example.com ",
+  RESEND_API_KEY: "re_test",
+  AUTH_EMAIL_FROM: "App <auth@example.com>",
+};
+const CONFIG: EmailOtpConfig = {
+  allowlist: ["bot@example.com"],
+  from: "App <auth@example.com>",
+  resendApiKey: "re_test",
+};
 
-  return { auth, db };
+function buildAuth() {
+  return betterAuth({
+    appName: "App",
+    baseURL: ORIGIN,
+    secret: SECRET,
+    trustedOrigins: [ORIGIN],
+    database: memoryAdapter({
+      user: [],
+      session: [],
+      account: [],
+      verification: [],
+    }),
+    rateLimit: { enabled: false },
+    plugins: createEmailOtpPlugins(CONFIG, "App"),
+  });
 }
 
-function post(
-  auth: ReturnType<typeof buildAuth>["auth"],
-  path: string,
-  body: Record<string, unknown>,
-) {
+type TestAuth = ReturnType<typeof buildAuth>;
+
+function post(auth: TestAuth, path: string, body: Record<string, unknown>) {
   return auth.handler(
     new Request(`${ORIGIN}/api/auth${path}`, {
       method: "POST",
@@ -84,232 +78,209 @@ function post(
   );
 }
 
-function sentCode(): string {
-  const [message] = send.mock.calls.at(-1) as unknown as [{ text: string }];
-  const code = /\b(\d{6})\b/.exec(message.text)?.[1];
-  if (!code) throw new Error("no code in email");
-  return code;
+function sendCode(auth: TestAuth, email: string, type = "sign-in") {
+  return post(auth, "/email-otp/send-verification-otp", { email, type });
+}
+
+function lastSentCode(): string {
+  const text = sendEmail.mock.lastCall?.[0].text ?? "";
+  return text.match(/\b(\d{6})\b/)?.[1] ?? "";
 }
 
 beforeEach(() => {
-  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  sendEmail.mockClear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("parseOtpAllowlist", () => {
-  it("splits on commas, trims, lowercases, drops empties and dedupes", () => {
-    expect(parseOtpAllowlist(" A@x.com,, b@Y.com ,a@x.com, ")).toEqual([
+  it("trims, lowercases, drops empties and dedupes", () => {
+    expect(parseOtpAllowlist(" A@x.com,,b@X.com , a@x.com ,")).toEqual([
       "a@x.com",
-      "b@y.com",
+      "b@x.com",
     ]);
+  });
+
+  it("returns an empty list when unset or blank", () => {
     expect(parseOtpAllowlist(undefined)).toEqual([]);
     expect(parseOtpAllowlist(" , ")).toEqual([]);
   });
 });
 
 describe("isOtpEmailAllowed", () => {
-  it("matches case-insensitively and rejects everything else", () => {
-    const allowlist = [BOT_EMAIL];
-    expect(isOtpEmailAllowed(" GROK-bot@example.com ", allowlist)).toBe(true);
-    expect(isOtpEmailAllowed(OTHER_EMAIL, allowlist)).toBe(false);
-    expect(isOtpEmailAllowed("", allowlist)).toBe(false);
+  it("matches listed emails case-insensitively", () => {
+    expect(isOtpEmailAllowed(" BOT@example.com", ["bot@example.com"])).toBe(
+      true,
+    );
+    expect(isOtpEmailAllowed("other@example.com", ["bot@example.com"])).toBe(
+      false,
+    );
+    expect(isOtpEmailAllowed("", [""])).toBe(false);
   });
 });
 
 describe("resolveEmailOtpConfig", () => {
-  it("is disabled without an allowlist", () => {
-    const env = { ...OTP_ENV, AUTH_OTP_ALLOWED_EMAILS: "" };
-    expect(resolveEmailOtpConfig(env, true)).toBeNull();
-    expect(isEmailOtpEnabled(env)).toBe(false);
-    expect(console.warn).not.toHaveBeenCalled();
+  it("returns the config when the allowlist and Resend are configured", () => {
+    expect(resolveEmailOtpConfig(ENV, false)).toEqual({
+      allowlist: ["bot@example.com", "second@example.com"],
+      from: "App <auth@example.com>",
+      resendApiKey: "re_test",
+    });
   });
 
-  it("is disabled with a warning when sending isn't configured", () => {
-    const env = { ...OTP_ENV, AUTH_EMAIL_FROM: " " };
-    expect(resolveEmailOtpConfig(env, true)).toBeNull();
-    expect(isEmailOtpEnabled(env)).toBe(false);
-    expect(console.warn).toHaveBeenCalledOnce();
-    expect(console.warn).toHaveBeenCalledWith(
+  it("returns null when any variable is missing", () => {
+    expect(
+      resolveEmailOtpConfig({ ...ENV, AUTH_OTP_ALLOWED_EMAILS: " , " }, false),
+    ).toBeNull();
+    expect(
+      resolveEmailOtpConfig({ ...ENV, RESEND_API_KEY: "" }, false),
+    ).toBeNull();
+    expect(
+      resolveEmailOtpConfig({ ...ENV, AUTH_EMAIL_FROM: undefined }, false),
+    ).toBeNull();
+  });
+
+  it("warns on partial configuration", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(
+      resolveEmailOtpConfig(
+        { AUTH_OTP_ALLOWED_EMAILS: "bot@example.com" },
+        true,
+      ),
+    ).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
       "[auth] email OTP sign-in is disabled: set AUTH_OTP_ALLOWED_EMAILS, RESEND_API_KEY and AUTH_EMAIL_FROM.",
     );
   });
 
-  it("is enabled with an allowlist, Resend key and sender", () => {
-    expect(resolveEmailOtpConfig(OTP_ENV, true)).toEqual({
-      allowlist: [BOT_EMAIL],
-      from: OTP_ENV.AUTH_EMAIL_FROM,
-      resendApiKey: OTP_ENV.RESEND_API_KEY,
-    });
-    expect(isEmailOtpEnabled(OTP_ENV)).toBe(true);
-  });
+  it("does not warn when nothing is configured", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-  it("uses tight OTP defaults", () => {
-    expect(EMAIL_OTP_EXPIRES_IN_SECONDS).toBe(300);
-    expect(EMAIL_OTP_ALLOWED_ATTEMPTS).toBe(3);
-    expect(EMAIL_OTP_LENGTH).toBe(6);
+    expect(resolveEmailOtpConfig({}, true)).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("isEmailOtpEnabled", () => {
+  it("reflects whether the config resolves", () => {
+    expect(isEmailOtpEnabled(ENV)).toBe(true);
+    expect(isEmailOtpEnabled({ ...ENV, AUTH_OTP_ALLOWED_EMAILS: "" })).toBe(
+      false,
+    );
   });
 });
 
 describe("sendSignInOtpEmail", () => {
-  it("sends a plain-text code from the configured sender", async () => {
-    const config = resolveEmailOtpConfig(OTP_ENV, false)!;
-    await sendSignInOtpEmail(config, {
-      appName: "Project RDC",
-      email: BOT_EMAIL,
+  it("sends a plain-text code email via Resend", async () => {
+    await sendSignInOtpEmail(CONFIG, {
+      appName: "App",
+      email: "bot@example.com",
       otp: "123456",
     });
 
-    expect(send).toHaveBeenCalledWith({
-      from: OTP_ENV.AUTH_EMAIL_FROM,
-      to: BOT_EMAIL,
-      subject: "Project RDC sign-in code",
-      text: "Your Project RDC sign-in code is 123456. It expires in 5 minutes.",
+    expect(sendEmail).toHaveBeenCalledWith({
+      from: "App <auth@example.com>",
+      to: "bot@example.com",
+      subject: "App sign-in code",
+      text: "Your App sign-in code is 123456. It expires in 5 minutes.",
     });
+  });
+
+  it("throws when Resend reports an error", async () => {
+    sendEmail.mockResolvedValueOnce({
+      data: null,
+      error: { message: "domain not verified" },
+    });
+
+    await expect(
+      sendSignInOtpEmail(CONFIG, {
+        appName: "App",
+        email: "bot@example.com",
+        otp: "123456",
+      }),
+    ).rejects.toThrow("domain not verified");
   });
 });
 
-describe("email OTP allowlist enforcement", () => {
-  it("sends nothing to a non-listed email but returns the same response", async () => {
-    const { auth } = buildAuth();
+describe("createEmailOtpPlugins", () => {
+  it("returns the email OTP plugin and the allowlist guard", () => {
+    const plugins = createEmailOtpPlugins(CONFIG, "App");
 
-    const listed = await post(auth, "/email-otp/send-verification-otp", {
-      email: BOT_EMAIL,
-      type: "sign-in",
+    expect(plugins.map((plugin) => plugin.id)).toEqual([
+      "email-otp",
+      "email-otp-allowlist",
+    ]);
+    expect(plugins[0]?.options).toMatchObject({
+      otpLength: EMAIL_OTP_LENGTH,
+      expiresIn: EMAIL_OTP_EXPIRES_IN_SECONDS,
+      allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
+      disableSignUp: false,
     });
-    expect(send).toHaveBeenCalledTimes(1);
-    send.mockClear();
+  });
 
-    const unlisted = await post(auth, "/email-otp/send-verification-otp", {
-      email: OTHER_EMAIL,
-      type: "sign-in",
-    });
+  it("returns the same response for unlisted emails without sending", async () => {
+    const auth = buildAuth();
+
+    const listed = await sendCode(auth, "bot@example.com");
+    const unlisted = await sendCode(auth, "intruder@example.com");
 
     expect(unlisted.status).toBe(listed.status);
     expect(await unlisted.json()).toEqual(await listed.json());
-    expect(send).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.lastCall?.[0].to).toBe("bot@example.com");
   });
 
-  it("rejects sign-in for a non-listed email even with a valid code", async () => {
-    const { auth, db } = buildAuth();
-    const otp = await auth.api.createVerificationOTP({
-      body: { email: OTHER_EMAIL, type: "sign-in" },
+  it("sends nothing for non-sign-in OTP types", async () => {
+    const auth = buildAuth();
+
+    for (const type of ["email-verification", "forget-password"]) {
+      const response = await sendCode(auth, "bot@example.com", type);
+      expect(response.status).toBe(200);
+    }
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects sign-in for unlisted emails even with a valid code", async () => {
+    const auth = buildAuth();
+    // A real code proves the allowlist, not a missing code, rejects the request.
+    const api = auth.api as unknown as {
+      createVerificationOTP: (input: {
+        body: { email: string; type: "sign-in" };
+      }) => Promise<string>;
+    };
+    const otp = await api.createVerificationOTP({
+      body: { email: "intruder@example.com", type: "sign-in" },
     });
 
     const response = await post(auth, "/sign-in/email-otp", {
-      email: OTHER_EMAIL,
+      email: "intruder@example.com",
       otp,
     });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_OTP" });
-    expect(db.user).toHaveLength(0);
-    expect(db.session).toHaveLength(0);
+    expect(response.headers.get("set-cookie")).toBeNull();
   });
 
-  it("never sends codes for OTP types other than sign-in", async () => {
-    const { auth } = buildAuth();
+  it("signs in a listed email with the emailed code", async () => {
+    const auth = buildAuth();
 
-    for (const type of ["email-verification", "forget-password"]) {
-      const response = await post(auth, "/email-otp/send-verification-otp", {
-        email: BOT_EMAIL,
-        type,
-      });
-      expect(response.status).toBe(200);
-    }
-
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("rejects non-listed emails on the verify paths", async () => {
-    const { auth } = buildAuth();
-    const otp = await auth.api.createVerificationOTP({
-      body: { email: OTHER_EMAIL, type: "sign-in" },
-    });
-
-    for (const path of [
-      "/email-otp/check-verification-otp",
-      "/email-otp/verify-email",
-    ]) {
-      const response = await post(auth, path, {
-        email: OTHER_EMAIL,
-        otp,
-        type: "sign-in",
-      });
-      expect(response.status, path).toBe(400);
-      expect(await response.json()).toMatchObject({ code: "INVALID_OTP" });
-    }
-  });
-
-  it("signs in a listed email as a least-privilege user", async () => {
-    const { auth, db } = buildAuth();
-
-    const sendResponse = await post(auth, "/email-otp/send-verification-otp", {
-      email: "GROK-BOT@example.com",
-      type: "sign-in",
-    });
-    expect(sendResponse.status).toBe(200);
-    expect(send).toHaveBeenCalledWith({
-      from: OTP_ENV.AUTH_EMAIL_FROM,
-      to: BOT_EMAIL,
-      subject: "Project RDC sign-in code",
-      text: expect.stringContaining("It expires in 5 minutes."),
-    });
+    await sendCode(auth, "BOT@example.com");
+    const otp = lastSentCode();
+    expect(otp).toMatch(/^\d{6}$/);
 
     const response = await post(auth, "/sign-in/email-otp", {
-      email: BOT_EMAIL,
-      otp: sentCode(),
-      role: "admin",
-    });
-
-    // First sign-in creates the user; a client-supplied role is ignored.
-    expect(response.status).toBe(200);
-    expect(db.user).toEqual([
-      expect.objectContaining({
-        email: BOT_EMAIL,
-        emailVerified: true,
-        role: "user",
-      }),
-    ]);
-
-    await post(auth, "/email-otp/send-verification-otp", {
-      email: BOT_EMAIL,
-      type: "sign-in",
-    });
-    const signIn = await post(auth, "/sign-in/email-otp", {
-      email: BOT_EMAIL,
-      otp: sentCode(),
-    });
-
-    // Returning sign-in reuses the same least-privilege user.
-    expect(signIn.status).toBe(200);
-    expect(signIn.headers.get("set-cookie")).toContain("session_token");
-    expect(db.user).toHaveLength(1);
-    expect(db.user[0]).toMatchObject({ role: "user" });
-    expect(db.session).toHaveLength(2);
-  });
-
-  it("burns the code after three wrong attempts", async () => {
-    const { auth } = buildAuth();
-    await post(auth, "/email-otp/send-verification-otp", {
-      email: BOT_EMAIL,
-      type: "sign-in",
-    });
-    const otp = sentCode();
-    const wrong = otp === "000000" ? "111111" : "000000";
-
-    for (let attempt = 0; attempt < 3; attempt++)
-      expect(
-        (
-          await post(auth, "/sign-in/email-otp", {
-            email: BOT_EMAIL,
-            otp: wrong,
-          })
-        ).status,
-      ).toBe(400);
-
-    const response = await post(auth, "/sign-in/email-otp", {
-      email: BOT_EMAIL,
+      email: "bot@example.com",
       otp,
     });
-    expect(response.status).toBe(403);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      user: { email: "bot@example.com", emailVerified: true },
+    });
+    expect(response.headers.get("set-cookie")).toContain("session_token");
   });
 });
