@@ -54,5 +54,6 @@ next-env.d.ts
 
 sessions_backup.json
 
-# neon branch switch log
+# neon branch switch log + saved pre-switch DB URLs
 .neon-switch.log
+.neon-switch.json
