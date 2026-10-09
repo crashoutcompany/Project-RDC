@@ -1,10 +1,9 @@
 import path from "node:path";
-import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const mockDirectory = path.resolve(
   import.meta.dirname,
-  "src/app/__tests__/__mocks__",
+  "src/test/mocks",
 );
 
 const resolve = {
@@ -54,43 +53,20 @@ const testEnv = {
 };
 
 export default defineConfig({
-  plugins: [react()],
   resolve,
   test: {
     globals: true,
+    environment: "node",
     env: testEnv,
-    exclude: ["**/node_modules/**", "**/.next/**", "**/e2e/**"],
+    setupFiles: ["./vitest.setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    // Restores each vi.fn to its original implementation before every test so
+    // overrides on shared mocks (prisma, auth) never leak between tests.
+    mockReset: true,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
+      include: ["src/app/actions/**", "src/lib/**", "src/app/(routes)/admin/_utils/**"],
     },
-    projects: [
-      {
-        test: {
-          name: "node",
-          environment: "node",
-          globals: true,
-          env: testEnv,
-          setupFiles: ["./vitest.setup.ts"],
-          include: ["src/lib/**/*.test.ts", "src/lib/**/__tests__/**/*.test.ts"],
-        },
-      },
-      {
-        test: {
-          name: "jsdom",
-          environment: "jsdom",
-          globals: true,
-          env: testEnv,
-          setupFiles: ["./vitest.setup.ts"],
-          include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
-          exclude: [
-            "src/lib/**",
-            "**/node_modules/**",
-            "**/.next/**",
-            "**/e2e/**",
-          ],
-        },
-      },
-    ],
   },
 });

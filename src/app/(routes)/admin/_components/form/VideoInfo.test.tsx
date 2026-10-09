@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { toast } from "sonner";
-import { VideoInfo } from "../(routes)/admin/_components/form/VideoInfo";
+import { VideoInfo } from "./VideoInfo";
 
 vi.mock("sonner", () => ({ toast: { warning: vi.fn() } }));
 
