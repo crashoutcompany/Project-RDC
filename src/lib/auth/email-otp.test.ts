@@ -49,18 +49,24 @@ const CONFIG: EmailOtpConfig = {
   resendApiKey: "re_test",
 };
 
-function buildAuth() {
+type MemoryDb = {
+  user: unknown[];
+  session: unknown[];
+  account: unknown[];
+  verification: Array<{ value: string }>;
+};
+
+function emptyDb(): MemoryDb {
+  return { user: [], session: [], account: [], verification: [] };
+}
+
+function buildAuth(db: MemoryDb = emptyDb()) {
   return betterAuth({
     appName: "App",
     baseURL: ORIGIN,
     secret: SECRET,
     trustedOrigins: [ORIGIN],
-    database: memoryAdapter({
-      user: [],
-      session: [],
-      account: [],
-      verification: [],
-    }),
+    database: memoryAdapter(db),
     rateLimit: { enabled: false },
     plugins: createEmailOtpPlugins(CONFIG, "App"),
   });
@@ -263,6 +269,18 @@ describe("createEmailOtpPlugins", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "INVALID_OTP" });
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("stores only a hash of the code", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    expect(otp).toMatch(/^\d{6}$/);
+
+    expect(db.verification).toHaveLength(1);
+    expect(db.verification[0]!.value).not.toContain(otp);
   });
 
   it("signs in a listed email with the emailed code", async () => {

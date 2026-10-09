@@ -1,4 +1,4 @@
-// shared:email-otp v1
+// shared:email-otp v2
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins/email-otp";
@@ -142,6 +142,8 @@ export function createEmailOtpPlugins(
       expiresIn: EMAIL_OTP_EXPIRES_IN_SECONDS,
       allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
       disableSignUp: false,
+      // Only a SHA-256 hash is stored, so a database read can't reveal a live code.
+      storeOTP: "hashed",
       // Unlisted emails and non-sign-in types get the same success response
       // from the endpoint, but no email is sent.
       async sendVerificationOTP({ email, otp, type }) {

@@ -28,9 +28,12 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
 
     setPending(false);
     if (result.error) {
-      setErrorMessage(result.error.message || "Unable to send a code.");
+      setErrorMessage(
+        result.error.message || "Unable to send a code. Try again in a minute.",
+      );
       return;
     }
+    setOtp("");
     setStep("code");
   }
 
@@ -45,12 +48,20 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
     });
 
     if (result.error) {
-      setErrorMessage(result.error.message || "Unable to sign in.");
+      setErrorMessage(
+        result.error.message || "Unable to sign in. Check the code and try again.",
+      );
       setPending(false);
       return;
     }
     router.replace(callbackURL ?? "/");
     router.refresh();
+  }
+
+  function changeEmail() {
+    setStep("email");
+    setOtp("");
+    setErrorMessage(null);
   }
 
   return (
@@ -64,31 +75,48 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
             name="email"
             type="email"
             autoComplete="email"
+            spellCheck={false}
+            placeholder="you@example.com"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
           <Button type="submit" variant="outline" disabled={pending}>
-            Send code
+            {pending ? "Sending…" : "Send code"}
           </Button>
         </form>
       ) : (
         <form className="flex flex-col gap-3" onSubmit={verifyCode}>
+          <p aria-live="polite" className="text-sm text-muted-foreground">
+            If <span className="break-all font-medium text-foreground">{email.trim()}</span>{" "}
+            can use email sign-in, a 6-digit code is on its way.
+          </p>
           <Label htmlFor="email-otp-code">Code</Label>
           <Input
             id="email-otp-code"
             name="otp"
             inputMode="numeric"
             autoComplete="one-time-code"
+            spellCheck={false}
             pattern="[0-9]*"
             maxLength={6}
+            placeholder="123456"
+            className="tracking-[0.3em] tabular-nums"
+            autoFocus
             required
             value={otp}
             onChange={(event) => setOtp(event.target.value)}
           />
           <Button type="submit" variant="outline" disabled={pending}>
-            Verify
+            {pending ? "Verifying…" : "Verify"}
           </Button>
+          <button
+            type="button"
+            className="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline"
+            onClick={changeEmail}
+          >
+            Use a different email
+          </button>
         </form>
       )}
       {errorMessage ? (
