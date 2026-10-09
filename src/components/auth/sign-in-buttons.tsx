@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { EmailOtpForm } from "@/components/auth/email-otp-form";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
 import {
@@ -16,8 +17,10 @@ const PROVIDER_LABELS: Record<SocialProvider, string> = {
 
 export function SignInButtons({
   providers,
+  emailOtpEnabled = false,
 }: {
   providers: SocialProvider[];
+  emailOtpEnabled?: boolean;
 }) {
   const [pendingProvider, setPendingProvider] =
     useState<SocialProvider | null>(null);
@@ -39,7 +42,7 @@ export function SignInButtons({
     }
   }
 
-  if (providers.length === 0) {
+  if (providers.length === 0 && !emailOtpEnabled) {
     return (
       <p role="status" className="text-muted-foreground text-sm">
         No social sign-in providers are currently configured.
@@ -67,6 +70,7 @@ export function SignInButtons({
           {errorMessage}
         </p>
       ) : null}
+      {emailOtpEnabled ? <EmailOtpForm callbackURL="/" /> : null}
     </div>
   );
 }

@@ -1,6 +1,9 @@
+import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createAuth,
   getEnabledSocialProviders,
   resolveAuthEnvironment,
 } from "./create-auth";
@@ -55,6 +58,44 @@ describe("resolveAuthEnvironment", () => {
       }),
     ).toEqual(["google"]);
     expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+  });
+});
+
+describe("createAuth", () => {
+  it("registers the email OTP plugins only when OTP is fully configured", () => {
+    vi.mocked(nextCookies).mockReturnValue({ id: "next-cookies" } as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const pluginIds = (env: Record<string, string>) => {
+      createAuth({
+        appName: "Project RDC",
+        database: {} as never,
+        env: { BETTER_AUTH_SECRET: SECRET, ...env },
+        productionUrl: "https://rdcstats.com",
+      });
+      const options = vi
+        .mocked(betterAuth)
+        .mock.calls.at(-1)?.[0] as unknown as {
+        plugins: { id: string }[];
+      };
+      return options.plugins.map((plugin) => plugin.id);
+    };
+
+    expect(pluginIds({})).toEqual(["next-cookies"]);
+    expect(
+      pluginIds({
+        AUTH_OTP_ALLOWED_EMAILS: "bot@example.com",
+        RESEND_API_KEY: "re_test",
+      }),
+    ).toEqual(["next-cookies"]);
+    expect(
+      pluginIds({
+        AUTH_OTP_ALLOWED_EMAILS: "bot@example.com",
+        RESEND_API_KEY: "re_test",
+        AUTH_EMAIL_FROM: "auth@rdcstats.com",
+      }),
+    ).toEqual(["next-cookies", "email-otp", "email-otp-allowlist"]);
 
     warn.mockRestore();
   });

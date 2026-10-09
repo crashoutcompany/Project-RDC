@@ -106,6 +106,7 @@ pnpm update-neon-branch
 
 - GitHub OAuth
 - Google OAuth
+- Email one-time code, restricted to an allowlist (for bot/automation accounts)
 
 **Environment Variables**:
 
@@ -113,6 +114,8 @@ pnpm update-neon-branch
 - `AUTH_GITHUB_SECRET` - GitHub OAuth App Client Secret
 - `AUTH_GOOGLE_ID` - Google OAuth Client ID
 - `AUTH_GOOGLE_SECRET` - Google OAuth Client Secret
+- `AUTH_OTP_ALLOWED_EMAILS` - Optional comma-separated allowlist for email-code sign-in
+- `AUTH_EMAIL_FROM` - Sender for sign-in codes (must be on a Resend-verified domain)
 - `BETTER_AUTH_SECRET` - Secret used to sign and encrypt auth data
 - `BETTER_AUTH_URL` - Optional canonical auth origin
 - `TEST_AUTH_SECRET` - Shared secret for the local authenticated E2E login
@@ -127,6 +130,13 @@ pnpm update-neon-branch
 - Admin access requires a Better Auth session with the `admin` role
 - Test login endpoint at `/api/test-auth/login` is disabled on Vercel and
   production deployments
+- Email-code sign-in (`src/lib/auth/email-otp.ts`) is registered only when
+  `AUTH_OTP_ALLOWED_EMAILS`, `AUTH_EMAIL_FROM` and `RESEND_API_KEY` are all set.
+  Codes are only ever sent for the `sign-in` type and only to listed
+  addresses; everyone else gets the same success response but no email, and
+  non-listed addresses are rejected at sign-in. Codes are 6 digits, expire after
+  5 minutes, and allow 3 attempts. New accounts get the `user` role; only list
+  addresses that should never be admins.
 
 **OAuth Provider Links**:
 
@@ -231,11 +241,13 @@ pnpm update-neon-branch
 
 - `RESEND_API_KEY` - Resend API key
 - `RESEND_JOB_SEND_LIST` - Semicolon-separated list of email recipients for cron jobs
+- `AUTH_EMAIL_FROM` - Sender for email sign-in codes; must use a verified domain
 
 **Usage**:
 
 - Feedback email notifications in `src/app/api/feedback/route.ts`
 - Weekly feedback summary emails sent via cron job
+- Email sign-in codes for allowlisted accounts (`src/lib/auth/email-otp.ts`)
 - Email template component in `src/components/email-template.tsx`
 
 ---
