@@ -7,6 +7,10 @@
  * `pnpm update-neon-branch --force` (e.g. after opening the PR). Set SKIP_NEON_SWITCH=1
  * to disable.
  *
+ * The post-merge hook runs it with `--if-preview`: when you're on a preview branch it
+ * re-checks that the preview still exists (the workflow deletes it when the PR closes)
+ * and restores the original URLs if not. It does nothing otherwise.
+ *
  * Preview branches are created by the shared crashoutcompany neon-branches workflow
  * as `preview/pr-{number}-{head ref with "/" replaced by "-"}`.
  *
@@ -251,13 +255,24 @@ async function main(): Promise<void> {
   if (!gitBranch) return;
 
   const state = readState();
+  const ifPreview = process.argv.includes("--if-preview");
+  // Only worth a network call when we're currently on a preview.
+  if (ifPreview && (!state.activeNeonBranch || state.gitBranch !== gitBranch))
+    return;
   // Same branch as last time (e.g. re-checkout, or two branches at one commit
   // already handled): nothing to look up.
-  if (state.gitBranch === gitBranch && !process.argv.includes("--force"))
+  if (
+    state.gitBranch === gitBranch &&
+    !ifPreview &&
+    !process.argv.includes("--force")
+  )
     return;
 
-  console.log("\n🔄 Checking for Neon preview branch...\n");
-  console.log(`Current git branch: ${gitBranch}`);
+  // Stay silent on post-merge refreshes unless something changes.
+  if (!ifPreview) {
+    console.log("\n🔄 Checking for Neon preview branch...\n");
+    console.log(`Current git branch: ${gitBranch}`);
+  }
 
   const projectId = getProjectId();
   if (!projectId) {
@@ -291,6 +306,9 @@ async function main(): Promise<void> {
     writeState({ gitBranch });
     return;
   }
+
+  // Post-merge refresh and the preview is still there: nothing to do.
+  if (ifPreview && state.activeNeonBranch === neonBranch) return;
 
   console.log(`Found matching Neon branch: ${neonBranch}`);
   console.log("Fetching connection strings...");
