@@ -1,4 +1,4 @@
-import { formSchema, FormValues } from "../(routes)/admin/_utils/form-helpers";
+import { formSchema, FormValues } from "./form-helpers";
 import { StatName } from "@/lib/stat-names";
 
 const MIXED_CASE_VIDEO_ID = "dQw4w9WgXcQ";
