@@ -1,0 +1,7 @@
+#!/bin/sh
+# After `git pull`: if the current branch's Neon preview was deleted (PR closed),
+# restore the original database URLs. No-op unless currently on a preview.
+[ -x node_modules/.bin/tsx ] || exit 0
+command -v pnpm >/dev/null 2>&1 || exit 0
+
+pnpm --silent run update-neon-branch --if-preview || true
