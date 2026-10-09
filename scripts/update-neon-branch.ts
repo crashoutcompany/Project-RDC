@@ -14,12 +14,17 @@
  * Preview branches are created by the shared crashoutcompany neon-branches workflow
  * as `preview/pr-{number}-{head ref with "/" replaced by "-"}`.
  *
+ * Without Neon credentials (no NEON_API_KEY and no neonctl login) it skips with a
+ * one-line notice instead of waiting on neonctl, so machines that don't use Neon
+ * previews can ignore it.
+ *
  * @requires NEON_PROJECT_ID environment variable (or projectId in .neon file)
- * @requires neonctl authentication (run `pnpm exec neonctl auth`)
+ * @requires neonctl authentication (`pnpm exec neonctl auth`) or NEON_API_KEY
  */
 
 import { execFileSync } from "child_process";
 import fs from "fs";
+import os from "os";
 import path from "path";
 
 /** Env var → which Neon connection string it gets. */
@@ -67,6 +72,18 @@ function run(file: string, args: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+/** NEON_API_KEY, or a saved neonctl login (config dir name and files vary by version). */
+function hasNeonCredentials(): boolean {
+  if (process.env.NEON_API_KEY) return true;
+  const base =
+    process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  return ["neon", "neonctl"].some((dir) =>
+    ["profiles.json", "credentials.json"].some((file) =>
+      fs.existsSync(path.join(base, dir, file)),
+    ),
+  );
 }
 
 function neonctl(args: string[]): string | null {
@@ -295,6 +312,15 @@ async function main(): Promise<void> {
     !process.argv.includes("--force")
   )
     return;
+
+  if (!hasNeonCredentials()) {
+    // Not recorded as handled, so the next checkout retries once you log in.
+    if (!ifPreview)
+      console.log(
+        "Neon: not logged in (run `pnpm exec neonctl auth` or set NEON_API_KEY), skipping preview switch.\n",
+      );
+    return;
+  }
 
   // Stay silent on post-merge refreshes unless something changes.
   if (!ifPreview) {
