@@ -30,10 +30,18 @@ const ENV_VARS: Record<string, "pooled" | "direct"> = {
 
 const ENV_FILE = ".env.development.local";
 const NEON_CONFIG_FILE = ".neon";
-/** Holds the pre-preview env values (secrets) — gitignored. */
+/** Which branch was last handled. Holds no secrets — gitignored. */
 const STATE_FILE = ".neon-switch.json";
 const LOG_FILE = ".neon-switch.log";
 const MAX_LOG_ENTRIES = 50;
+/**
+ * While a preview is active, the original values live in ENV_FILE itself as comment
+ * lines (`# neon-switch-base: KEY=value`) under SENTINEL. That keeps a single copy of
+ * each secret, and ENV_FILE alone says whether a preview is active.
+ */
+const BASE_PREFIX = "# neon-switch-base: ";
+const SENTINEL =
+  "# neon-switch-base (restored when you leave the preview branch)";
 /** neonctl waits for a browser login when unauthenticated; never block a checkout on it. */
 const COMMAND_TIMEOUT_MS = 15_000;
 
@@ -42,8 +50,6 @@ type State = {
   gitBranch?: string;
   /** Neon branch currently written to ENV_FILE, if any. */
   activeNeonBranch?: string;
-  /** Raw values from before the switch; null = key was absent. */
-  base?: Record<string, string | null>;
   /** ENV_FILE didn't exist before the switch. */
   createdEnvFile?: boolean;
 };
@@ -234,11 +240,33 @@ function writeEnvFile(content: string): void {
   writeFileAtomic(path.join(cwd, ENV_FILE), content);
 }
 
-/** Put back the values from before the preview switch. */
+/** A preview is active: ENV_FILE carries the saved originals. */
+function hasBase(content: string | null): boolean {
+  return content !== null && content.split("\n").includes(SENTINEL);
+}
+
+/** Append the current values of ENV_VARS as comment lines, so they can be restored. */
+function saveBase(content: string): string {
+  let out = content && !content.endsWith("\n") ? `${content}\n` : content;
+  out += `${SENTINEL}\n`;
+  for (const key of Object.keys(ENV_VARS)) {
+    const raw = getEnvValue(content, key);
+    if (raw !== null) out += `${BASE_PREFIX}${key}=${raw}\n`;
+  }
+  return out;
+}
+
+/** Put back the values saved by saveBase; keys with no saved value are removed. */
 function restoreBase(state: State): void {
   let content = readEnvFile() ?? "";
-  for (const [key, raw] of Object.entries(state.base ?? {}))
-    content = setEnvValue(content, key, raw);
+  for (const key of Object.keys(ENV_VARS)) {
+    const saved = new RegExp(`^${BASE_PREFIX}${key}=(.*)$`, "m").exec(content);
+    content = setEnvValue(content, key, saved ? saved[1] : null);
+  }
+  content = content
+    .split("\n")
+    .filter((line) => line !== SENTINEL && !line.startsWith(BASE_PREFIX))
+    .join("\n");
 
   if (state.createdEnvFile && content.trim() === "")
     fs.rmSync(path.join(cwd, ENV_FILE), { force: true });
@@ -255,10 +283,10 @@ async function main(): Promise<void> {
   if (!gitBranch) return;
 
   const state = readState();
+  const switched = hasBase(readEnvFile());
   const ifPreview = process.argv.includes("--if-preview");
   // Only worth a network call when we're currently on a preview.
-  if (ifPreview && (!state.activeNeonBranch || state.gitBranch !== gitBranch))
-    return;
+  if (ifPreview && (!switched || state.gitBranch !== gitBranch)) return;
   // Same branch as last time (e.g. re-checkout, or two branches at one commit
   // already handled): nothing to look up.
   if (
@@ -292,14 +320,11 @@ async function main(): Promise<void> {
 
   if (neonBranch === null) {
     console.log(`No Neon preview branch for git branch '${gitBranch}'.`);
-    if (state.activeNeonBranch) {
+    if (switched) {
+      const left = state.activeNeonBranch ?? "unknown";
       restoreBase(state);
-      writeLog(
-        `git="${gitBranch}": no preview branch, left neon="${state.activeNeonBranch}"`,
-      );
-      console.log(
-        `\n✅ Switched back from Neon branch: ${state.activeNeonBranch}\n`,
-      );
+      writeLog(`git="${gitBranch}": no preview branch, left neon="${left}"`);
+      console.log(`\n✅ Switched back from Neon branch: ${left}\n`);
     } else {
       console.log("   Database URLs already point at the default database.\n");
     }
@@ -324,23 +349,19 @@ async function main(): Promise<void> {
 
   const before = readEnvFile();
   const next: State = { gitBranch, activeNeonBranch: neonBranch };
-  if (state.activeNeonBranch) {
-    // Preview → preview: keep the original base, not the previous preview.
-    next.base = state.base;
+  let content = before ?? "";
+  if (switched) {
+    // Preview → preview: keep the originals already saved, not the previous preview.
     next.createdEnvFile = state.createdEnvFile;
   } else {
-    next.base = Object.fromEntries(
-      Object.keys(ENV_VARS).map((key) => [key, getEnvValue(before ?? "", key)]),
-    );
     next.createdEnvFile = before === null;
+    content = saveBase(content);
   }
-  // Save the base before touching the env file so it can always be restored.
-  writeState(next);
-
-  let content = before ?? "";
   for (const [key, url] of Object.entries(values))
     content = setEnvValue(content, key, `"${url}"`);
+  // One atomic write: new values and saved originals land together.
   writeEnvFile(content);
+  writeState(next);
   console.log(`Updated ${ENV_FILE} with new database URLs`);
 
   const endpointName = extractEndpointName(Object.values(values)[0]);
