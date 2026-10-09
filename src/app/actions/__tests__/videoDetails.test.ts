@@ -37,6 +37,9 @@ describe("getRDCVideoDetails", () => {
 
     const result = await getRDCVideoDetails(VIDEO_ID, "Mario Kart 8", "anon");
 
+    // `part` must be one comma-separated value, or snippet is silently dropped.
+    const requested = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(requested.searchParams.getAll("part")).toEqual(["snippet,player"]);
     expect(result).toEqual({
       error: undefined,
       video: {
@@ -50,6 +53,15 @@ describe("getRDCVideoDetails", () => {
 
   it("rejects videos from other channels", async () => {
     fetchMock.mockResolvedValue(youtubeResponse("Someone Else"));
+
+    expect(await getRDCVideoDetails(VIDEO_ID, "Mario Kart 8", "anon")).toEqual({
+      video: null,
+      error: "Please upload a video by RDC Live",
+    });
+  });
+
+  it("does not treat a response without snippet as an RDC Live video", async () => {
+    fetchMock.mockResolvedValue(Response.json({ items: [{ id: VIDEO_ID }] }));
 
     expect(await getRDCVideoDetails(VIDEO_ID, "Mario Kart 8", "anon")).toEqual({
       video: null,

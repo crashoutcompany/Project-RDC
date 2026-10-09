@@ -3,7 +3,7 @@
 import prisma, { handlePrismaOperation } from "prisma/db";
 import { getAuthoritativeSession } from "@/lib/auth/server";
 import { errorCodes } from "@/lib/constants";
-import { revalidateTag } from "next/cache";
+import { revalidateSessionData } from "@/lib/revalidate";
 import { after } from "next/server";
 import { UseFormReturn } from "react-hook-form";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
@@ -122,24 +122,28 @@ export async function approveEditRequest(editId: number, note?: string) {
     });
   }
 
-  // Helper: mark edit request as approved
-  async function markRequestApproved(
+  // Helper: atomically move the request from PENDING to APPROVED. The status
+  // condition makes a concurrent approve/reject lose (count 0) instead of
+  // applying the same edit twice.
+  async function claimRequestForApproval(
     tx: Prisma.TransactionClient,
     id: number,
     reviewer: { user?: { id?: string; email?: string | null } },
     reviewNote?: string,
   ) {
-    await tx.sessionEditRequest.update({
-      where: { id },
+    const now = new Date();
+    const claimed = await tx.sessionEditRequest.updateMany({
+      where: { id, status: "PENDING" },
       data: {
         status: "APPROVED",
         reviewerId: reviewer.user?.id,
         reviewNote,
-        reviewedAt: new Date(),
-        appliedAt: new Date(),
+        reviewedAt: now,
+        appliedAt: now,
         appliedBy: reviewer.user?.email,
       },
     });
+    if (claimed.count === 0) throw new Error("Edit request is not pending");
   }
 
   // Helper: apply top-level session field updates
@@ -158,6 +162,7 @@ export async function approveEditRequest(editId: number, note?: string) {
         }),
         ...(dirtyFields.thumbnail && { thumbnail: proposedData.thumbnail }),
         ...(dirtyFields.videoId && { videoId: proposedData.videoId }),
+        ...(dirtyFields.date && { date: new Date(proposedData.date) }),
       },
     });
   }
@@ -247,7 +252,23 @@ export async function approveEditRequest(editId: number, note?: string) {
     }
   }
 
-  // Helper: update existing sets (same count) by replacing winners and matches
+  // In-place updates are only safe when the proposal is a 1:1 match of the
+  // existing sets. Otherwise (sets added/removed/swapped) replace them all so
+  // no proposed set is silently skipped.
+  function canUpdateSetsInPlace(
+    session: SessionSelect,
+    proposedSets: ProposedData["proposedData"]["sets"],
+  ) {
+    const existingIds = new Set(session.sets.map((s) => s.setId));
+    const proposedIds = new Set(proposedSets.map((s) => s.setId));
+    return (
+      proposedSets.length === session.sets.length &&
+      proposedIds.size === proposedSets.length &&
+      [...proposedIds].every((id) => existingIds.has(id))
+    );
+  }
+
+  // Helper: update existing sets (1:1 by setId) by replacing winners and matches
   async function updateExistingSets(
     tx: Prisma.TransactionClient,
     session: SessionSelect,
@@ -255,12 +276,8 @@ export async function approveEditRequest(editId: number, note?: string) {
   ) {
     for (const set of proposedSets) {
       const existingSet = session.sets.find((s) => set.setId === s.setId);
-      if (!existingSet) {
-        console.warn(
-          `No existing set found for proposed set with ID ${set.setId}`,
-        );
-        continue;
-      }
+      if (!existingSet)
+        throw new Error(`No existing set found for set ID ${set.setId}`);
 
       // replace set winners (keeps previous approach, even if it uses a project-specific pattern)
       await tx.gameSet.update({
@@ -303,11 +320,8 @@ export async function approveEditRequest(editId: number, note?: string) {
 
       const newJson = JSON.parse(edit.proposedData as string) as ProposedData;
 
-      // create revision and mark approved - parallel within transaction for atomicity
-      await Promise.all([
-        createRevision(tx, session, user.user?.email ?? null),
-        markRequestApproved(tx, editId, user, note),
-      ]);
+      await claimRequestForApproval(tx, editId, user, note);
+      await createRevision(tx, session, user.user?.email ?? null);
 
       // top-level updates
       await applyTopLevelUpdates(
@@ -318,15 +332,17 @@ export async function approveEditRequest(editId: number, note?: string) {
       );
 
       const proposedSets = newJson.proposedData.sets || [];
+      // Recreated player stats carry the session date, so use the edited one.
+      const editedSession = newJson.dirtyFields.date
+        ? { ...session, date: new Date(newJson.proposedData.date) }
+        : session;
 
-      if (session.sets.length !== proposedSets.length) {
-        await replaceAllSets(tx, session, proposedSets);
-      } else {
-        await updateExistingSets(tx, session, proposedSets);
-      }
+      if (canUpdateSetsInPlace(session, proposedSets))
+        await updateExistingSets(tx, editedSession, proposedSets);
+      else await replaceAllSets(tx, editedSession, proposedSets);
     });
 
-    revalidateTag("getAllSessions", "max");
+    revalidateSessionData();
     after(() => console.log(`Edit ${editId} approved by ${user.user?.id}`));
     return { error: null };
   } catch (err) {
@@ -342,9 +358,10 @@ export async function rejectEditRequest(editId: number, note?: string) {
     return { error: errorCodes.NotAuthenticated };
 
   try {
+    // Only PENDING requests can be rejected; never flip an applied edit.
     const res = await handlePrismaOperation((prisma) =>
-      prisma.sessionEditRequest.update({
-        where: { id: editId },
+      prisma.sessionEditRequest.updateMany({
+        where: { id: editId, status: "PENDING" },
         data: {
           status: "REJECTED",
           reviewerId: user.user?.id,
@@ -356,6 +373,8 @@ export async function rejectEditRequest(editId: number, note?: string) {
 
     if (!res.success)
       return { error: res.error || "Failed to reject edit request" };
+    if (res.data.count === 0)
+      return { error: "Edit request not found or is not pending" };
     return { error: null };
   } catch (err) {
     console.error("rejectEditRequest error", err);

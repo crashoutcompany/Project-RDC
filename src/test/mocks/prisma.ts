@@ -36,6 +36,7 @@ const mockPrisma = {
     findMany: vi.fn(async () => []),
     findUnique: vi.fn(),
     update: vi.fn(async () => ({ id: 1 })),
+    updateMany: vi.fn(async () => ({ count: 1 })),
     deleteMany: vi.fn(),
   },
   sessionRevision: {

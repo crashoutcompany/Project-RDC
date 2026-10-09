@@ -1,4 +1,3 @@
-// shared:client v1
 "use client";
 
 import { createAuthClient } from "better-auth/react";

@@ -1,5 +1,3 @@
-// shared:base-url v1
-
 export type AuthBaseUrlEnv = {
   BETTER_AUTH_URL?: string;
   EXPOSE_TESTING_API?: string;
@@ -30,6 +28,21 @@ export function isLocalE2EAuthOverride(
   env: AuthBaseUrlEnv = process.env,
 ): boolean {
   return env.EXPOSE_TESTING_API === "1" && env.VERCEL !== "1";
+}
+
+/**
+ * Exact origins of the running Vercel preview (branch alias + per-deployment
+ * URL). Never a wildcard: `*.vercel.app` is shared by every Vercel account, so
+ * trusting it would let any third-party deployment act as a trusted origin.
+ */
+export function resolvePreviewOrigins(
+  env: AuthBaseUrlEnv = process.env,
+): string[] {
+  if (env.VERCEL_ENV !== "preview") return [];
+  return [env.VERCEL_BRANCH_URL, env.VERCEL_URL]
+    .map((host) => host?.trim())
+    .filter((host): host is string => Boolean(host))
+    .map((host) => `https://${host}`);
 }
 
 /**

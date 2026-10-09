@@ -1,5 +1,6 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
+import { approvedSession } from "./approved";
 
 export const getAllSessions = async () => {
   "use cache";
@@ -18,7 +19,7 @@ export const getAllSessionsByGame = async (gameId: number) => {
   cacheTag("getAllSessions", gameId.toString());
   return await handlePrismaOperation((prisma) =>
     prisma.session.findMany({
-      where: { gameId },
+      where: { gameId, ...approvedSession },
       select: {
         date: true,
         sessionId: true,

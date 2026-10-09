@@ -82,8 +82,8 @@ describe("approveEditRequest", () => {
     expect(db.sessionRevision.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ sessionId: 1, snapshot: expect.any(String) }),
     });
-    expect(db.sessionEditRequest.update).toHaveBeenCalledWith({
-      where: { id: 5 },
+    expect(db.sessionEditRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: "PENDING" },
       data: expect.objectContaining({
         status: "APPROVED",
         reviewerId: TEST_USERS.admin.id,
@@ -122,6 +122,39 @@ describe("approveEditRequest", () => {
     expect(db.gameSet.create).toHaveBeenCalledTimes(2);
   });
 
+  it("loses cleanly when another reviewer claims the request first", async () => {
+    givenPendingEdit({ ...mk8SessionForm(), sessionName: "Renamed" }, { sessionName: true });
+    db.sessionEditRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    expect(await approveEditRequest(5)).toEqual({ error: "Error: Edit request is not pending" });
+    expect(db.session.update).not.toHaveBeenCalled();
+    expect(db.sessionRevision.create).not.toHaveBeenCalled();
+  });
+
+  it("replaces every set when the count matches but the set ids do not", async () => {
+    givenPendingEdit(mk8SessionForm([mk8Set(99, MARK)]), { sets: true });
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.gameSet.deleteMany).toHaveBeenCalledWith({ where: { sessionId: 1 } });
+    expect(db.match.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("applies an edited date to the session and the recreated stats", async () => {
+    const newDate = new Date("2025-06-15T00:00:00.000Z");
+    givenPendingEdit({ ...mk8SessionForm(), date: newDate }, { date: true, sets: true });
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).toHaveBeenCalledWith({
+      where: { sessionId: 1 },
+      data: { date: newDate },
+    });
+    expect(db.playerStat.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ date: newDate })],
+    });
+  });
+
   it("refuses requests that are no longer pending", async () => {
     givenPendingEdit(mk8SessionForm(), { sessionName: true }, "APPROVED");
 
@@ -140,16 +173,24 @@ describe("approveEditRequest", () => {
 });
 
 describe("rejectEditRequest", () => {
-  it("marks the request rejected with the reviewer and note", async () => {
+  it("marks a pending request rejected with the reviewer and note", async () => {
     expect(await rejectEditRequest(5, "Wrong video")).toEqual({ error: null });
 
-    expect(db.sessionEditRequest.update).toHaveBeenCalledWith({
-      where: { id: 5 },
+    expect(db.sessionEditRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 5, status: "PENDING" },
       data: expect.objectContaining({
         status: "REJECTED",
         reviewerId: TEST_USERS.admin.id,
         reviewNote: "Wrong video",
       }),
+    });
+  });
+
+  it("refuses to reject a request that was already reviewed", async () => {
+    db.sessionEditRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    expect(await rejectEditRequest(5)).toEqual({
+      error: "Edit request not found or is not pending",
     });
   });
 });

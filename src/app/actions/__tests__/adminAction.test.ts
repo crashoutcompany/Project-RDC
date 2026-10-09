@@ -61,6 +61,17 @@ describe("insertNewSessionFromAdmin", () => {
       ],
     });
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
+    expect(revalidateTag).toHaveBeenCalledWith("getMember", "max");
+  });
+
+  it("keeps the case of YouTube video ids in the stored session url", async () => {
+    const sessionUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+    await insertNewSessionFromAdmin({ ...codSessionForm(), sessionUrl, videoId: "dQw4w9WgXcQ" });
+
+    expect(db.session.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ sessionUrl, videoId: "dQw4w9WgXcQ" }),
+    });
   });
 
   it("rejects submissions that fail the form schema before touching the database", async () => {
