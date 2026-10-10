@@ -42,6 +42,8 @@ export async function downloadVideo(args: {
     console.log(`[download] fetching ${url} (cap=${maxHeight}p)`);
     await runSpawn(ytDlpPath, [
       ...ytDlpArgs,
+      // The live progress bar floods timer logs with carriage returns.
+      ...(process.stdout.isTTY ? [] : ["--no-progress"]),
       "-f",
       `bv*[height<=${maxHeight}][ext=mp4]/bv*[height<=${maxHeight}]/b[height<=${maxHeight}]`,
       "--no-playlist",
