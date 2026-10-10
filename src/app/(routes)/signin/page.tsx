@@ -45,7 +45,7 @@ export default function Page() {
 
         <section className="flex flex-col justify-center gap-8 p-8 sm:p-12">
           <div>
-            <p className="text-chart-4 text-xs font-semibold tracking-[0.2em] uppercase">
+            <p className="dark:text-chart-4 text-xs font-semibold tracking-[0.2em] text-amber-700 uppercase">
               Contributor access
             </p>
             <h1
