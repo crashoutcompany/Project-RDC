@@ -61,7 +61,9 @@ async function main() {
           ? `$${m.price.inputPerM} / $${m.price.outputPerM} per 1M`
           : m.price.kind === "call"
             ? `$${m.price.perCall} per call`
-            : "free";
+            : m.price.kind === "subscription"
+              ? "plan usage (not per call)"
+              : "free";
       console.log(`${m.id.padEnd(20)} ${m.provider.padEnd(10)} ${price.padEnd(26)} ${missing.length ? `missing ${missing.join(", ")}` : "ready"}`);
     }
     return;
