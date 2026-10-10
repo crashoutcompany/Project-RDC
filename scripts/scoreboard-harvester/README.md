@@ -1,215 +1,130 @@
 # Scoreboard Harvester
 
-A local-first pipeline that scans a long video (YouTube or local file) and emits one PNG per detected end-of-match scoreboard. Built game-agnostic — Rocket League ships out of the box, more games are a config file away.
+Turns RDC stream VODs into **draft sessions**. It finds every end-of-match scoreboard in a video, reads the stats with the same Azure models the admin "RDC Vision" button uses, groups the matches into sets, and saves the result as an **unapproved** session. An admin reviews, edits, and approves it at `/admin/submissions`, so nothing reaches public pages without a human check.
 
 ```text
-Video → ffmpeg sample → pHash filter (optional) → Apple Vision OCR → dedup → match-NN.png(s) + manifest.json
+Google Sheet "Truth" ─► yt-dlp (video only) ─► ffmpeg keyframes ─► OCR keyword gate ─► dedup
+   (uploads not yet in DB)                                         (RapidOCR / Apple Vision)
+        ─► Azure Document Intelligence (per-game model) ─► game processor ─► sets ─► unapproved session
 ```
 
-## Quick start
+It runs on a Raspberry Pi 5, Linux, or macOS. The weekly job is a single command you put on a timer.
+
+## Run it every week (Raspberry Pi / Linux)
+
+One-time setup:
 
 ```bash
-# One-time setup
+sudo apt install ffmpeg                       # usually already present
+pip install --user --break-system-packages yt-dlp rapidocr onnxruntime
 pnpm install --frozen-lockfile
-pnpm harvest:build-ocr               # compiles the Swift Vision CLI (~5s)
-
-# Bootstrap a reference image for Rocket League (one-time per game)
-pnpm harvest -- bootstrap --game rocket-league --from ~/Pictures/clean-scoreboard.png
-
-# Extract scoreboards from a YouTube video
-pnpm harvest -- extract --game rocket-league --url 'https://youtu.be/<id>'
-
-# ...or a local file
-pnpm harvest -- extract --game rocket-league --video ./session.mp4
 ```
 
-Output goes to `out/<game-id>/<video-id>/`. For YouTube the `<video-id>` is the 11-char watch ID; for local files it's the filename minus extension.
+Create `.env.harvester.local` in the repo root (gitignored):
+
+```bash
+DATABASE_URL=...                       # the DB drafts are saved to (production)
+DOCUMENT_INTELLIGENCE_ENDPOINT=...     # same values as the app
+DOCUMENT_INTELLIGENCE_API_KEY=...
+SHEET_ID=...                           # same values as the /api/sheets cron
+GCP_SA_KEY=...                         # base64 service-account JSON
+# Optional: email the run report
+RESEND_API_KEY=...
+HARVEST_REPORT_TO=you@example.com;someone@example.com
+```
+
+Try a dry run first. Without `--write` it only writes `draft.json` files, no database rows:
+
+```bash
+pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts weekly --limit 1
+```
+
+`pnpm harvest:weekly` is what the timer runs. It is the same command with `--write`.
+
+Install the systemd user timer (Mondays 03:00; catches up after downtime):
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp scripts/scoreboard-harvester/schedule/rdc-harvester.{service,timer} ~/.config/systemd/user/
+# Edit ExecStart in the .service if the repo isn't at ~/Developer/Project-RDC
+systemctl --user daemon-reload
+systemctl --user enable --now rdc-harvester.timer
+sudo loginctl enable-linger "$USER"    # run even when nobody is logged in
+
+systemctl --user list-timers rdc-harvester.timer   # next run
+systemctl --user start rdc-harvester.service       # run now
+journalctl --user -u rdc-harvester -f              # watch it
+```
+
+Runs write logs to `~/.cache/rdc-harvester/logs/` and a Markdown report to `~/.cache/rdc-harvester/reports/<date>.md`.
+
+On macOS, point a launchd agent (`StartCalendarInterval`) at `schedule/run-weekly.sh` instead. It picks Apple Vision OCR automatically once `pnpm harvest:build-ocr` has been run.
+
+### What the weekly job does
+
+1. Reads the **Truth** sheet and queues rows where `added_to_db` is not TRUE and the `games` cell names a game with an Azure model (`Rocket League`, `RL`, …). Newest first.
+2. Skips any (game, video) that already has a session, draft or approved. It also skips anything `weekly-state.json` says is done. Failures retry on the next run, up to 3 times (use `--retry` to force).
+3. Processes at most `--limit` videos (default 4). Each takes about 20–40 minutes on a Pi 5.
+4. For each video: downloads it, harvests the scoreboards, reads them with Azure, and builds the draft. With `--write` it saves an unapproved session (`createdBy: scoreboard-harvester`), then deletes the ~2 GB video.
+5. Writes a report listing what was drafted, which scoreboards were skipped and why, and what to double-check. If configured, it also emails the report.
+
+A lock file stops overlapping runs. Every stage is resumable from disk.
+
+### Reviewing drafts
+
+Drafts show up as **Pending** in `/admin/submissions`. Open one, compare it against the video, fix anything with **Edit**, then **Approve**. The report flags what most often needs attention:
+
+- **Low-confidence reads** (the Azure processor's "check" flag).
+- **Short sets**: a set that ended before a team reached 3 wins usually means a missed scoreboard or a misread gamertag.
+- **Skipped scoreboards**: Azure failed, fewer than 2 RDC members were recognized (randoms-only lobby), or it was the same scoreboard twice.
+
+Unknown gamertags are dropped: the processors map gamertags to members via `PLAYER_MAPPINGS`. When a member plays on a new account, add the tag there and rerun with `--retry`.
 
 ## How detection works
 
-1. **Sample** the video at 1 fps (configurable) into `out/<game>/<video>/frames/*.jpg` via ffmpeg with VideoToolbox hwaccel.
-2. **pHash filter** (optional, when a reference exists for the active game): drop frames whose dHash differs from the reference by more than `--phash-threshold`. Massively speeds things up for clean game captures.
-3. **Vision OCR** each surviving frame with the compiled Swift binary. A frame is _confirmed_ when its OCR text contains at least `--ocr-min-keywords` of the active game's keyword list.
-4. **Skip-ahead**: once a confirmed run ends, jump forward `--skip-ahead-sec` seconds before resuming OCR. Per-game default; tied to the shortest possible interval between two consecutive matches.
-5. **Dedup**: cluster confirmed frames whose frame-IDs are within `--dedup-gap` of each other into a single match, pick the sharpest frame from the middle of the run, save as `match-NN_t=<hh-mm-ss>.png`.
-6. **Manifest**: write `manifest.json` with the game, source, config, runtime, and per-match metadata.
+1. **Sample.** Keyframe mode (RL default) decodes only the video's I-frames, about one every 2–7s. On a Pi 5 that is ~15s for a 100-minute VOD, versus ~25 minutes for 1 fps. `fps` mode samples at a fixed rate for games whose results screen is brief.
+2. **OCR gate.** Each frame goes through a persistent OCR daemon: RapidOCR on Linux, Apple Vision on macOS. Both speak the same line protocol. A frame is a scoreboard when at least `minKeywords` of the game's keywords appear as **standalone OCR lines**. Stream VODs carry a live-chat overlay full of "score", "mvp", "goals", so substring matching gives false positives (see `pipeline/keywords.ts`). Games can also require an end-screen sentinel. RL requires `WINNER` or `NEXT MATCH IN`, which rejects the mid-game TAB scoreboard.
+3. **Skip-ahead.** After a scoreboard run ends, frames until `minMatchIntervalSec` later are skipped, since no match is that short.
+4. **Dedup.** Confirmed frames within `--dedup-gap` seconds form one match. The sharpest frame from the middle of the run is saved as `match-NN_t=<hh-mm-ss>.png`.
+5. **Analyze** (`--analyze`, always on for `weekly`). Each PNG goes through `analyzeScoreboard` (`src/lib/vision/analyze-scoreboard.ts`), the same code as the admin button, with every RDC member as the candidate roster. Results are cached as `match-NN.analysis.json`.
+6. **Draft** (`draft/build-draft.ts`). Matches are kept in video order and grouped by the game's `setRule`: RL is first-to-3 series that also break on roster changes, MK8 is 4-race cups, COD is one set.
 
-## Game profiles
+pHash pre-filtering (`bootstrap` + reference image) still works for clean captures. The weekly job skips it: overlays change the whole-frame hash, so on stream VODs it rejects real scoreboards.
 
-The harvester is driven by declarative profiles in `games/`. Each profile declares the OCR keywords, end-screen sentinel, default tuning, and the reference image filename.
+## Game support
 
-See **[`games/README.md`](games/README.md)** for adding a new game (three steps: drop a `.ts` file, register it, bootstrap a reference image).
+| Game          | Detection profile | Azure model | Notes                                                                                                                                                       |
+| ------------- | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rocket League | ✅ `rocket-league` | `RDC-RL`    | Validated against a real session (see below).                                                                                                               |
+| Mario Kart 8  | ❌ not yet         | `RDC-MK8`   | Results list has no column headers and shows ~5s (one keyframe). Needs `fps` sampling and a name-list detector instead of header keywords. |
+| Call of Duty  | ❌ not yet         | `RDC-COD`   | Add a profile from a sample VOD (see `games/README.md`).                                                                                                    |
+| Marvel Rivals | ❌ not yet         | `RDC-MR`    | Same.                                                                                                                                                        |
 
-Currently registered:
-
-- `rocket-league` — keywords `WINNER SCORE GOALS ASSISTS SAVES SHOTS MVP`, sentinel `WINNER`, min-interval 180s
-
-## CLI reference
-
-```text
-extract     Default. Harvest scoreboards.
-bootstrap   Set the pHash reference image for the active --game.
-
---game <id>             Game profile (default: rocket-league)
-
---url <url>             YouTube URL
---video <path>          Local video file
---from <path>           Bootstrap-only: use an existing screenshot
-
---no-phash              Skip pHash; OCR every frame (use for stream videos)
---phash-threshold <n>   Hamming distance cutoff 0-64 (default: 12)
---ocr-min-keywords <n>  Min keyword hits (game-default if omitted)
---require-end-screen    Reject frames missing the game's sentinel (e.g. WINNER)
---dedup-gap <n>         Max frame gap inside one match (game-default if omitted)
---skip-ahead-sec <n>    Skip ahead this many seconds after each match
-                        (game-default if omitted)
---no-skip-ahead         Disable skip-ahead
-
---out <dir>             Output root (default: ./out)
---fps <n>               Sample rate (game-default if omitted)
---quality <px>          Max download height (default: 720)
---sample-width <px>     Extracted frame width (default: 1280; try 960)
---jpeg-quality <n>      ffmpeg JPEG q value, lower is better (default: 3; try 5)
---ocr-concurrency <n>   Persistent OCR workers (default: 2; benchmark 1, 2, 4)
---start <sec>           Start time slice (debugging)
---end <sec>             End time slice (debugging)
---reference <path>      Override pHash reference image
---keep-frames           Don't delete temp frames after run
---submit                Pipe matches into analyzeScreenShot (stub)
---session-id <id>       Required with --submit
-```
-
-## Skip-ahead optimization
-
-Most games have a hard floor on how long a match takes. RL is at least ~3 min including queue and load. So once the harvester confirms a scoreboard ended at frame T, the next scoreboard physically can't appear before T+180 frames (at 1 fps). The OCR loop fast-forwards past that dead zone.
-
-State machine:
-
-```text
-After we exit a run (= dedup-gap frames since last confirm):
-    skipToFrameId = lastConfirmedFrameId + skipAheadFrames
-    next frames whose ID < skipToFrameId are not OCR'd
-```
-
-Tuning live in the GameProfile (`defaults.minMatchIntervalSec`). Overridable per-run with `--skip-ahead-sec <n>` or fully disabled with `--no-skip-ahead`.
-
-Real-world impact on RDC RL videos:
-
-| Video                  | Without skip | With skip-180 | Savings |
-| ---------------------- | ------------ | ------------- | ------- |
-| 2 hr, 17 matches       | 7,200 frames | ~4,140 frames | ~42%    |
-| 1 hr 8 min, 10 matches | 4,103 frames | ~2,300 frames | ~44%    |
-
-Trade-off: a noisy mid-match HUD that briefly hits the keyword threshold _and_ survives the `dedup-gap` window could cause the loop to skip past a real match. The defaults are tuned to make this very unlikely (≥ 4 unique keywords, run must end naturally), but `--no-skip-ahead` is the escape hatch.
-
-## Performance tuning
-
-OCR runs through persistent `vision-ocr --daemon` workers. This avoids paying Swift/Vision process startup for every frame, and `--ocr-concurrency` controls how many workers run at once. Results are still applied in frame order so skip-ahead and dedup behave like the old sequential loop.
-
-Frame extraction now exposes the pixel and JPEG quality knobs that usually matter most for throughput. The default stays conservative (`--sample-width 1280 --jpeg-quality 3`), but Rocket League videos are good candidates for benchmarking `--sample-width 960 --jpeg-quality 5`.
-
-Recommended slice benchmark:
+## Manual use
 
 ```bash
-pnpm harvest:build-ocr
-
-pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
-  --out ./out/bench-c1 --start 600 --end 900 --keep-frames \
-  --no-phash --ocr-concurrency 1
-
-pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
-  --out ./out/bench-c2 --start 600 --end 900 --keep-frames \
-  --no-phash --ocr-concurrency 2
-
-pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
-  --out ./out/bench-c4-960 --start 600 --end 900 --keep-frames \
-  --no-phash --ocr-concurrency 4 --sample-width 960 --jpeg-quality 5
+# Screenshots only
+pnpm harvest -- extract --game rocket-league --url 'https://youtu.be/<id>'
+# Screenshots + Azure reads (needs DOCUMENT_INTELLIGENCE_* and DATABASE_URL)
+pnpm exec tsx --env-file=.env.local scripts/scoreboard-harvester/index.ts \
+  extract --game rocket-league --url 'https://youtu.be/<id>' --analyze
+# Draft specific videos instead of reading the sheet
+pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts \
+  weekly --videos <id>,<id> --game rocket-league --write
 ```
 
-Compare runtime plus `confirmed` and saved match counts before changing defaults for a game profile or workflow.
+Output goes to `out/<game-id>/<video-id>/`: `match-NN_*.png`, `match-NN.analysis.json`, `manifest.json`, and `draft.json` for weekly runs. Run `pnpm harvest -- --help` for every flag.
 
-## Resumability
+## Tuning
 
-Every stage writes to disk and is skipped if its output exists:
+| Symptom                        | Fix                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| `yt-dlp` "Sign in to confirm"  | Run from a home connection (datacenter IPs get challenged); update yt-dlp.                |
+| No matches detected            | `--ocr-min-keywords 3`, `--no-require-end-screen`, or `--sampling fps`.                   |
+| False positives                | Raise `--ocr-min-keywords`; add a sentinel to the profile.                                 |
+| One match split in two         | Raise `--dedup-gap` (seconds at 1 fps).                                                    |
+| Skip-ahead missed a match      | `--no-skip-ahead` or lower `--skip-ahead-sec`.                                             |
+| OCR too slow                   | `--ocr-concurrency` × `RAPIDOCR_THREADS` ≈ cores (default 2 × 2 on a Pi 5).                |
+| Vision OCR fails on macOS      | Run from a normal terminal; sandboxed shells block `~/Library/Caches`.                    |
 
-- `out/<game>/<video>/video.mp4` is reused if already downloaded.
-- `out/<game>/<video>/frames/` is reused if already extracted.
-
-Interrupt with ^C, restart with the same args, and it picks up where it left off. Pass `--keep-frames` if you want the frames directory to survive after a successful run.
-
-## Output: manifest.json
-
-```json
-{
-  "game": "rocket-league",
-  "source": { "url": "...", "filePath": "...", "durationSec": 4103, "fps": 1 },
-  "config": {
-    /* resolved flags incl. gameId, skipAheadFrames, etc. */
-  },
-  "runtimeMs": 1837886,
-  "matches": [
-    {
-      "match": 1,
-      "timestampSec": 754,
-      "timestampStr": "00:12:34",
-      "runLengthFrames": 11,
-      "imagePath": "match-01_t=00-12-34.png",
-      "ocrKeywords": ["WINNER", "GOALS", "SHOTS", "SAVES", "ASSISTS"],
-      "submission": null
-    }
-  ]
-}
-```
-
-Filenames intentionally do **not** include team scores — the local OCR pass can read the visible SCORE column (per-player points, in the hundreds) but not the actual goal totals without positional grounding. Azure Document Intelligence downstream extracts goals correctly, so the harvester just omits that field from the filename.
-
-## Submitting to `analyzeScreenShot` (NOT YET WIRED)
-
-`--submit` is currently a stub. `analyzeScreenShot` in `src/app/actions/visionAction.ts` depends on Next.js runtime helpers (`after()` from `next/server`, PostHog server analytics) that don't load cleanly from a bare `tsx` script. Wiring it up safely requires either:
-
-1. Refactoring `analyzeScreenShot` to make the Next.js coupling optional, or
-2. Standing up a small local HTTP endpoint the script can POST to.
-
-When wired, the harvester will pass `GameProfile.azureGameId` automatically. For now, drag the PNGs into the existing admin upload UI manually.
-
-## Troubleshooting
-
-| Symptom                            | Fix                                                                                          |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- |
-| `yt-dlp not found`                 | `brew install yt-dlp`                                                                        |
-| `ffmpeg not found`                 | `brew install ffmpeg`                                                                        |
-| `vision-ocr binary not built`      | `pnpm harvest:build-ocr`                                                                      |
-| `[phash] 0 frames survived filter` | Stream overlays make pHash unreliable. Use `--no-phash` (see below).                         |
-| No matches detected                | Lower `--ocr-min-keywords` (try 3) or `--quality 1080`                                       |
-| Reference image missing            | Run `bootstrap --game <id>` once, or drop your own at `reference/<id>/scoreboard.png`        |
-| Too many false positives           | Raise `--ocr-min-keywords` (try 5), add `--require-end-screen`, or lower `--phash-threshold` |
-| Duplicate detections close in time | Raise `--dedup-gap` (e.g. 20); per-game default is in the profile                            |
-| Skip-ahead missed a match          | Use `--no-skip-ahead` or lower `--skip-ahead-sec`                                            |
-| Vision OCR fails to load           | Run from a normal terminal — sandboxed shells block `~/Library/Caches` access                |
-
-### `--no-phash`: when to use it
-
-The pHash pre-filter is great for **clean game captures** where every frame either is or isn't a scoreboard with minimal surrounding clutter. But **YouTube stream videos** (RDC, Twitch VODs, etc.) typically have face-cam overlays, stream branding, side panels — content that varies between videos but stays consistent within one. dHash compares the whole cropped region as one fingerprint, so two scoreboards with different overlays look like completely different images.
-
-**Solution: skip pHash and let OCR alone do the gatekeeping.**
-
-```bash
-pnpm harvest -- extract --game rocket-league --video ./game.mp4 --no-phash
-```
-
-OCR is ~100ms/frame on Apple Silicon Vision, so:
-
-- 90-min video at 1 fps = 5,400 frames = ~9 min
-- 2-hour video at 1 fps = 7,200 frames = ~12 min
-
-With skip-ahead enabled (the default), these times drop another ~40%.
-
-### Tuning precision
-
-If you know the expected match count and the harvester is overshooting, tighten in this order:
-
-1. **`--require-end-screen`** — kills any frame whose OCR didn't pick up the game's sentinel keyword. Catches mid-match HUD frames and replay screens. Will also drop legit scoreboards if Vision misreads the sentinel, so spot-check the first run.
-2. **`--ocr-min-keywords <n>`** — bump above the game default. Real end-of-match scoreboards usually hit all keywords; mid-match HUDs only hit a subset.
-3. **`--dedup-gap <n>`** — if you're seeing the same match split into two adjacent detections, raise the gap.
-
-If you're undershooting, loosen the same knobs the other direction.
+Every stage is resumable: `video.mp4`, `frames/` (with `keyframes.json`), and the per-match analysis cache are reused. Interrupt with ^C and rerun the same command.

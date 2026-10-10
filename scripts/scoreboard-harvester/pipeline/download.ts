@@ -12,7 +12,11 @@ export interface DownloadResult {
  * already exists the download is skipped (cheap resumability). Returns the
  * resolved file path and duration in seconds.
  *
+ * Downloads video only: scoreboards are read from frames, so skipping the
+ * audio stream saves bandwidth and the ffmpeg merge step.
+ *
  * @param args.ytDlpPath - Resolved path to yt-dlp binary.
+ * @param args.ytDlpArgs - Extra yt-dlp args (JS runtime, cookies, …).
  * @param args.ffprobePath - Resolved path to ffprobe (for duration probe).
  * @param args.url - The YouTube URL to download.
  * @param args.outDir - Where to write video.mp4.
@@ -21,12 +25,14 @@ export interface DownloadResult {
  */
 export async function downloadVideo(args: {
   ytDlpPath: string;
+  ytDlpArgs?: string[];
   ffprobePath: string;
   url: string;
   outDir: string;
   maxHeight: number;
 }): Promise<DownloadResult> {
-  const { ytDlpPath, ffprobePath, url, outDir, maxHeight } = args;
+  const { ytDlpPath, ytDlpArgs = [], ffprobePath, url, outDir, maxHeight } =
+    args;
   fs.mkdirSync(outDir, { recursive: true });
   const target = path.join(outDir, "video.mp4");
 
@@ -35,10 +41,9 @@ export async function downloadVideo(args: {
   } else {
     console.log(`[download] fetching ${url} (cap=${maxHeight}p)`);
     await runSpawn(ytDlpPath, [
+      ...ytDlpArgs,
       "-f",
-      `bv*[height<=${maxHeight}]+ba/b[height<=${maxHeight}]`,
-      "--merge-output-format",
-      "mp4",
+      `bv*[height<=${maxHeight}][ext=mp4]/bv*[height<=${maxHeight}]/b[height<=${maxHeight}]`,
       "--no-playlist",
       "-o",
       target,

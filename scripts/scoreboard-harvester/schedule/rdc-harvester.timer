@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly RDC scoreboard harvest
+
+[Timer]
+# Monday 03:00 local time; runs at next boot if the machine was off.
+OnCalendar=Mon *-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

@@ -59,7 +59,10 @@ export default defineConfig({
     environment: "node",
     env: testEnv,
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: [
+      "src/**/*.test.{ts,tsx}",
+      "scripts/scoreboard-harvester/**/*.test.ts",
+    ],
     // Restores each vi.fn to its original implementation before every test so
     // overrides on shared mocks (prisma, auth) never leak between tests.
     mockReset: true,
