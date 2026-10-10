@@ -46,10 +46,11 @@ export const GAMES: Record<string, GameSpec> = {
     teams: false,
     winner: { by: "lowest", stat: "MK8_POS" },
     screen:
-      "The race results screen lists every racer in finishing order with their place number, name, and points. " +
-      "Ignore stream overlays such as chat, sub goals, and the webcam.",
+      "After each race a results panel (often in the top-right corner, over the course) lists every racer in finishing order. " +
+      "Each row has the finishing place (1, 2, 3, ...), a character icon, the racer's name, a flag, the points just gained (+N), and their total. " +
+      "Read the place number at the left of each row. Stream overlays (sub goal counters, chat, webcam) may cover part of the panel; ignore them.",
     finderQuestion:
-      "Is this frame Mario Kart 8's race results list, showing racers ranked by finishing place with names and points? " +
+      "Is this frame Mario Kart 8's race results panel: racers listed by finishing place with names, flags and points? " +
       "Answer no for racing, menus, course selection, and the cup podium.",
   },
 };

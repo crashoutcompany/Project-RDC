@@ -6,14 +6,16 @@
  *   pnpm bench -- run     --dataset <dataset.json> [--methods a,b] [--repeats 3]
  *   pnpm bench -- report  --dataset <dataset.json> --run <name>
  *   pnpm bench -- finder  --dataset <dataset.json> --video <url|path>
+ *   pnpm bench -- combine --run rl-run,mk8-run
  *   pnpm bench -- methods
  */
+import fs from "fs";
 import path from "path";
 import { parseArgs } from "util";
 import { BENCH_DIR, DEFAULT_REPEATS, METHODS, PRICES_CHECKED, resolveMethods } from "./config";
 import { buildDataset, loadDataset } from "./dataset";
 import { runFinder } from "./finder";
-import { writeReport } from "./report";
+import { writeCombined, writeReport } from "./report";
 import { runExtraction } from "./run";
 
 const { values, positionals } = parseArgs({
@@ -46,7 +48,7 @@ const runDir = (datasetName: string) =>
 
 async function main() {
   if (values.help || !command) {
-    console.log(`Commands: dataset, run, report, finder, methods. See scripts/extraction-benchmark/README.md`);
+    console.log(`Commands: dataset, run, report, combine, finder, methods. See scripts/extraction-benchmark/README.md`);
     return;
   }
 
@@ -79,6 +81,16 @@ async function main() {
       outDir: path.join(BENCH_DIR, "datasets"),
       map,
     });
+    return;
+  }
+
+  if (command === "combine") {
+    const runs = need(values.run, "run").split(",").map((name) => {
+      const dir = path.join(BENCH_DIR, "runs", name.trim());
+      const meta = JSON.parse(fs.readFileSync(path.join(dir, "run.json"), "utf8"));
+      return { runDir: dir, dataset: loadDataset(path.join(BENCH_DIR, "datasets", meta.dataset, "dataset.json")) };
+    });
+    writeCombined(runs, path.join(BENCH_DIR, "runs", "combined.md"));
     return;
   }
 

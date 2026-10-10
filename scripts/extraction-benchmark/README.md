@@ -23,6 +23,17 @@ Compares ways of turning an end-of-match scoreboard screenshot into stats — th
 
 Azure gets no prompt or gamertag list: it's the production path, called exactly as the admin "RDC Vision" button calls it.
 
+## Datasets
+
+| Dataset | Game | Source | Scoreboards | Values |
+|---|---|---|---|---|
+| `rl-session33` | Rocket League | session 33, `Opw1cTW5Q68` | 13 full-screen post-match scoreboards | 390 |
+| `mk8-session41` | Mario Kart 8 | session 41, `eta4OGSy9s0` | 10 race-results panels (small, top-right, partly covered by stream overlays) | 50 |
+
+Marvel Rivals has a trained Azure model but no sessions in the database yet, so it has no dataset.
+
+How the MK8 images were chosen: race ends were located by OCR, then the frame showing the race result ("+points" column, before the standings re-sort) was picked by eye. Each was paired by hand to the only recorded race with the same finishing order. The map is in the dataset's `pairing` field and build log.
+
 ## Setup
 
 Put keys in a gitignored env file at the repo root, e.g. `.env.bench.local`:
@@ -43,6 +54,16 @@ pnpm exec tsx --env-file=.env.bench.local scripts/extraction-benchmark/index.ts 
 ```
 
 Outputs go to `~/ocrbench/experiment` (override with `BENCH_DIR`).
+
+## Run everything
+
+Once keys are in `.env.bench.local`:
+
+```bash
+scripts/extraction-benchmark/run-all.sh
+```
+
+This runs every stat reader on both datasets (3 passes), writes the cross-game summary (`runs/combined.md`), and runs the finder test. Rerun it after an interruption to continue. The steps below are the same thing piece by piece.
 
 ## 1. Build a dataset
 
@@ -77,6 +98,12 @@ Each run directory holds:
 | `run.json`, `prompt.txt` | Models, prompt fingerprint, price date, host |
 
 Run `report --dataset ... --run <name>` to regenerate the summary without making calls.
+
+To compare games side by side and apply the "qualifies on every game → default for future games" rule:
+
+```bash
+pnpm exec tsx scripts/extraction-benchmark/index.ts combine --run rl-s33-main,mk8-s41-main
+```
 
 ## 3. Run the finder test
 

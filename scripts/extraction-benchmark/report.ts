@@ -104,7 +104,7 @@ const SIBLINGS: [string, string][] = [
  * run (or the saved baseline when Azure wasn't re-run): Azure read 367 of 390
  * values (94.1%) on rl-session33 during the harvester validation.
  */
-const SAVED_AZURE_ACCURACY = 367 / 390;
+const SAVED_AZURE_ACCURACY: Record<string, number> = { "rl-session33": 367 / 390 };
 /** Within this many percentage points of Azure still qualifies for new games. */
 const NEW_GAMES_MARGIN = 0.03;
 
@@ -158,10 +158,31 @@ export function evaluateHypotheses(summaries: MethodSummary[]): string[] {
   return lines;
 }
 
-/** Applies the decision rules fixed in the test plan. */
-export function decide(summaries: MethodSummary[]): string {
+type Verdict = "pivot" | "new-games" | "keep-azure";
+
+/** Where one method lands on one dataset under the pre-registered rules. */
+export function verdictFor(
+  summary: MethodSummary,
+  summaries: MethodSummary[],
+  datasetName: string,
+): Verdict | null {
   const azure = summaries.find((s) => s.method === "azure");
-  const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY;
+  const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
+  if (baseline === undefined) return null;
+  const cheaper =
+    azure?.costPerScoreboard == null ||
+    (summary.costPerScoreboard ?? Infinity) < azure.costPerScoreboard;
+  if (summary.invented > 0) return "keep-azure";
+  if (summary.accuracy >= baseline && cheaper) return "pivot";
+  if (summary.accuracy >= baseline - NEW_GAMES_MARGIN) return "new-games";
+  return "keep-azure";
+}
+
+/** Applies the decision rules fixed in the test plan. */
+export function decide(summaries: MethodSummary[], datasetName: string): string {
+  const azure = summaries.find((s) => s.method === "azure");
+  const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
+  if (baseline === undefined) return "No Azure baseline for this dataset; include `azure` in the run.";
   const baselineLabel = azure ? "Azure in this run" : "saved Azure baseline";
   const llms = summaries
     .filter((s) => s.method !== "azure" && s.method !== "oracle")
@@ -216,7 +237,7 @@ export function writeReport(dataset: Dataset, runDir: string): MethodSummary[] {
     "",
     "## Decision (pre-registered rules)",
     "",
-    decide(summaries),
+    decide(summaries, dataset.name),
     "",
   ].join("\n");
 
@@ -246,4 +267,61 @@ function writeCsv(file: string, header: string[], rows: unknown[][]) {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   fs.writeFileSync(file, [header, ...rows].map((r) => r.map(cell).join(",")).join("\n") + "\n");
+}
+
+/**
+ * Side-by-side results for several runs (one per game) and the cross-game
+ * rule: an LLM that qualifies on every dataset is the default for future games.
+ */
+export function writeCombined(runs: { runDir: string; dataset: Dataset }[], outFile: string) {
+  const perRun = runs.map(({ runDir, dataset }) => ({
+    dataset,
+    summaries: summarize(dataset, readCalls(runDir)),
+  }));
+  const methods = [...new Set(perRun.flatMap((r) => r.summaries.map((s) => s.method)))].filter(
+    (m) => m !== "oracle",
+  );
+  const header = perRun.map((r) => r.dataset.name);
+  const rows = methods.map((method) => {
+    const cells = perRun.map(({ summaries, dataset }) => {
+      const s = summaries.find((x) => x.method === method);
+      return s ? { s, verdict: verdictFor(s, summaries, dataset.name) } : null;
+    });
+    const costs = cells.flatMap((c) => (c?.s.costPerScoreboard != null ? [c.s.costPerScoreboard] : []));
+    const latencies = cells.flatMap((c) => (c?.s.latencyMeanMs != null ? [c.s.latencyMeanMs] : []));
+    const qualifiesEverywhere =
+      method !== "azure" && cells.every((c) => c?.verdict === "pivot" || c?.verdict === "new-games");
+    return { method, cells, costs, latencies, qualifiesEverywhere };
+  });
+
+  const label = (v: Verdict | null) =>
+    v === null ? "no baseline" : { pivot: "pivot", "new-games": "new games", "keep-azure": "—" }[v];
+  const md = [
+    "# Extraction benchmark — all games",
+    "",
+    `Prices checked ${PRICES_CHECKED}. Verdicts use the pre-registered rules against Azure measured in the same run.`,
+    "",
+    `| Method | ${header.map((h) => `${h} accuracy | ${h} verdict`).join(" | ")} | Mean cost / scoreboard | Mean latency | All games? |`,
+    `|---|${header.map(() => "---|---").join("|")}|---|---|---|`,
+    ...rows.map(
+      (r) =>
+        `| ${r.method} | ${r.cells
+          .map((c) => (c ? `${pct(c.s.accuracy)} (${c.s.correctPerPass.toFixed(1)}/${c.s.cellsPerPass}) | ${r.method === "azure" ? "baseline" : label(c.verdict)}` : "not run | —"))
+          .join(" | ")} | ${r.costs.length ? money(r.costs.reduce((a, b) => a + b, 0) / r.costs.length) : "n/a"} | ${r.latencies.length ? secs(r.latencies.reduce((a, b) => a + b, 0) / r.latencies.length) : "n/a"} | ${r.method === "azure" ? "—" : r.qualifiesEverywhere ? "yes" : "no"} |`,
+    ),
+    "",
+    "## Recommendation for future games",
+    "",
+    (() => {
+      const winners = rows
+        .filter((r) => r.qualifiesEverywhere)
+        .sort((a, b) => (a.costs[0] ?? Infinity) - (b.costs[0] ?? Infinity));
+      if (winners.length === 0)
+        return "No LLM qualified on every game. Keep training Azure models for new games.";
+      return `Qualified on every game (cheapest first): ${winners.map((w) => w.method).join(", ")}. The first is the default for games without a trained Azure model.`;
+    })(),
+    "",
+  ].join("\n");
+  fs.writeFileSync(outFile, md);
+  console.log(md);
 }
