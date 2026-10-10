@@ -40,6 +40,7 @@ export const RocketLeagueProcessor: GameProcessor = {
         const { processedPlayers, reqCheckFlag } = processTeam(
           teamData,
           sessionPlayers,
+          "rl",
         );
 
         console.log(`Processed Player for: ${teamColor}:`, processedPlayers);
