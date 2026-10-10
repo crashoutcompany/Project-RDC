@@ -26,7 +26,7 @@ bench methods
 # Stat readers repeat REPEATS times. Each Claude model runs once (its subagent
 # gives one answer per scoreboard) into the same run directory, and only when
 # its readings exist (see README, "Claude readers").
-STAT_READERS="azure,gemini-2.5-flash,gemini-3.8-flash"
+STAT_READERS="azure,gemini-3.8-flash"
 declare -A GAME=( [rl-session33]=rocket-league [mk8-session41]=mario-kart-8 )
 for dataset in rl-session33 mk8-session41; do
   run="$dataset-$TAG"

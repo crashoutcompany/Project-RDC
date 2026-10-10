@@ -25,7 +25,8 @@ export const PRICES_CHECKED = "2026-10-10";
  * - Claude runs through Claude Code subagents (`claude-haiku|sonnet|opus`), never the API.
  * - OpenAI is used only through the Decisions API, and only gpt-6-luna. So no
  *   OpenAI model reads stats; Decisions is the scoreboard finder below.
- * - Gemini runs through the Vercel AI SDK with structured output.
+ * - Gemini runs through the Vercel AI SDK with structured output. gemini-2.5-flash
+ *   is no longer open to new users, so only the 3.x Flash model is measured.
  * Gemini reasoning is set to its "low" level so it gets no more thinking than
  * the other readers.
  */
@@ -34,8 +35,6 @@ export const METHODS: Method[] = [
   claudeReaderMethod("haiku"),
   claudeReaderMethod("sonnet"),
   claudeReaderMethod("opus"),
-  // Gemini 2.5 has no thinking levels; a 1,024-token budget is its "low".
-  geminiMethod("gemini-2.5-flash", "gemini-2.5-flash", { kind: "tokens", inputPerM: 0.3, outputPerM: 2.5 }, { thinkingBudget: 1024 }),
   // Intro price through 2026-12-31; it doubles to $1.50 / $7.50 after.
   geminiMethod("gemini-3.8-flash", "gemini-3.8-flash", { kind: "tokens", inputPerM: 0.75, outputPerM: 3.75 }, { thinkingLevel: "low" }),
   oracleMethod,
