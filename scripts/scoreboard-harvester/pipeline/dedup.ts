@@ -6,8 +6,7 @@ import { fmtTime } from "../utils";
 
 /**
  * Clusters consecutive confirmed OCR records into runs and emits one PNG per
- * run. Within each run we pick the sharpest frame from the middle 60% (avoids
- * fade-in/fade-out animation frames at the edges).
+ * run. Within each run we keep the earliest frame (see `pickBestFrame`).
  *
  * Game-agnostic: callers (index.ts) supply `gapSec` from the active
  * GameProfile so per-game scoreboard durations can vary.
@@ -89,26 +88,22 @@ function clusterConsecutive(
 }
 
 /**
- * From a single run, picks the frame with highest variance-of-laplacian
- * sharpness within the middle 60% of the run (avoids fade transitions).
+ * From a single run, picks the earliest frame, breaking near-ties on
+ * sharpness. Players who leave during the post-match countdown vanish from
+ * the scoreboard, so later frames can be missing rows (seen on RL session 13:
+ * 6 rows at the first frame, 3 by the middle of the run). Every frame in a run
+ * was already confirmed legible by the finder, so the first one isn't a fade.
+ * The second frame is taken only when the first is clearly blurrier.
  *
  * @param run - A run of confirmed frames belonging to the same match.
  * @returns The best frame in the run.
  */
 async function pickBestFrame(run: OcrRecord[]): Promise<OcrRecord> {
-  const lo = Math.floor(run.length * 0.2);
-  const hi = Math.max(lo + 1, Math.ceil(run.length * 0.8));
-  const window = run.slice(lo, hi);
-  let best = window[0];
-  let bestScore = -1;
-  for (const rec of window) {
-    const score = await sharpnessScore(rec.filePath);
-    if (score > bestScore) {
-      bestScore = score;
-      best = rec;
-    }
-  }
-  return best;
+  if (run.length < 2) return run[0];
+  const [first, second] = await Promise.all(
+    run.slice(0, 2).map((rec) => sharpnessScore(rec.filePath)),
+  );
+  return first >= second * 0.7 ? run[0] : run[1];
 }
 
 /**
