@@ -5,9 +5,9 @@ import { DepCheckResult } from "./pipeline/deps";
 import { downloadVideo, probeDuration } from "./pipeline/download";
 import { sampleFrames } from "./pipeline/sample";
 import { filterByPHash, loadReferenceHash } from "./pipeline/phash";
-import { ocrFrames } from "./pipeline/ocr";
 import { dedupAndSave } from "./pipeline/dedup";
-import { analyzeMatches } from "./pipeline/analyze";
+import { analyzeJobs } from "./pipeline/analyze";
+import { findScoreboards } from "./pipeline/finders";
 import { urlToSlug } from "./utils";
 import { FrameRecord, Manifest, ResolvedConfig } from "./types";
 import type { GameProfile } from "./games/types";
@@ -82,7 +82,7 @@ async function runPhashStage(args: {
   const { mode, frames, config } = args;
 
   if (config.noPhash) {
-    console.log("[phash] --no-phash set → OCR will see every frame");
+    console.log("[phash] --no-phash set → the finder will see every frame");
     return frames;
   }
 
@@ -95,7 +95,7 @@ async function runPhashStage(args: {
 
   if (!fs.existsSync(config.referencePath)) {
     console.log(
-      `[phash] no reference at ${config.referencePath} → OCR will see every frame`,
+      `[phash] no reference at ${config.referencePath} → the finder will see every frame`,
     );
     return frames;
   }
@@ -116,7 +116,7 @@ async function runPhashStage(args: {
     // reference from a clean capture can reject every frame. Finding nothing
     // is worse than a slower run: fall back to OCR on every frame.
     console.warn(
-      "[phash] 0 frames matched the reference (stream overlays?) → OCR will see every frame",
+      "[phash] 0 frames matched the reference (stream overlays?) → the finder will see every frame",
     );
     return frames;
   }
@@ -124,12 +124,16 @@ async function runPhashStage(args: {
 }
 
 /**
- * Runs one video through the pipeline: download → sample → (pHash) → OCR →
- * dedup → (Azure analysis) → manifest.json. Every stage is resumable from
- * disk, so a crashed weekly run picks up where it stopped.
+ * Runs one video through the pipeline: download → sample → (pHash) → find
+ * scoreboards (Decisions or RapidOCR) → dedup → read stats (Gemini or Azure)
+ * → manifest.json. Every stage is resumable from disk, so a crashed weekly
+ * run picks up where it stopped.
+ *
+ * `deferAnalysis` stops before reading stats so a bulk run can read every
+ * video's scoreboards in one batch (see `analyzeJobs`).
  *
  * In bootstrap mode the first confirmed scoreboard is saved as the game's
- * pHash reference instead.
+ * pHash reference instead (always found with RapidOCR).
  */
 export async function harvestVideo(args: {
   mode: HarvestMode;
@@ -140,6 +144,7 @@ export async function harvestVideo(args: {
   video?: string;
   /** Required when `config.analyze` is on (see pipeline/analyze.ts). */
   players?: Player[];
+  deferAnalysis?: boolean;
 }): Promise<HarvestResult> {
   const { mode, profile, config, deps, url, video } = args;
   const startTime = Date.now();
@@ -165,20 +170,19 @@ export async function harvestVideo(args: {
 
   const candidates = await runPhashStage({ mode, frames, config });
 
-  const confirmed = await ocrFrames(candidates, {
-    engine: deps.ocrEngine,
-    keywords: profile.keywords,
-    keywordNoise: profile.keywordNoise,
-    minKeywords: config.ocrMinKeywords,
-    endScreenSentinels: profile.endScreenSentinels,
-    requireEndScreen: config.requireEndScreen,
-    dedupGapSec: config.dedupGapSec,
+  const found = await findScoreboards({
+    finder: mode === "bootstrap" ? "rapidocr" : config.finder,
+    frames: candidates,
+    profile,
+    config,
+    deps,
+    workDir,
     skipAheadSec: mode === "bootstrap" ? 0 : config.skipAheadSec,
-    concurrency: config.ocrConcurrency,
   });
+  const confirmed = found.confirmed;
   console.log(
-    `[ocr] ${confirmed.length} confirmed scoreboard frames` +
-      (config.requireEndScreen ? " (require-end-screen=on)" : ""),
+    `[find] ${confirmed.length} scoreboard frames via ${found.finder}` +
+      (config.requireEndScreen && found.finder !== "decisions" ? " (require-end-screen=on)" : ""),
   );
 
   if (mode === "bootstrap") {
@@ -200,14 +204,14 @@ export async function harvestVideo(args: {
   if (mode === "extract")
     console.log(`[dedup] saved ${matches.length} match screenshot(s)`);
 
-  if (config.analyze && matches.length > 0) {
+  if (config.analyze && !args.deferAnalysis && matches.length > 0) {
     if (!profile.azureGameId)
       throw new Error(`${profile.displayName} has no azureGameId to analyze with`);
-    matches = await analyzeMatches({
-      matches,
-      workDir,
-      gameId: profile.azureGameId,
+    [matches] = await analyzeJobs({
+      jobs: [{ matches, workDir, gameId: profile.azureGameId }],
       players: args.players ?? [],
+      reader: config.reader,
+      batch: config.batch,
     });
   }
 
@@ -220,6 +224,7 @@ export async function harvestVideo(args: {
       fps: config.fps,
     },
     config: { ...config },
+    finder: { id: found.finder, fallback: found.fallback },
     runtimeMs: Date.now() - startTime,
     matches,
   };

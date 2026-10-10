@@ -8,7 +8,8 @@ import { harvestVideo } from "../harvest";
 import { buildDraft } from "../draft/build-draft";
 import { writeDraftSession } from "../draft/write-draft";
 import type { GameProfile } from "../games/types";
-import type { ResolvedConfig } from "../types";
+import type { Manifest, ResolvedConfig } from "../types";
+import { analyzeJobs } from "../pipeline/analyze";
 import { fmtTime } from "../utils";
 import {
   CandidateVideo,
@@ -133,46 +134,83 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
     }
     saveState();
 
-    const batch = queue.slice(0, opts.limit);
-    if (queue.length > batch.length)
+    const selected = queue.slice(0, opts.limit);
+    if (queue.length > selected.length)
       console.log(
-        `[weekly] processing ${batch.length} of ${queue.length}; the rest wait for the next run`,
+        `[weekly] processing ${selected.length} of ${queue.length}; the rest wait for the next run`,
       );
 
-    for (const candidate of batch) {
+    const record = (
+      candidate: CandidateVideo,
+      line: { outcome: Outcome; detail: string; sessionId?: number },
+    ) => {
       const key = stateKey(candidate);
-      const attempts = (state[key]?.attempts ?? 0) + 1;
+      state[key] = {
+        outcome: line.outcome,
+        attempts: (state[key]?.attempts ?? 0) + 1,
+        lastRun: new Date().toISOString(),
+        sessionId: line.sessionId,
+        message: line.detail,
+      };
+      report.push({ candidate, outcome: line.outcome, detail: line.detail });
+      saveState();
+    };
+    const recordFailure = (candidate: CandidateVideo, err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[weekly] ✖ ${candidate.videoId}: ${message}`);
+      record(candidate, { outcome: "failed", detail: message });
+    };
+
+    // In batch mode every video is harvested first, then all their
+    // scoreboards are read in one Gemini batch, then drafts are written.
+    const batch = opts.configFor(selected[0]?.profile ?? opts.profiles[0]).batch;
+    const harvested: Harvested[] = [];
+    for (const candidate of selected) {
       console.log(
         `\n[weekly] ▶ ${candidate.profile.displayName}: ${candidate.title} (${candidate.videoId})`,
       );
       try {
-        const line = await processCandidate(candidate, opts, players);
-        state[key] = {
-          outcome: line.outcome as Outcome,
-          attempts,
-          lastRun: new Date().toISOString(),
-          sessionId: line.sessionId,
-          message: line.detail,
-        };
-        report.push({ candidate, outcome: line.outcome, detail: line.detail });
+        const h = await harvestCandidate(candidate, opts, players, batch);
+        if (batch) harvested.push(h);
+        else record(candidate, await draftCandidate(h, opts));
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[weekly] ✖ ${candidate.videoId}: ${message}`);
-        state[key] = {
-          outcome: "failed",
-          attempts,
-          lastRun: new Date().toISOString(),
-          message,
-        };
-        report.push({ candidate, outcome: "failed", detail: message });
+        recordFailure(candidate, err);
       }
-      saveState();
+    }
+
+    if (harvested.length > 0) {
+      const toRead = harvested.filter((h) => h.manifest.matches.length > 0);
+      try {
+        const analyzed = await analyzeJobs({
+          jobs: toRead.map((h) => ({
+            matches: h.manifest.matches,
+            workDir: h.workDir,
+            gameId: h.candidate.profile.azureGameId!,
+          })),
+          players,
+          reader: opts.configFor(toRead[0]?.candidate.profile ?? opts.profiles[0]).reader,
+          batch: true,
+        });
+        toRead.forEach((h, i) => {
+          h.manifest.matches = analyzed[i];
+          fs.writeFileSync(path.join(h.workDir, "manifest.json"), JSON.stringify(h.manifest, null, 2));
+        });
+        for (const h of harvested) {
+          try {
+            record(h.candidate, await draftCandidate(h, opts));
+          } catch (err) {
+            recordFailure(h.candidate, err);
+          }
+        }
+      } catch (err) {
+        for (const h of harvested) recordFailure(h.candidate, err);
+      }
     }
 
     const markdown = renderReport({
       startedAt,
       report,
-      pending: queue.length - batch.length,
+      pending: queue.length - selected.length,
       write: opts.write,
     });
     const reportDir = path.join(opts.out, "reports");
@@ -192,24 +230,35 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
   }
 }
 
-async function processCandidate(
+interface Harvested {
+  candidate: CandidateVideo;
+  manifest: Manifest;
+  workDir: string;
+}
+
+async function harvestCandidate(
   candidate: CandidateVideo,
   opts: WeeklyOptions,
   players: Awaited<ReturnType<typeof prisma.player.findMany>>,
-): Promise<{ outcome: Outcome; detail: string; sessionId?: number }> {
-  const { profile, videoId } = candidate;
-  const config = opts.configFor(profile);
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
-
+  deferAnalysis: boolean,
+): Promise<Harvested> {
   const { manifest, workDir } = await harvestVideo({
     mode: "extract",
-    profile,
-    config,
+    profile: candidate.profile,
+    config: opts.configFor(candidate.profile),
     deps: opts.deps,
-    url,
+    url: `https://www.youtube.com/watch?v=${candidate.videoId}`,
     players,
+    deferAnalysis,
   });
+  return { candidate, manifest, workDir };
+}
 
+async function draftCandidate(
+  { candidate, manifest, workDir }: Harvested,
+  opts: WeeklyOptions,
+): Promise<{ outcome: Outcome; detail: string; sessionId?: number }> {
+  const { profile, videoId } = candidate;
   if (manifest.matches.length === 0)
     return { outcome: "no-scoreboards", detail: "no scoreboards detected" };
 

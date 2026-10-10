@@ -250,6 +250,8 @@ export const logAdminAction = async (
 export const logVisionSuccess = async (
   gameId: number,
   durationMs: number,
+  /** Which reader answered, and how many fell over before it. */
+  reader?: { readerId: string; fallbacks: string[] },
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
@@ -260,6 +262,7 @@ export const logVisionSuccess = async (
     properties: {
       gameId,
       durationMs,
+      ...(reader && { reader: reader.readerId, fallbacks: reader.fallbacks }),
       ...withSessionReplay(sessionReplayId),
     },
   });

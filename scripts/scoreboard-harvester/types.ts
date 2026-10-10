@@ -1,4 +1,6 @@
 import type { AnalysisResults } from "@/lib/visionTypes";
+import type { ReaderId } from "@/lib/vision/readers";
+import type { FinderId } from "./pipeline/finders";
 
 /**
  * Shared types for the scoreboard harvester pipeline. Game-specific knowledge
@@ -42,8 +44,19 @@ export interface ResolvedConfig {
   keepVideo: boolean;
   start?: number;
   end?: number;
-  /** Run every saved scoreboard through the game's Azure model. */
+  /** Read every saved scoreboard's stats. */
   analyze: boolean;
+  /** Finds scoreboard frames; `decisions` falls back to RapidOCR on errors. */
+  finder: FinderId;
+  /** Reads stats; `gemini` falls back to Azure on errors. */
+  reader: ReaderId;
+  /**
+   * Bulk mode: Gemini reads through its Batch API (half price, slower), and
+   * Decisions runs at higher concurrency (it has no batch API).
+   */
+  batch: boolean;
+  /** Decisions calls in flight at once. */
+  decisionsConcurrency: number;
   referencePath: string;
 }
 
@@ -75,8 +88,10 @@ export interface MatchManifest {
   runLengthFrames: number;
   imagePath: string;
   ocrKeywords: string[];
-  /** Azure + game-processor result for this screenshot, when analyzed. */
+  /** Reader + game-processor result for this screenshot, when analyzed. */
   analysis: AnalysisResults | null;
+  /** Which reader produced `analysis`, and any that failed before it. */
+  reader?: { id: string; fallbacks: string[] };
 }
 
 export interface Manifest {
@@ -89,6 +104,8 @@ export interface Manifest {
     fps: number;
   };
   config: Record<string, unknown>;
+  /** Finder that actually ran, and why it fell back, if it did. */
+  finder?: { id: string; fallback: string | null };
   runtimeMs: number;
   matches: MatchManifest[];
 }

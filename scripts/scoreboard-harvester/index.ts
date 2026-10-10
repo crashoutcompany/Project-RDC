@@ -2,12 +2,13 @@
 /**
  * RDC Scoreboard Harvester.
  *
- * Downloads (or accepts) a video, extracts end-of-match scoreboard
- * screenshots, and optionally reads their stats with the game's Azure model.
+ * Downloads (or accepts) a video, finds the end-of-match scoreboards
+ * (Decisions API, or RapidOCR), and reads their stats (Gemini, or the game's
+ * Azure model). Each step falls back to the other option on errors.
  * Game-agnostic — the actual scoreboard recognition is driven by a per-game
  * profile in games/. See README.md for full docs.
  *
- *   pnpm harvest -- extract   --game rocket-league --url <youtube> [--analyze]
+ *   pnpm harvest -- extract   --game rocket-league --url <youtube> [--finder rapidocr] [--reader azure] [--batch]
  *   pnpm harvest -- bootstrap --game rocket-league --from ./shot.png
  *   pnpm harvest -- weekly    [--write] [--limit 4]
  */
@@ -32,6 +33,8 @@ import {
   resolveProfile,
 } from "./games/registry";
 import type { GameProfile } from "./games/types";
+import { FINDER_IDS, type FinderId } from "./pipeline/finders";
+import { READER_IDS, type ReaderId } from "@/lib/vision/readers";
 
 // Not __dirname: the generated Prisma client overwrites the global one.
 const HARVESTER_ROOT = import.meta.dirname;
@@ -40,6 +43,9 @@ const DEFAULT_SAMPLE_WIDTH = 1280;
 const DEFAULT_JPEG_QUALITY = 3;
 const DEFAULT_OCR_CONCURRENCY = 2;
 const DEFAULT_WEEKLY_LIMIT = 4;
+const DEFAULT_DECISIONS_CONCURRENCY = 4;
+/** Decisions has no batch API, so bulk mode just asks more frames at once. */
+const BATCH_DECISIONS_CONCURRENCY = 12;
 type Command = (typeof COMMANDS)[number];
 
 const OPTIONS = {
@@ -72,7 +78,13 @@ const OPTIONS = {
   start: { type: "string" },
   end: { type: "string" },
   reference: { type: "string" },
+  finder: { type: "string", default: "decisions" },
+  reader: { type: "string", default: "gemini" },
+  batch: { type: "boolean", default: false },
+  "decisions-concurrency": { type: "string" },
+  // Accepted so old commands still parse; reading stats is now the default.
   analyze: { type: "boolean", default: false },
+  "no-analyze": { type: "boolean", default: false },
   write: { type: "boolean", default: false },
   limit: { type: "string", default: String(DEFAULT_WEEKLY_LIMIT) },
   retry: { type: "boolean", default: false },
@@ -144,6 +156,17 @@ function resolveConfig(
     console.error(`Invalid --sampling: expected fps or keyframes, got "${sampling}"`);
     process.exit(1);
   }
+  const finder = values.finder as FinderId;
+  if (!FINDER_IDS.includes(finder)) {
+    console.error(`Invalid --finder: expected ${FINDER_IDS.join(" or ")}, got "${finder}"`);
+    process.exit(1);
+  }
+  const reader = values.reader as ReaderId;
+  if (!READER_IDS.includes(reader)) {
+    console.error(`Invalid --reader: expected ${READER_IDS.join(" or ")}, got "${reader}"`);
+    process.exit(1);
+  }
+  const batch = Boolean(values.batch);
   const ocrEngine = values["ocr-engine"] ?? "auto";
   if (ocrEngine !== "auto" && ocrEngine !== "vision" && ocrEngine !== "rapidocr") {
     console.error(`Invalid --ocr-engine: expected auto, vision, or rapidocr`);
@@ -208,7 +231,19 @@ function resolveConfig(
     keepVideo: command === "weekly" ? Boolean(values["keep-video"]) : true,
     start,
     end,
-    analyze: command === "weekly" || Boolean(values.analyze),
+    // Reading stats is the point of a harvest; --no-analyze stops after the screenshots.
+    analyze: command === "weekly" || !values["no-analyze"],
+    finder,
+    reader,
+    batch,
+    decisionsConcurrency:
+      parseFiniteNumber({
+        name: "decisions-concurrency",
+        raw: values["decisions-concurrency"],
+        kind: "int",
+        min: 1,
+        max: 64,
+      }) ?? (batch ? BATCH_DECISIONS_CONCURRENCY : DEFAULT_DECISIONS_CONCURRENCY),
     referencePath: values.reference
       ? path.resolve(values.reference)
       : path.join(
@@ -278,17 +313,28 @@ function printUsage(): void {
 RDC Scoreboard Harvester
 
 Usage:
-  pnpm harvest -- extract   --game <id> --url <youtube> [--analyze]
+  pnpm harvest -- extract   --game <id> --url <youtube> [--finder <f>] [--reader <r>] [--batch]
   pnpm harvest -- extract   --game <id> --video ./game.mp4
   pnpm harvest -- bootstrap --game <id> --from ./shot.png   (fast)
   pnpm harvest -- bootstrap --game <id> --url <youtube>     (slow)
   pnpm harvest -- weekly    [--write] [--limit ${DEFAULT_WEEKLY_LIMIT}] [--videos <id,id> --game <id>]
 
 Commands:
-  extract     (default) Harvest scoreboard screenshots from one video.
+  extract     (default) Find and read the scoreboards in one video.
   bootstrap   Set the pHash reference image for a given --game.
   weekly      Find uploads missing from the database (Google Sheet "Truth"),
               harvest + analyze them, and save unapproved draft sessions.
+
+Setup (each step falls back to the other option on errors):
+  --finder <name>         decisions (default) | rapidocr
+                          decisions → RapidOCR for frames it can't answer
+  --reader <name>         gemini (default) | azure
+                          gemini → Azure for scoreboards it can't read
+  --batch                 Bulk mode: Gemini reads through its Batch API (half
+                          price, can take hours; anything it misses is read
+                          normally), Decisions asks ${BATCH_DECISIONS_CONCURRENCY} frames at once
+  --decisions-concurrency <n>  Decisions calls in flight (default: ${DEFAULT_DECISIONS_CONCURRENCY})
+  --no-analyze            Stop after saving screenshots; don't read stats
 
 Game selection:
   --game <id>             Game profile (default: ${DEFAULT_GAME_ID})
@@ -310,7 +356,8 @@ Weekly:
 
 Detection tuning (defaults come from the active --game profile):
   --sampling <mode>       fps | keyframes (decode I-frames only; much faster)
-  --ocr-engine <name>     auto | vision | rapidocr (auto = Vision on macOS)
+  --ocr-engine <name>     RapidOCR finder's engine: auto | vision | rapidocr
+                          (auto = Vision on macOS)
   --no-phash              Skip pHash pre-filter; OCR every frame
   --phash-threshold <n>   Hamming distance cutoff 0-64 (default: 12)
   --ocr-min-keywords <n>  Min game keywords to confirm a frame
@@ -332,7 +379,6 @@ I/O:
   --end <sec>             End time slice (debugging)
   --reference <path>      Override pHash reference image
   --keep-frames           Don't delete temp frames after run
-  --analyze               Read each scoreboard with the game's Azure model
   --help                  This message
 `);
 }
@@ -427,7 +473,7 @@ async function main(): Promise<void> {
   exitOnMissingDeps(deps.errors);
 
   let players;
-  if (config.analyze) {
+  if (config.analyze && command === "extract") {
     const { default: prisma } = await import("prisma/db");
     players = await prisma.player.findMany();
     await prisma.$disconnect();

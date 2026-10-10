@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
-import OpenAI from "openai";
 import { checkDeps } from "../scoreboard-harvester/pipeline/deps";
 import { downloadVideo } from "../scoreboard-harvester/pipeline/download";
 import { ocrFrames } from "../scoreboard-harvester/pipeline/ocr";
 import { sampleFrames } from "../scoreboard-harvester/pipeline/sample";
+import { decideFrames, type FrameVerdict } from "../scoreboard-harvester/pipeline/decisions";
 import { GAME_PROFILES } from "../scoreboard-harvester/games/registry";
 import type { FrameRecord } from "../scoreboard-harvester/types";
 import { DECISIONS, PRICES_CHECKED, WEEKLY_VIDEOS } from "./config";
@@ -17,17 +17,6 @@ const MATCH_WINDOW_SEC = 30;
 /** Positive frames closer than this belong to the same detection. */
 const RUN_GAP_SEC = 20;
 const THRESHOLDS = [0.3, 0.5, 0.7, 0.9];
-
-interface FrameVerdict {
-  frameId: number;
-  startedAt: string;
-  timestampSec: number;
-  probability: number | null;
-  latencyMs: number;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  error: string | null;
-}
 
 interface FinderResult {
   method: string;
@@ -179,77 +168,11 @@ export async function runFinder(args: {
   return results;
 }
 
-/**
- * One predicate call per frame, `concurrency` at a time. Results append to
- * `logPath` so an interrupted run resumes; failed frames are retried on rerun.
- */
+/** The harvester's Decisions finder, so the benchmark measures production code. */
 export async function runDecisions(frames: FrameRecord[], question: string, logPath: string) {
-  const done = new Map<number, FrameVerdict>();
-  if (fs.existsSync(logPath))
-    for (const line of fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean)) {
-      const v = JSON.parse(line) as FrameVerdict;
-      done.set(v.frameId, v);
-    }
-  const todo = frames.filter((f) => !done.has(f.frameId) || done.get(f.frameId)!.error);
-  const client = new OpenAI({ maxRetries: 0 });
-  const log = fs.openSync(logPath, "a");
-  let next = 0;
-  let finished = 0;
-
-  const worker = async () => {
-    while (next < todo.length) {
-      const frame = todo[next++];
-      const image = fs.readFileSync(frame.filePath).toString("base64");
-      const startedAt = new Date().toISOString();
-      const t0 = performance.now();
-      let verdict: FrameVerdict;
-      try {
-        const decision = await client.decisions.create({
-          model: DECISIONS.model,
-          input: [
-            {
-              role: "user",
-              content: [{ type: "input_image", image_url: `data:image/jpeg;base64,${image}` }],
-            },
-          ],
-          questions: [{ type: "predicate", name: "is_scoreboard", instructions: question }],
-        });
-        const answer = decision.answers[0];
-        verdict = {
-          frameId: frame.frameId,
-          startedAt,
-          timestampSec: frame.timestampSec,
-          probability: answer?.type === "predicate" ? answer.probability : null,
-          latencyMs: Math.round(performance.now() - t0),
-          inputTokens: decision.usage.input_tokens,
-          outputTokens: decision.usage.output_tokens,
-          error: answer?.type === "refusal" ? "refusal" : null,
-        };
-      } catch (err) {
-        verdict = {
-          frameId: frame.frameId,
-          startedAt,
-          timestampSec: frame.timestampSec,
-          probability: null,
-          latencyMs: Math.round(performance.now() - t0),
-          inputTokens: null,
-          outputTokens: null,
-          error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-        };
-      }
-      done.set(frame.frameId, verdict);
-      fs.writeSync(log, JSON.stringify(verdict) + "\n");
-      if (++finished % 50 === 0 || finished === todo.length)
-        console.log(`[finder] decisions ${finished}/${todo.length}`);
-    }
-  };
-
-  try {
-    await Promise.all(Array.from({ length: DECISIONS.concurrency }, worker));
-  } finally {
-    fs.closeSync(log);
-  }
-  return frames.map((f) => done.get(f.frameId)!).filter(Boolean);
+  const run = await decideFrames(frames, question, { logPath, concurrency: DECISIONS.concurrency });
+  if (run.abortReason) console.warn(`[finder] Decisions stopped early: ${run.abortReason}`);
+  return run.verdicts;
 }
 
 /**

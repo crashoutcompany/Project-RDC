@@ -42,24 +42,20 @@ export const getGameProcessor = (gameId: number): GameProcessor => {
   }
 };
 
+/** Per-player fields in Azure's layout: one array per team, or a single array for solo games. */
+export type ScoreboardFields = AnalyzedTeamData[] | AnalyzedPlayersObj[];
+
 /**
- * Runs a scoreboard screenshot through the game's custom Azure Document
- * Intelligence model and the matching game processor.
- *
- * Free of Next.js runtime helpers (`after`, PostHog, `server-only`) so the
- * admin server action and the offline harvester script share one code path.
- * Throws on Azure/processor errors; callers decide how to log and report.
+ * Reads a screenshot with the game's custom Azure Document Intelligence model.
+ * Returns null when Azure answers with no document. Throws on API errors.
  */
-export async function analyzeScoreboard(args: {
+export async function extractWithAzure(args: {
   client: DocumentIntelligenceClient;
   base64Source: string;
-  sessionPlayers: Player[];
   gameId: number;
-}): Promise<AnalysisResults> {
-  const { client, base64Source, sessionPlayers, gameId } = args;
-  const gameProcessor = getGameProcessor(gameId);
+}): Promise<ScoreboardFields | null> {
+  const { client, base64Source, gameId } = args;
   const gameConfig = GAME_CONFIGS[gameId];
-
   if (!gameConfig) throw new Error(`Game config not found for gameId: ${gameId}`);
 
   const response = await client
@@ -74,12 +70,7 @@ export async function analyzeScoreboard(args: {
 
   const poller = await getLongRunningPoller(client, response);
   const result = (await poller.body) as AnalyzeOperationOutput;
-
-  if (!result.analyzeResult || !result.analyzeResult.documents)
-    return {
-      status: VisionResultCodes.Failed,
-      message: "Analyze result or documents are undefined",
-    };
+  if (!result.analyzeResult || !result.analyzeResult.documents) return null;
 
   // Team models (RL) return one array field per team; solo models (MK8, COD)
   // return every player in a single array field.
@@ -87,40 +78,50 @@ export async function analyzeScoreboard(args: {
   if (!analyzedPlayers)
     throw new Error("Vision Analysis Player Results are undefined");
 
-  let teamsArray: AnalyzedTeamData[] = [];
-  let playersData: AnalyzedPlayersObj[] = [];
-
   if (gameConfig.type === "TEAM")
-    teamsArray = Object.entries(analyzedPlayers).map(([teamName, teamData]) => ({
+    return Object.entries(analyzedPlayers).map(([teamName, teamData]) => ({
       teamName,
       players: teamData as unknown as AnalyzedPlayersObj,
     }));
-  else
-    playersData = Object.values(
-      analyzedPlayers,
-    ) as unknown as AnalyzedPlayersObj[];
+  return Object.values(analyzedPlayers) as unknown as AnalyzedPlayersObj[];
+}
 
-  const processedPlayers = gameProcessor.processPlayers(
-    gameConfig.type === "TEAM" ? teamsArray : playersData,
-    sessionPlayers,
-  );
+/**
+ * Turns per-player fields (from any reader) into the admin form's result:
+ * maps gamertags to session players, validates stats, and picks winners with
+ * the game's processor.
+ *
+ * `ocrCorrections` applies the processor's fixes for Azure's known misreads
+ * (e.g. MK8 7th -> 1st). They're wrong for readers that don't make those
+ * mistakes, so the Gemini reader turns them off.
+ */
+export function processScoreboard(args: {
+  fields: ScoreboardFields;
+  gameId: number;
+  sessionPlayers: Player[];
+  ocrCorrections: boolean;
+}): AnalysisResults {
+  const { fields, gameId, sessionPlayers, ocrCorrections } = args;
+  const gameProcessor = getGameProcessor(gameId);
+  const processedPlayers = gameProcessor.processPlayers(fields, sessionPlayers);
 
   // Game-specific corrections (e.g. MK8 7th -> 1st) must still flag review.
   let statsRequireCheck = false;
-  const validatedPlayers: VisionPlayer[] =
-    processedPlayers.processedPlayers.map((player) => {
-      const validatedStats = player.stats.map((stat: Stat) => {
-        const validatedStat = gameProcessor.validateStats(
-          stat.statValue,
-          sessionPlayers.length,
-        );
-        if (validatedStat.reqCheck) statsRequireCheck = true;
+  const validatedPlayers: VisionPlayer[] = ocrCorrections
+    ? processedPlayers.processedPlayers.map((player) => {
+        const validatedStats = player.stats.map((stat: Stat) => {
+          const validatedStat = gameProcessor.validateStats(
+            stat.statValue,
+            sessionPlayers.length,
+          );
+          if (validatedStat.reqCheck) statsRequireCheck = true;
 
-        return { ...stat, statValue: validatedStat.statValue };
-      });
+          return { ...stat, statValue: validatedStat.statValue };
+        });
 
-      return { ...player, stats: validatedStats };
-    });
+        return { ...player, stats: validatedStats };
+      })
+    : processedPlayers.processedPlayers;
 
   const winners = gameProcessor.calculateWinners(validatedPlayers);
 
@@ -129,4 +130,29 @@ export async function analyzeScoreboard(args: {
     winners,
     processedPlayers.reqCheckFlag || statsRequireCheck,
   );
+}
+
+/**
+ * Runs a scoreboard screenshot through the game's custom Azure Document
+ * Intelligence model and the matching game processor.
+ *
+ * Free of Next.js runtime helpers (`after`, PostHog, `server-only`) so the
+ * admin server action and the offline harvester script share one code path.
+ * Throws on Azure/processor errors; callers decide how to log and report.
+ */
+export async function analyzeScoreboard(args: {
+  client: DocumentIntelligenceClient;
+  base64Source: string;
+  sessionPlayers: Player[];
+  gameId: number;
+}): Promise<AnalysisResults> {
+  const { sessionPlayers, gameId } = args;
+  getGameProcessor(gameId); // fail on an unknown game before paying for Azure
+  const fields = await extractWithAzure(args);
+  if (!fields)
+    return {
+      status: VisionResultCodes.Failed,
+      message: "Analyze result or documents are undefined",
+    };
+  return processScoreboard({ fields, gameId, sessionPlayers, ocrCorrections: true });
 }

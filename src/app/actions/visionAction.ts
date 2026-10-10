@@ -4,10 +4,7 @@ import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { AnalysisResults } from "@/lib/visionTypes";
 import config from "@/lib/config";
-import {
-  analyzeScoreboard,
-  createDocumentIntelligenceClient,
-} from "@/lib/vision/analyze-scoreboard";
+import { azureReader, geminiReader, readWithFallback } from "@/lib/vision/readers";
 
 export { getGameProcessor } from "@/lib/vision/analyze-scoreboard";
 export type {
@@ -16,10 +13,15 @@ export type {
   AnalyzedPlayersObj,
 } from "@/lib/visionTypes";
 
-const client = createDocumentIntelligenceClient(
-  config.DOCUMENT_INTELLIGENCE_ENDPOINT!,
-  config.DOCUMENT_INTELLIGENCE_API_KEY!,
-);
+// Gemini reads first; Azure's trained models answer only when Gemini fails
+// (after retrying 429s/5xx) or doesn't support the game yet.
+const readers = [
+  geminiReader({ apiKey: config.GOOGLE_GENERATIVE_AI_API_KEY }),
+  azureReader({
+    endpoint: config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+    key: config.DOCUMENT_INTELLIGENCE_API_KEY,
+  }),
+];
 
 export const analyzeScreenShot = async (
   base64Source: string,
@@ -28,17 +30,24 @@ export const analyzeScreenShot = async (
 ): Promise<AnalysisResults> => {
   const startTime = performance.now();
   try {
-    const result = await analyzeScoreboard({
-      client,
-      base64Source,
-      sessionPlayers,
-      gameId,
-    });
+    const { result, readerId, fallbacks } = await readWithFallback(
+      readers,
+      { base64Source, sessionPlayers, gameId },
+      {
+        onFallback: (f) =>
+          console.warn(`[vision] ${f.from} failed for game ${gameId}: ${f.reason}`),
+      },
+    );
 
     if (result.status !== VisionResultCodes.Failed) {
       const duration = performance.now() - startTime;
-      after(() => logVisionSuccess(gameId, duration));
-    }
+      after(() =>
+        logVisionSuccess(gameId, duration, {
+          readerId,
+          fallbacks: fallbacks.map((f) => `${f.from}: ${f.reason}`),
+        }),
+      );
+    } else logVisionError(new Error(result.message));
 
     return result;
   } catch (error) {

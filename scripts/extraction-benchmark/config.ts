@@ -3,6 +3,11 @@ import path from "path";
 import { geminiMethod } from "./methods/gemini";
 import { oracleMethod } from "./methods/oracle";
 import type { Method } from "./methods/types";
+import {
+  DECISIONS_INPUT_PER_M,
+  DECISIONS_MODEL,
+  DECISIONS_THRESHOLD,
+} from "../scoreboard-harvester/pipeline/decisions";
 
 /** Where datasets, raw outputs, logs, and reports live (outside the repo). */
 export const BENCH_DIR = process.env.BENCH_DIR ?? path.join(os.homedir(), "ocrbench", "experiment");
@@ -36,10 +41,10 @@ export const METHODS: Method[] = [
 
 /** Decisions API (scoreboard finder): input tokens only. */
 export const DECISIONS = {
-  model: "gpt-6-luna",
-  inputPerM: 0.1,
+  model: DECISIONS_MODEL,
+  inputPerM: DECISIONS_INPUT_PER_M,
   /** Probability at which a frame counts as a scoreboard; the report also sweeps others. */
-  threshold: 0.5,
+  threshold: DECISIONS_THRESHOLD,
   concurrency: 4,
 };
 
