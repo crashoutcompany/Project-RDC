@@ -6,11 +6,11 @@ Compares ways of turning an end-of-match scoreboard screenshot into stats — th
 
 | Job | Methods |
 |---|---|
-| Read stats from a scoreboard | `azure` (production), `claude-code` (Claude in a Claude Code session), `gemini-2.5-flash`, `gemini-3.8-flash` (AI SDK) |
+| Read stats from a scoreboard | `azure` (production), `claude-haiku`, `claude-sonnet`, `claude-opus` (Claude Code subagents), `gemini-2.5-flash`, `gemini-3.8-flash` (AI SDK) |
 | Find scoreboards in a video | `rapidocr` (production harvester gate), `decisions` (OpenAI Decisions predicate per keyframe, `gpt-6-luna`) |
 
 Access rules (set by the project owner):
-- **Claude is read in Claude Code**, never through the Anthropic API. Its answers are written by hand into `claude-code/<game>/<case>.json` (see below).
+- **Claude is read through Claude Code subagents**, one run per model (Haiku, Sonnet, Opus), never through the Anthropic API. See "Claude readers" below.
 - **OpenAI is used only through the Decisions API, and only `gpt-6-luna`.** No OpenAI model reads stats. The Responses API isn't used.
 - Gemini is used through the Vercel AI SDK with structured output.
 
@@ -20,7 +20,7 @@ Access rules (set by the project owner):
 
 - **Same input:** every method reads the same frozen PNGs.
 - **Same instructions:** every LLM gets the same system prompt, user prompt, and JSON schema, generated from the game spec in `games.ts`. The run records a fingerprint of all three (`prompt.txt`, `run.json`).
-- **Same reasoning level:** Gemini 3.x runs at `thinkingLevel: "low"`; Gemini 2.5 has no levels, so it gets a 1,024-token budget. Claude Code runs at its default and reports its usage as is.
+- **Same reasoning level:** Gemini 3.x runs at `thinkingLevel: "low"`; Gemini 2.5 has no levels, so it gets a 1,024-token budget. Claude subagents run at their default settings; their token counts aren't reported, so their cost is n/a.
 - **No silent retries:** SDK retries are off (`maxRetries: 0`), so latency is one attempt. Failed calls are logged; `--retry-failed` reruns them.
 - **No silent model changes:** each method is one model, recorded in `run.json`.
 - **Fair ordering:** calls run one at a time, ordered repeat → scoreboard → method, so methods interleave instead of each getting its own time window.
@@ -28,28 +28,22 @@ Access rules (set by the project owner):
 
 Azure gets no prompt or gamertag list: it's the production path, called exactly as the admin "RDC Vision" button calls it.
 
-### Running Claude Code
+### Claude readers (subagents)
 
-Claude doesn't use the API here. For each dataset case, read the image blind (no database lookups), and write the answer as JSON to:
+Each Claude model reads the scoreboards through a Claude Code subagent set to that model. Subagents are blind: they get neutral image names and the instructions, and never the dataset file or the database.
 
-```
-~/ocrbench/experiment/claude-code/<game>/<case-id>.json
-```
+1. Prepare the blind inputs for a dataset:
+   ```bash
+   pnpm exec tsx scripts/extraction-benchmark/index.ts prepare --dataset <dataset.json>
+   ```
+   This writes `~/ocrbench/experiment/blind/<game>/` (shuffled neutral images and `BRIEF.md`). The key that maps names to cases is kept in `~/ocrbench/private/`, outside the experiment folder.
+2. Start one subagent per model (`haiku`, `sonnet`, `opus`) and point it at `BRIEF.md`. Each writes one JSON file per image to `~/ocrbench/experiment/blind/out/<model>/<game>/`.
+3. Ingest each model's answers:
+   ```bash
+   pnpm exec tsx scripts/extraction-benchmark/index.ts ingest --dataset <dataset.json> --model haiku
+   ```
+4. `run-all.sh` picks up any model that has readings and scores it like every other method, once per scoreboard (a single subagent answer can't be repeated usefully).
 
-in this shape, with the stats in the game's column keys (`rl_goals`, `mk8_place`, ...), `member` set to a member name or `null`, and `winning_team` set to the team label or `null`:
-
-```json
-{
-  "players": [
-    { "gamertag": "Dpatel254", "member": "Dylan", "team": "BLUE",
-      "stats": { "rl_score": 353, "rl_goals": 1, "rl_assists": 1, "rl_saves": 1, "rl_shots": 3 } }
-  ],
-  "winning_team": "BLUE",
-  "latencyMs": 42000
-}
-```
-
-Include `latencyMs`, plus `inputTokens` and `outputTokens` if the session reports them. The answers are then run through the same scorer as every other method: `pnpm exec tsx ... run --methods claude-code`. Use `--repeats 1` for the session, since each repeat is another full read.
 
 ## Datasets
 

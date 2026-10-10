@@ -32,6 +32,7 @@ const { values, positionals } = parseArgs({
     run: { type: "string" },
     "retry-failed": { type: "boolean", default: false },
     video: { type: "string" },
+    model: { type: "string" },
     help: { type: "boolean", default: false },
   },
 });
@@ -66,6 +67,13 @@ async function main() {
               : "free";
       console.log(`${m.id.padEnd(20)} ${m.provider.padEnd(10)} ${price.padEnd(26)} ${missing.length ? `missing ${missing.join(", ")}` : "ready"}`);
     }
+    return;
+  }
+
+  if (command === "prepare" || command === "ingest") {
+    const { prepare, ingest } = await import("./blind");
+    if (command === "prepare") prepare(datasetPath());
+    else ingest(datasetPath(), need(values.model, "model"));
     return;
   }
 

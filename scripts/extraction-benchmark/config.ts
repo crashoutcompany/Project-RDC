@@ -1,7 +1,7 @@
 import os from "os";
 import path from "path";
 import { azureMethod } from "./methods/azure";
-import { claudeCodeMethod } from "./methods/claude-code";
+import { claudeReaderMethod } from "./methods/claude-reader";
 import { geminiMethod } from "./methods/gemini";
 import { oracleMethod } from "./methods/oracle";
 import type { Method } from "./methods/types";
@@ -22,7 +22,7 @@ export const PRICES_CHECKED = "2026-10-10";
 
 /**
  * Every stat reader in the experiment. Access rules, set by the user:
- * - Claude runs in a Claude Code session (`claude-code`), never through the API.
+ * - Claude runs through Claude Code subagents (`claude-haiku|sonnet|opus`), never the API.
  * - OpenAI is used only through the Decisions API, and only gpt-6-luna. So no
  *   OpenAI model reads stats; Decisions is the scoreboard finder below.
  * - Gemini runs through the Vercel AI SDK with structured output.
@@ -31,7 +31,9 @@ export const PRICES_CHECKED = "2026-10-10";
  */
 export const METHODS: Method[] = [
   azureMethod({ kind: "call", perCall: 0.03 }),
-  claudeCodeMethod,
+  claudeReaderMethod("haiku"),
+  claudeReaderMethod("sonnet"),
+  claudeReaderMethod("opus"),
   // Gemini 2.5 has no thinking levels; a 1,024-token budget is its "low".
   geminiMethod("gemini-2.5-flash", "gemini-2.5-flash", { kind: "tokens", inputPerM: 0.3, outputPerM: 2.5 }, { thinkingBudget: 1024 }),
   // Intro price through 2026-12-31; it doubles to $1.50 / $7.50 after.
@@ -52,8 +54,8 @@ export const DECISIONS = {
 export const WEEKLY_SCOREBOARDS = 52;
 export const WEEKLY_VIDEOS = 4;
 
-/** Methods run by default. `oracle` is a self-check; `claude-code` needs transcriptions first. */
-const OPT_IN = new Set(["oracle", "claude-code"]);
+/** Methods run by default. `oracle` is a self-check; Claude readers need subagent answers first. */
+const OPT_IN = new Set(["oracle", "claude-haiku", "claude-sonnet", "claude-opus"]);
 
 export function resolveMethods(ids: string[] | undefined): Method[] {
   if (!ids || ids.length === 0) return METHODS.filter((m) => !OPT_IN.has(m.id));
