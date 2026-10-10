@@ -13,19 +13,32 @@ import { NO_USAGE, type ExtractInput, type ExtractResult, type Method, type Pric
  * The production path: the game's custom Document Intelligence model plus its
  * processor, called exactly as the admin "RDC Vision" button calls it. Azure
  * gets no prompt; the processor maps gamertags itself.
+ *
+ * `azure` is given every RDC member as the candidate list (no hints about who
+ * played). `azure-roster` is given only the session's actual players, as the
+ * admin form does in production. The latter is the fair production baseline,
+ * but it uses knowledge the LLMs don't get, so both are reported.
  */
-export function azureMethod(price: Price): Method {
+export function azureMethod(price: Price, sessionRoster = false): Method {
   let client: DocumentIntelligenceClient | undefined;
-  const players = Object.values(PLAYER_MAPPINGS).map(
+  const everyone = Object.values(PLAYER_MAPPINGS).map(
     (p) => ({ playerId: p.playerId, playerName: p.playerName }) as Player,
   );
   return {
-    id: "azure",
+    id: sessionRoster ? "azure-roster" : "azure",
     provider: "azure",
     model: "custom document model (per game)",
     price,
     env: ["DOCUMENT_INTELLIGENCE_ENDPOINT", "DOCUMENT_INTELLIGENCE_API_KEY"],
-    async extract({ spec, image }: ExtractInput): Promise<ExtractResult> {
+    async extract({ spec, image, testCase }: ExtractInput): Promise<ExtractResult> {
+      // In production the admin picks the session's players first, and the
+      // processors use that list (and its size) to drop randoms and to correct
+      // misreads such as "7th" for "1st". `azure-roster` reproduces that.
+      const players = sessionRoster
+        ? testCase.expected.players.map(
+            (p) => ({ playerId: p.playerId, playerName: p.name }) as Player,
+          )
+        : everyone;
       client ??= createDocumentIntelligenceClient(
         process.env.DOCUMENT_INTELLIGENCE_ENDPOINT!,
         process.env.DOCUMENT_INTELLIGENCE_API_KEY!,

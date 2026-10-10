@@ -95,6 +95,19 @@ export function summarize(dataset: Dataset, calls: CallRecord[]): MethodSummary[
   });
 }
 
+const AZURE_IDS = ["azure", "azure-roster"];
+
+/**
+ * Azure baseline: the more accurate of `azure` (every member as candidates) and
+ * `azure-roster` (the session's real players, as in production). Using the
+ * stronger one keeps every comparison conservative against the LLMs.
+ */
+function azureBaseline(summaries: MethodSummary[]): MethodSummary | undefined {
+  return summaries
+    .filter((s) => AZURE_IDS.includes(s.method))
+    .sort((a, b) => b.accuracy - a.accuracy)[0];
+}
+
 /** Sibling pairs for H2: [smaller, larger]. */
 const SIBLINGS: [string, string][] = [
   ["claude-haiku", "claude-sonnet"],
@@ -111,8 +124,8 @@ const SAVED_AZURE_ACCURACY: Record<string, number> = { "rl-session33": 367 / 390
 const NEW_GAMES_MARGIN = 0.03;
 
 export function evaluateHypotheses(summaries: MethodSummary[]): string[] {
-  const azure = summaries.find((s) => s.method === "azure");
-  const llms = summaries.filter((s) => s.method !== "azure" && s.method !== "oracle");
+  const azure = azureBaseline(summaries);
+  const llms = summaries.filter((s) => !AZURE_IDS.includes(s.method) && s.method !== "oracle");
   const lines: string[] = [];
   const verdict = (ok: boolean | null) => (ok === null ? "not testable" : ok ? "supported" : "not supported");
   const fmt = (s: MethodSummary) => `${s.method} ${s.correctPerPass.toFixed(1)}/${s.cellsPerPass}`;
@@ -173,7 +186,7 @@ export function verdictFor(
   summaries: MethodSummary[],
   datasetName: string,
 ): Verdict | null {
-  const azure = summaries.find((s) => s.method === "azure");
+  const azure = azureBaseline(summaries);
   const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
   if (baseline === undefined) return null;
   const cheaper =
@@ -187,12 +200,12 @@ export function verdictFor(
 
 /** Applies the decision rules fixed in the test plan. */
 export function decide(summaries: MethodSummary[], datasetName: string): string {
-  const azure = summaries.find((s) => s.method === "azure");
+  const azure = azureBaseline(summaries);
   const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
   if (baseline === undefined) return "No Azure baseline for this dataset; include `azure` in the run.";
   const baselineLabel = azure ? "Azure in this run" : "saved Azure baseline";
   const llms = summaries
-    .filter((s) => s.method !== "azure" && s.method !== "oracle")
+    .filter((s) => !AZURE_IDS.includes(s.method) && s.method !== "oracle")
     .sort((a, b) => b.accuracy - a.accuracy || (a.costPerScoreboard ?? Infinity) - (b.costPerScoreboard ?? Infinity));
   const best = llms[0];
   if (!best) return "No LLM results yet.";
@@ -297,7 +310,7 @@ export function writeCombined(runs: { runDir: string; dataset: Dataset }[], outF
     const costs = cells.flatMap((c) => (c?.s.costPerScoreboard != null ? [c.s.costPerScoreboard] : []));
     const latencies = cells.flatMap((c) => (c?.s.latencyMeanMs != null ? [c.s.latencyMeanMs] : []));
     const qualifiesEverywhere =
-      method !== "azure" && cells.every((c) => c?.verdict === "pivot" || c?.verdict === "new-games");
+      !AZURE_IDS.includes(method) && cells.every((c) => c?.verdict === "pivot" || c?.verdict === "new-games");
     return { method, cells, costs, latencies, qualifiesEverywhere };
   });
 
@@ -313,8 +326,8 @@ export function writeCombined(runs: { runDir: string; dataset: Dataset }[], outF
     ...rows.map(
       (r) =>
         `| ${r.method} | ${r.cells
-          .map((c) => (c ? `${pct(c.s.accuracy)} (${c.s.correctPerPass.toFixed(1)}/${c.s.cellsPerPass}) | ${r.method === "azure" ? "baseline" : label(c.verdict)}` : "not run | —"))
-          .join(" | ")} | ${r.costs.length ? money(r.costs.reduce((a, b) => a + b, 0) / r.costs.length) : "n/a"} | ${r.latencies.length ? secs(r.latencies.reduce((a, b) => a + b, 0) / r.latencies.length) : "n/a"} | ${r.method === "azure" ? "—" : r.qualifiesEverywhere ? "yes" : "no"} |`,
+          .map((c) => (c ? `${pct(c.s.accuracy)} (${c.s.correctPerPass.toFixed(1)}/${c.s.cellsPerPass}) | ${AZURE_IDS.includes(r.method) ? "baseline" : label(c.verdict)}` : "not run | —"))
+          .join(" | ")} | ${r.costs.length ? money(r.costs.reduce((a, b) => a + b, 0) / r.costs.length) : "n/a"} | ${r.latencies.length ? secs(r.latencies.reduce((a, b) => a + b, 0) / r.latencies.length) : "n/a"} | ${AZURE_IDS.includes(r.method) ? "—" : r.qualifiesEverywhere ? "yes" : "no"} |`,
     ),
     "",
     "## Recommendation for future games",

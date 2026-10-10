@@ -32,6 +32,7 @@ export const PRICES_CHECKED = "2026-10-10";
  */
 export const METHODS: Method[] = [
   azureMethod({ kind: "call", perCall: 0.03 }),
+  azureMethod({ kind: "call", perCall: 0.03 }, true),
   claudeReaderMethod("haiku"),
   claudeReaderMethod("sonnet"),
   claudeReaderMethod("opus"),
@@ -54,7 +55,7 @@ export const WEEKLY_SCOREBOARDS = 52;
 export const WEEKLY_VIDEOS = 4;
 
 /** Methods run by default. `oracle` is a self-check; Claude readers need subagent answers first. */
-const OPT_IN = new Set(["oracle", "claude-haiku", "claude-sonnet", "claude-opus"]);
+const OPT_IN = new Set(["azure-roster", "oracle", "claude-haiku", "claude-sonnet", "claude-opus"]);
 
 export function resolveMethods(ids: string[] | undefined): Method[] {
   if (!ids || ids.length === 0) return METHODS.filter((m) => !OPT_IN.has(m.id));
