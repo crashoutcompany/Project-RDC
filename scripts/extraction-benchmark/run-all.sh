@@ -22,7 +22,7 @@ TAG="${TAG:-$(date +%Y-%m-%d)}"
 REPEATS="${REPEATS:-3}"
 bench() { pnpm exec tsx --env-file="$ENV_FILE" scripts/extraction-benchmark/index.ts "$@"; }
 
-DATASETS="rl-s1 rl-s2 rl-s13 mk8-s31 mk8-s17 mk8-s28"
+DATASETS="${DATASETS:-rl-s1 rl-s2 rl-s13}"
 RUNS=""
 for dataset in $DATASETS; do
   run="$dataset-$TAG"

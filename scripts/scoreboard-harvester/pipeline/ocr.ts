@@ -241,7 +241,7 @@ export async function ocrFrames(
 /**
  * Manages a pool of persistent OCR daemon processes.
  */
-class OcrWorkerPool {
+export class OcrWorkerPool {
   private readonly workers: OcrDaemonWorker[];
   private nextWorker = 0;
 
