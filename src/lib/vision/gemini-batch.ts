@@ -145,9 +145,11 @@ function chunkBySize<T extends { body: unknown }>(requests: T[]): T[][] {
 }
 
 // The docs show both shapes (`metadata.state` / `state`, `response` / `dest`); accept either.
+// The docs say JOB_STATE_*, but the REST API answers BATCH_STATE_*; normalize to one.
 function stateOf(status: Record<string, unknown>): string {
   const metadata = status.metadata as Record<string, unknown> | undefined;
-  return String(metadata?.state ?? status.state ?? (status.done ? "JOB_STATE_SUCCEEDED" : "JOB_STATE_PENDING"));
+  const raw = metadata?.state ?? status.state ?? (status.done ? "JOB_STATE_SUCCEEDED" : "JOB_STATE_PENDING");
+  return String(raw).replace(/^BATCH_STATE_/, "JOB_STATE_");
 }
 
 type Inlined = { response?: GenerateContentResponse; error?: { message?: string }; metadata?: { key?: string } };
