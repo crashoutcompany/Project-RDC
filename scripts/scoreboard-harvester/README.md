@@ -91,6 +91,23 @@ Unknown gamertags are dropped: the processors map gamertags to members via `PLAY
 
 pHash pre-filtering (`bootstrap` + reference image) still works for clean captures. The weekly job skips it: overlays change the whole-frame hash, so on stream VODs it rejects real scoreboards.
 
+## Validation
+
+Checked against session 33 (`Opw1cTW5Q68`, "BENCH PLAYERS TALKING LIKE STARTERS", 1h43m, 15 recorded RL matches) on a Raspberry Pi 5:
+
+| Stage            | Result                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime          | 31 min end to end: 15s keyframe decode (1,357 frames), ~29 min OCR with skip-ahead, ~1 min Azure                                                                        |
+| Detection        | 13 scoreboards, 0 false positives. The 2 recorded matches not found have no end screen in the VOD: most players are all-zero, which looks like a restart or forfeit      |
+| Stats            | **367 / 370** stat values match the database. All 3 misses are in one row where Azure merged a player-card subtitle ("HAPPY CAMPER"); that match is flagged for review |
+| Players          | 6/6 recognized in 9 matches, 5/6 in 4 (an unreadable row is dropped and flagged)                                                                                        |
+
+Fixed along the way, in the shared processor code the admin button also uses:
+
+- The RL model labels Orange fields `RL_Goals` but Blue fields `Goals`. Blue stats came back as `UNKNOWN_STAT`, and winners were computed from Orange's goals alone.
+- An unrecognized gamertag row crashed the whole analysis ("Cannot read properties of undefined (reading 'map')").
+- Merged cells (`"140\n38"`) were stored verbatim.
+
 ## Game support
 
 | Game          | Detection profile | Azure model | Notes                                                                                                                                                       |

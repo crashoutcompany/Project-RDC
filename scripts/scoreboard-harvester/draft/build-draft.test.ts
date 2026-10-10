@@ -76,6 +76,17 @@ test("starts a new set when the teams change and warns about the short one", () 
   expect(draft.warnings).toHaveLength(2);
 });
 
+test("a dropped player row doesn't split the series or the winning team", () => {
+  const draft = buildDraft({
+    setRule: firstTo3,
+    matches: [rlMatch(A, B), rlMatch([2, 3], B), rlMatch(A, [1, 4])],
+  });
+
+  expect(draft.sets).toHaveLength(1);
+  expect(draft.sets[0].winnerIds).toEqual(A);
+  expect(draft.warnings).toEqual([]);
+});
+
 test("skips failed, randoms-only, and duplicate scoreboards", () => {
   const failed: MatchManifest = {
     ...rlMatch(A, B),

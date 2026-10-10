@@ -140,66 +140,88 @@ function groupIntoSets(
   }
 
   // firstTo: team series. Close a set when a team hits `wins`, and start a
-  // new one whenever the team compositions change.
+  // new one when players switch teams. Teams are accumulated across the set,
+  // so a match where Azure dropped one row still counts for the full team.
   const sets: DraftSet[] = [];
   let current: DraftMatch[] = [];
-  let currentRoster = "";
-  const tally = new Map<string, number>();
+  let teams: Set<number>[] = [];
+  let tally: number[] = [];
 
   const close = (complete: boolean) => {
     if (current.length === 0) return;
-    const [leader] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+    const best = Math.max(0, ...Array.from(tally, (n) => n ?? 0));
+    const leader = best > 0 ? tally.indexOf(best) : -1;
     if (!complete)
       warnings.push(
         `Set ${sets.length + 1} ended before anyone reached ${rule.wins} wins — check for a missed scoreboard or roster misread.`,
       );
     sets.push({
       matches: current,
-      winnerIds: leader ? leader[0].split(",").map(Number) : [],
+      winnerIds: leader >= 0 ? [...teams[leader]].sort((a, b) => a - b) : [],
     });
     current = [];
-    tally.clear();
+    teams = [];
+    tally = [];
   };
 
   for (const match of matches) {
-    const roster = rosterKey(match.players);
-    if (current.length > 0 && roster !== currentRoster) close(false);
-    currentRoster = roster;
+    const matchTeams = teamsOf(match.players);
+    if (current.length > 0 && !teamsCompatible(teams, matchTeams)) close(false);
+    teams = mergeTeams(teams, matchTeams);
     current.push(match);
 
-    const winningTeam = teamOf(match.players, match.winnerIds);
-    if (winningTeam) {
-      const wins = (tally.get(winningTeam) ?? 0) + 1;
-      tally.set(winningTeam, wins);
-      if (wins >= rule.wins) close(true);
+    const winner = teams.findIndex((team) =>
+      match.winnerIds.some((id) => team.has(id)),
+    );
+    if (winner >= 0) {
+      tally[winner] = (tally[winner] ?? 0) + 1;
+      if (tally[winner] >= rule.wins) close(true);
     }
   }
   close(false);
   return sets;
 }
 
-/** Team-colour-agnostic identity of who played with whom. */
-function rosterKey(players: DraftPlayer[]): string {
-  const teams = new Map<string, number[]>();
+function teamsOf(players: DraftPlayer[]): Set<number>[] {
+  const teams = new Map<string, Set<number>>();
   for (const p of players) {
     const key = p.teamKey ?? "solo";
-    teams.set(key, [...(teams.get(key) ?? []), p.playerId]);
+    teams.set(key, (teams.get(key) ?? new Set()).add(p.playerId));
   }
-  return [...teams.values()]
-    .map((ids) => ids.sort((a, b) => a - b).join(","))
-    .sort()
-    .join("|");
+  return [...teams.values()];
 }
 
-/** The sorted player IDs of the team the winners belong to. */
-function teamOf(players: DraftPlayer[], winnerIds: number[]): string | null {
-  const winner = players.find((p) => winnerIds.includes(p.playerId));
-  if (!winner) return null;
-  return players
-    .filter((p) => p.teamKey === winner.teamKey)
-    .map((p) => p.playerId)
-    .sort((a, b) => a - b)
-    .join(",");
+const teamIndex = (teams: Set<number>[], id: number) =>
+  teams.findIndex((team) => team.has(id));
+
+/** False when two players are teammates in one grouping but not the other. */
+function teamsCompatible(a: Set<number>[], b: Set<number>[]): boolean {
+  const ids = b
+    .flatMap((team) => [...team])
+    .filter((id) => teamIndex(a, id) >= 0);
+  for (const x of ids)
+    for (const y of ids) {
+      const sameInA = teamIndex(a, x) === teamIndex(a, y);
+      const sameInB = teamIndex(b, x) === teamIndex(b, y);
+      if (sameInA !== sameInB) return false;
+    }
+  return true;
+}
+
+/** Folds a compatible match's teams into the set's running teams. */
+function mergeTeams(
+  teams: Set<number>[],
+  incoming: Set<number>[],
+): Set<number>[] {
+  const merged = teams.map((team) => new Set(team));
+  for (const team of incoming) {
+    const known = [...team]
+      .map((id) => teamIndex(merged, id))
+      .find((i) => i >= 0);
+    if (known !== undefined) team.forEach((id) => merged[known].add(id));
+    else merged.push(new Set(team));
+  }
+  return merged;
 }
 
 /** Players with the most match wins in a set (ties share the set). */
