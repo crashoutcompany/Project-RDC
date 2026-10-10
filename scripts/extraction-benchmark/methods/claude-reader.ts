@@ -13,7 +13,9 @@ export type ClaudeModel = "haiku" | "sonnet" | "opus";
  * `<BENCH_DIR>/claude/<model>/<game>/<case>.json`. This method reads those files
  * and scores them like any other method.
  *
- * Subagent calls draw on plan usage, not per-call billing, so cost is n/a.
+ * Subagent calls draw on plan usage, not per-call billing, so cost is n/a. The
+ * answer file may carry `_usage: { tokens, ms }` (added by `ingest` from the
+ * subagent's own report): tokens are input+output combined, ms is its duration.
  */
 export function claudeReaderMethod(model: ClaudeModel): Method {
   return {
@@ -25,14 +27,23 @@ export function claudeReaderMethod(model: ClaudeModel): Method {
     async extract({ spec, testCase }: ExtractInput): Promise<ExtractResult> {
       const file = path.join(BENCH_DIR, "claude", model, spec.id, `${testCase.id}.json`);
       if (!fs.existsSync(file)) throw new Error(`no ${model} reading at ${file}`);
-      const raw = JSON.parse(fs.readFileSync(file, "utf8")) as ScoreboardOutput;
+      const raw = JSON.parse(fs.readFileSync(file, "utf8")) as ScoreboardOutput & {
+        _usage?: { tokens?: number; ms?: number };
+      };
       const parsed = buildSchema(spec).safeParse(raw);
       return {
         prediction: parsed.success ? fromLlmOutput(spec, parsed.data) : null,
         schemaValid: parsed.success,
-        usage: { inputTokens: null, outputTokens: null, reasoningTokens: null },
+        usage: {
+          inputTokens: null,
+          outputTokens: null,
+          reasoningTokens: null,
+          // Subagents report one combined count, including their tool turns.
+          totalTokens: raw._usage?.tokens ?? null,
+        },
         servedBy: `claude-${model} (subagent)`,
         raw,
+        latencyMs: raw._usage?.ms,
       };
     },
   };

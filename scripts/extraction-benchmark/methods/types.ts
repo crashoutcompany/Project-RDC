@@ -17,6 +17,8 @@ export interface ExtractResult {
   usage: Usage;
   servedBy: string | null;
   raw: unknown;
+  /** Latency measured by the method itself (e.g. a subagent's own duration). */
+  latencyMs?: number;
 }
 
 /** List prices on the run date. Per 1M tokens, or a flat per-call price. */

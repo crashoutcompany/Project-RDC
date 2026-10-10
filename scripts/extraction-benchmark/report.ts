@@ -35,6 +35,7 @@ export interface MethodSummary {
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
+  totalTokens: number | null;
   totalCostUsd: number | null;
   costPerScoreboard: number | null;
   weeklyCostUsd: number | null;
@@ -84,6 +85,9 @@ export function summarize(dataset: Dataset, calls: CallRecord[]): MethodSummary[
       inputTokens: sumOrNull(records.map((r) => r.usage.inputTokens)),
       outputTokens: sumOrNull(records.map((r) => r.usage.outputTokens)),
       reasoningTokens: sumOrNull(records.map((r) => r.usage.reasoningTokens)),
+      totalTokens: sumOrNull(
+        records.map((r) => r.usage.totalTokens ?? (r.usage.inputTokens === null ? null : r.usage.inputTokens + (r.usage.outputTokens ?? 0))),
+      ),
       totalCostUsd: totalCost,
       costPerScoreboard,
       weeklyCostUsd: costPerScoreboard === null ? null : costPerScoreboard * WEEKLY_SCOREBOARDS,
@@ -93,10 +97,8 @@ export function summarize(dataset: Dataset, calls: CallRecord[]): MethodSummary[
 
 /** Sibling pairs for H2: [smaller, larger]. */
 const SIBLINGS: [string, string][] = [
-  ["claude-haiku-5-5", "claude-sonnet-5-5"],
-  ["claude-sonnet-5-5", "claude-opus-5-5"],
-  ["gpt-6-luna", "gpt-6-sol"],
-  ["gemini-2.5-flash", "gemini-3.8-flash"],
+  ["claude-haiku", "claude-sonnet"],
+  ["claude-sonnet", "claude-opus"],
 ];
 
 /**
@@ -141,11 +143,16 @@ export function evaluateHypotheses(summaries: MethodSummary[]): string[] {
       (h3 ? ` — ${h3.length}/${llms.length} LLMs` : ""),
   );
 
+  // Only methods billed per call can be compared on cost; plan-usage methods are skipped.
+  const billed = llms.filter((s) => s.costPerScoreboard !== null);
   const h4 =
     azure?.costPerScoreboard != null
-      ? llms.filter((s) => s.costPerScoreboard !== null && s.costPerScoreboard < azure.costPerScoreboard!)
+      ? billed.filter((s) => s.costPerScoreboard! < azure.costPerScoreboard!)
       : null;
-  lines.push(`H4 (every LLM cheaper than Azure per scoreboard): ${verdict(h4 ? h4.length === llms.length : null)}`);
+  lines.push(
+    `H4 (every API-billed LLM cheaper than Azure per scoreboard): ${verdict(h4 ? h4.length === billed.length : null)}` +
+      (billed.length < llms.length ? ` — ${llms.length - billed.length} plan-usage method(s) not compared` : ""),
+  );
 
   const h5 =
     azure?.latencyMeanMs != null
@@ -224,11 +231,11 @@ export function writeReport(dataset: Dataset, runDir: string): MethodSummary[] {
     "",
     "## Time, tokens, cost",
     "",
-    "| Method | Model | Calls | Mean latency | p95 latency | Total time | Input tokens | Output tokens | Reasoning tokens | Total cost | Per scoreboard | Weekly (52) |",
-    "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    "| Method | Model | Calls | Mean latency | p95 latency | Total time | Input tokens | Output tokens | Reasoning tokens | Total tokens | Total cost | Per scoreboard | Weekly (52) |",
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ...summaries.map(
       (s) =>
-        `| ${s.method} | ${s.model} | ${s.calls} | ${secs(s.latencyMeanMs)} | ${secs(s.latencyP95Ms)} | ${secs(s.totalTimeMs)} | ${num(s.inputTokens)} | ${num(s.outputTokens)} | ${num(s.reasoningTokens)} | ${money(s.totalCostUsd)} | ${money(s.costPerScoreboard)} | ${money(s.weeklyCostUsd, 2)} |`,
+        `| ${s.method} | ${s.model} | ${s.calls} | ${secs(s.latencyMeanMs)} | ${secs(s.latencyP95Ms)} | ${secs(s.totalTimeMs)} | ${num(s.inputTokens)} | ${num(s.outputTokens)} | ${num(s.reasoningTokens)} | ${num(s.totalTokens)} | ${money(s.totalCostUsd)} | ${money(s.costPerScoreboard)} | ${money(s.weeklyCostUsd, 2)} |`,
     ),
     "",
     "## Hypotheses",

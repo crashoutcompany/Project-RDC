@@ -100,7 +100,7 @@ export async function runExtraction(opts: RunOptions): Promise<void> {
               caseId: testCase.id,
               repeat,
               startedAt,
-              latencyMs: Math.round(performance.now() - t0),
+              latencyMs: result.latencyMs ?? Math.round(performance.now() - t0),
               usage: result.usage,
               costUsd: costOf(method.price, result.usage),
               schemaValid: result.schemaValid,

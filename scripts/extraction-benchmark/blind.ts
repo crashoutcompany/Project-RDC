@@ -94,6 +94,14 @@ export function ingest(datasetFile: string, model: string) {
   const target = path.join(BENCH_DIR, "claude", model, spec.id);
   fs.mkdirSync(target, { recursive: true });
 
+  const usageFile = path.join(BENCH_DIR, "blind", "out", "usage.jsonl");
+  const usage = new Map<string, { tokens: number; ms: number }>();
+  if (fs.existsSync(usageFile))
+    for (const line of fs.readFileSync(usageFile, "utf8").split("\n").filter(Boolean)) {
+      const row = JSON.parse(line) as { model: string; game: string; id: string; tokens: number; ms: number };
+      usage.set(`${row.model}|${row.game}|${row.id}`, { tokens: row.tokens, ms: row.ms });
+    }
+
   let copied = 0;
   for (const [neutral, caseId] of Object.entries(key)) {
     const file = path.join(source, `${neutral}.json`);
@@ -101,7 +109,12 @@ export function ingest(datasetFile: string, model: string) {
       console.warn(`[ingest] ${model}: no answer for ${neutral} (${caseId})`);
       continue;
     }
-    fs.copyFileSync(file, path.join(target, `${caseId}.json`));
+    const answer = JSON.parse(fs.readFileSync(file, "utf8"));
+    const used = usage.get(`${model}|${spec.id}|${neutral}`);
+    fs.writeFileSync(
+      path.join(target, `${caseId}.json`),
+      JSON.stringify(used ? { ...answer, _usage: used } : answer, null, 2),
+    );
     copied++;
   }
   console.log(`[ingest] ${model} ${spec.id}: ${copied}/${Object.keys(key).length} → ${target}`);

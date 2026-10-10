@@ -49,6 +49,8 @@ export interface Usage {
   outputTokens: number | null;
   /** Thinking/reasoning tokens, already included in outputTokens. */
   reasoningTokens: number | null;
+  /** Input + output together, for methods that only report a combined count. */
+  totalTokens?: number | null;
 }
 
 /** One API call, as logged to calls.jsonl. */
