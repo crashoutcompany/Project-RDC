@@ -62,6 +62,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.{ts,tsx}",
       "scripts/scoreboard-harvester/**/*.test.ts",
+      "scripts/extraction-benchmark/**/*.test.ts",
     ],
     // Restores each vi.fn to its original implementation before every test so
     // overrides on shared mocks (prisma, auth) never leak between tests.

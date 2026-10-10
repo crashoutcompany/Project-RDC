@@ -31,7 +31,8 @@
     "update-neon-branch": "tsx scripts/update-neon-branch.ts",
     "harvest": "tsx scripts/scoreboard-harvester/index.ts",
     "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh",
-    "harvest:weekly": "bash scripts/scoreboard-harvester/schedule/run-weekly.sh"
+    "harvest:weekly": "bash scripts/scoreboard-harvester/schedule/run-weekly.sh",
+    "bench": "tsx scripts/extraction-benchmark/index.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -106,6 +107,7 @@
     "zod": "^4.1.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@next/playwright": "^16.3.0",
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.0",
@@ -122,6 +124,7 @@
     "jsdom": "^29.1.1",
     "neonctl": "^8.0.1",
     "next-devtools-mcp": "^0.4.0",
+    "openai": "^7.32.0",
     "postcss": "^8.5.4",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.6.12",
