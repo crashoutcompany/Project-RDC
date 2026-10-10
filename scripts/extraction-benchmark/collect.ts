@@ -4,6 +4,7 @@ import path from "path";
 import sharp from "sharp";
 import prisma from "prisma/db";
 import { checkDeps } from "../scoreboard-harvester/pipeline/deps";
+import type { FrameRecord } from "../scoreboard-harvester/types";
 import { downloadVideo } from "../scoreboard-harvester/pipeline/download";
 import { sampleFrames } from "../scoreboard-harvester/pipeline/sample";
 import { BENCH_DIR } from "./config";
@@ -149,4 +150,53 @@ export function summarizeCollections(): string {
         `| ${r.game} | ${r.sessionId} | ${r.videoId} | ${r.dbMatches} | ${r.detections.length} | ${r.countMatches ? "yes" : "NO"} |`,
     ),
   ].join("\n");
+}
+
+/**
+ * The production finder (RapidOCR keyword gate) on the same keyframes that
+ * `collect` used, grouped into scoreboards the same way, and counted against
+ * the database. Writes `rapidocr.json` next to the collection.
+ */
+export async function rapidocrCount(args: { sessionId: number; game: string }): Promise<number> {
+  const { GAME_PROFILES } = await import("../scoreboard-harvester/games/registry");
+  const { ocrFrames } = await import("../scoreboard-harvester/pipeline/ocr");
+  const profile = GAME_PROFILES.find((p) => p.id === args.game);
+  if (!profile) throw new Error(`No harvester profile for ${args.game}`);
+  const dir = path.join(BENCH_DIR, "collect", `${args.game}-s${args.sessionId}`);
+  const deps = checkDeps(path.resolve(import.meta.dirname, "../scoreboard-harvester"), false);
+  if (!deps.ocrEngine) throw new Error(deps.errors.join("\n"));
+
+  const framesDir = path.join(dir, "frames");
+  // Keyframes aren't evenly spaced, so use the real times saved by sampleFrames.
+  const times = JSON.parse(fs.readFileSync(path.join(framesDir, "keyframes.json"), "utf8")) as number[];
+  const frames: FrameRecord[] = times.map((t, i) => ({
+    frameId: i + 1,
+    filePath: path.join(framesDir, `${String(i + 1).padStart(6, "0")}.jpg`),
+    timestampSec: t,
+  }));
+  const confirmed = await ocrFrames(frames, {
+    engine: deps.ocrEngine,
+    keywords: profile.keywords,
+    keywordNoise: profile.keywordNoise,
+    minKeywords: profile.defaults.minKeywords,
+    endScreenSentinels: profile.endScreenSentinels,
+    requireEndScreen: profile.defaults.requireEndScreen ?? false,
+    dedupGapSec: profile.defaults.dedupGap / profile.defaults.fps,
+    skipAheadSec: profile.defaults.minMatchIntervalSec,
+    concurrency: 2,
+  });
+  let count = 0;
+  let last = -Infinity;
+  for (const f of confirmed) {
+    if (f.timestampSec - last > RUN_GAP_SEC) count++;
+    last = f.timestampSec;
+  }
+  const dbMatches = await countMatches(args.sessionId);
+  fs.writeFileSync(
+    path.join(dir, "rapidocr.json"),
+    JSON.stringify({ detections: count, dbMatches, countMatches: count === dbMatches, confirmedFrames: confirmed.length }, null, 2),
+  );
+  console.log(`[rapidocr] ${count} scoreboards found, ${dbMatches} in DB → ${count === dbMatches ? "MATCH" : "MISMATCH"}`);
+  await prisma.$disconnect();
+  return count;
 }

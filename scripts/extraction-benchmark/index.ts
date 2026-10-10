@@ -81,6 +81,12 @@ async function main() {
     return;
   }
 
+  if (command === "rapidocr-count") {
+    const { rapidocrCount } = await import("./collect");
+    await rapidocrCount({ sessionId: Number(need(values.session, "session")), game: need(values.game, "game") });
+    return;
+  }
+
   if (command === "summary-collections") {
     const { summarizeCollections } = await import("./collect");
     console.log(summarizeCollections());
