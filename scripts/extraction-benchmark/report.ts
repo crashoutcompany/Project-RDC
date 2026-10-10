@@ -95,7 +95,7 @@ export function summarize(dataset: Dataset, calls: CallRecord[]): MethodSummary[
   });
 }
 
-const AZURE_IDS = ["azure", "azure-roster"];
+const AZURE_IDS: string[] = [];
 
 /**
  * Azure baseline: the more accurate of `azure` (every member as candidates) and

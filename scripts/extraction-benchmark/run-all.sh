@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Runs the whole experiment: every stat reader on every dataset (3 passes),
-# the scoreboard finder test, and the cross-game summary. Claude readings come
-# from subagents and must already exist (see README).
+# and the scoreboard finder test.
 # Resumable: rerun after an interruption and it continues where it stopped.
 #
 #   scripts/extraction-benchmark/run-all.sh            # uses .env.bench.local
@@ -23,23 +22,13 @@ bench() { pnpm exec tsx --env-file="$ENV_FILE" scripts/extraction-benchmark/inde
 
 bench methods
 
-# Stat readers repeat REPEATS times. Each Claude model runs once (its subagent
-# gives one answer per scoreboard) into the same run directory, and only when
-# its readings exist (see README, "Claude readers").
-STAT_READERS="azure,gemini-3.8-flash"
+# Stat readers repeat REPEATS times.
+STAT_READERS="gemini-3.8-flash"
 declare -A GAME=( [rl-session33]=rocket-league [mk8-session41]=mario-kart-8 )
 for dataset in rl-session33 mk8-session41; do
   run="$dataset-$TAG"
   bench run --dataset "$BENCH_DIR/datasets/$dataset/dataset.json" --methods "$STAT_READERS" \
     --repeats "${REPEATS:-3}" --run "$run"
-  for model in haiku sonnet opus; do
-    if [ -d "$BENCH_DIR/claude/$model/${GAME[$dataset]}" ]; then
-      bench run --dataset "$BENCH_DIR/datasets/$dataset/dataset.json" --methods "claude-$model" \
-        --repeats 1 --run "$run"
-    else
-      echo "[run-all] no $model subagent readings for ${GAME[$dataset]}; skipping"
-    fi
-  done
 done
 
 bench combine --run "rl-session33-$TAG,mk8-session41-$TAG"
