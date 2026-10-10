@@ -1,7 +1,9 @@
 import {
   AnalyzedPlayersObj,
   AnalyzedTeamData,
-} from "@/app/actions/visionAction";
+  VisionPlayer,
+  VisionResult,
+} from "@/lib/visionTypes";
 import { Player } from "@/generated/prisma/client";
 import {
   GameProcessor,
@@ -9,7 +11,6 @@ import {
   processPlayer,
   validateProcessedPlayer,
 } from "./game-processor-utils";
-import { VisionPlayer, VisionResult } from "../visionTypes";
 import { VisionResultCodes } from "../constants";
 
 const processMarvelRivalsPlayers = (

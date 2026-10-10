@@ -1,8 +1,9 @@
 import {
   AnalyzedTeamData,
   AnalyzedPlayersObj,
-} from "@/app/actions/visionAction";
-import { VisionPlayer, VisionResult } from "../visionTypes";
+  VisionPlayer,
+  VisionResult,
+} from "@/lib/visionTypes";
 import { Player } from "@/generated/prisma/client";
 import { RL_TEAM_MAPPING, VisionResultCodes } from "../constants";
 import {
@@ -39,6 +40,7 @@ export const RocketLeagueProcessor: GameProcessor = {
         const { processedPlayers, reqCheckFlag } = processTeam(
           teamData,
           sessionPlayers,
+          "rl",
         );
 
         console.log(`Processed Player for: ${teamColor}:`, processedPlayers);

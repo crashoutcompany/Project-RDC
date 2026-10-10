@@ -30,7 +30,8 @@
     "prepare": "test -z \"$CI\" && husky || true",
     "update-neon-branch": "tsx scripts/update-neon-branch.ts",
     "harvest": "tsx scripts/scoreboard-harvester/index.ts",
-    "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh"
+    "harvest:build-ocr": "bash scripts/scoreboard-harvester/ocr-tool/build.sh",
+    "harvest:weekly": "bash scripts/scoreboard-harvester/schedule/run-weekly.sh"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

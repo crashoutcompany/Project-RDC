@@ -1,3 +1,5 @@
+import type { AnalysisResults } from "@/lib/visionTypes";
+
 /**
  * Shared types for the scoreboard harvester pipeline. Game-specific knowledge
  * lives in games/ — these types are intentionally game-agnostic.
@@ -13,17 +15,21 @@ export interface ResolvedConfig {
   phashThreshold: number;
   ocrMinKeywords: number;
   /**
-   * If true, only accept frames whose OCR includes the active game's
-   * endScreenSentinel keyword (e.g., "WINNER" for Rocket League).
+   * If true, only accept frames whose OCR includes one of the active game's
+   * endScreenSentinels (e.g., "WINNER" for Rocket League).
    */
   requireEndScreen: boolean;
-  /** Max frame gap allowed within a single dedup run. */
-  dedupGap: number;
+  /** Max timestamp gap (seconds) allowed within a single dedup run. */
+  dedupGapSec: number;
   /**
-   * After a confirmed run ends, jump this many frames forward before resuming
+   * After a confirmed run ends, skip ahead this many seconds before resuming
    * OCR. Set to 0 to disable skip-ahead (every frame is OCR'd).
    */
-  skipAheadFrames: number;
+  skipAheadSec: number;
+  /** `fps` samples at a fixed rate; `keyframes` decodes I-frames only. */
+  sampling: "fps" | "keyframes";
+  /** OCR backend; `auto` = Apple Vision on macOS, RapidOCR elsewhere. */
+  ocrEngine: "auto" | "vision" | "rapidocr";
   quality: number;
   /** Width used when normalizing sampled frame JPEGs for pHash/OCR. */
   sampleWidth: number;
@@ -32,10 +38,12 @@ export interface ResolvedConfig {
   /** Number of persistent OCR workers to run concurrently. */
   ocrConcurrency: number;
   keepFrames: boolean;
+  /** Keep the downloaded video.mp4 after a successful run. */
+  keepVideo: boolean;
   start?: number;
   end?: number;
-  submit: boolean;
-  sessionId?: number;
+  /** Run every saved scoreboard through the game's Azure model. */
+  analyze: boolean;
   referencePath: string;
 }
 
@@ -67,7 +75,8 @@ export interface MatchManifest {
   runLengthFrames: number;
   imagePath: string;
   ocrKeywords: string[];
-  submission: unknown | null;
+  /** Azure + game-processor result for this screenshot, when analyzed. */
+  analysis: AnalysisResults | null;
 }
 
 export interface Manifest {

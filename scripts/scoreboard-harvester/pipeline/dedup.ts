@@ -9,25 +9,25 @@ import { fmtTime } from "../utils";
  * run. Within each run we pick the sharpest frame from the middle 60% (avoids
  * fade-in/fade-out animation frames at the edges).
  *
- * Game-agnostic: callers (index.ts) supply `gapTolerance` from the active
+ * Game-agnostic: callers (index.ts) supply `gapSec` from the active
  * GameProfile so per-game scoreboard durations can vary.
  *
- * @param args.confirmed - OCR-confirmed scoreboard frames, sorted by frameId.
+ * @param args.confirmed - OCR-confirmed scoreboard frames, sorted by time.
  * @param args.outDir - Where to save the match PNGs.
- * @param args.gapTolerance - Max frame gap allowed within a single run.
+ * @param args.gapSec - Max timestamp gap (seconds) within a single run.
  * @returns One manifest entry per detected match.
  */
 export async function dedupAndSave(args: {
   confirmed: OcrRecord[];
   outDir: string;
-  gapTolerance: number;
+  gapSec: number;
 }): Promise<MatchManifest[]> {
-  const { confirmed, outDir, gapTolerance } = args;
+  const { confirmed, outDir, gapSec } = args;
   if (confirmed.length === 0) return [];
 
-  const runs = clusterConsecutive(confirmed, gapTolerance);
+  const runs = clusterConsecutive(confirmed, gapSec);
   console.log(
-    `[dedup] ${confirmed.length} confirmed → ${runs.length} runs (gap=${gapTolerance})`,
+    `[dedup] ${confirmed.length} confirmed → ${runs.length} runs (gap=${gapSec}s)`,
   );
 
   fs.mkdirSync(outDir, { recursive: true });
@@ -54,7 +54,7 @@ export async function dedupAndSave(args: {
       runLengthFrames: run.length,
       imagePath: fileName,
       ocrKeywords: allKeywords,
-      submission: null,
+      analysis: null,
     });
   }
 
@@ -62,27 +62,27 @@ export async function dedupAndSave(args: {
 }
 
 /**
- * Groups records into runs where consecutive frame IDs are within
- * `gapTolerance` of each other.
+ * Groups records into runs where consecutive timestamps are within `gapSec`
+ * of each other.
  *
- * @param records - OCR records sorted by frameId.
- * @param gapTolerance - Max frame gap inside a single run.
+ * @param records - OCR records sorted by timestamp.
+ * @param gapSec - Max gap (seconds) inside a single run.
  * @returns Array of runs (each run is an array of records).
  */
 function clusterConsecutive(
   records: OcrRecord[],
-  gapTolerance: number,
+  gapSec: number,
 ): OcrRecord[][] {
   const runs: OcrRecord[][] = [];
   let current: OcrRecord[] = [];
-  let lastFrame = -Infinity;
+  let lastSec = -Infinity;
   for (const rec of records) {
-    if (rec.frameId - lastFrame > gapTolerance && current.length > 0) {
+    if (rec.timestampSec - lastSec > gapSec && current.length > 0) {
       runs.push(current);
       current = [];
     }
     current.push(rec);
-    lastFrame = rec.frameId;
+    lastSec = rec.timestampSec;
   }
   if (current.length > 0) runs.push(current);
   return runs;

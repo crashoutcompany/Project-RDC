@@ -1,43 +1,48 @@
 import { spawn } from "child_process";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import type { FrameRecord, OcrRecord } from "../types";
+import type { OcrEngine } from "./deps";
+import { matchKeywords } from "./keywords";
 
 export interface OcrOptions {
-  /** Absolute path to the compiled vision-ocr Swift binary. */
-  visionOcrPath: string;
-  /** Game keywords to match against OCR output (case-insensitive substring). */
+  /** Daemon to spawn per worker (Apple Vision or RapidOCR). */
+  engine: OcrEngine;
+  /** Game keywords to match against OCR output (standalone tokens). */
   keywords: readonly string[];
+  /** Words allowed to share a merged header line with keywords. */
+  keywordNoise?: readonly string[];
   /** Minimum keyword hits required to mark a frame as a confirmed scoreboard. */
   minKeywords: number;
   /**
-   * When set with `requireEndScreen=true`, frames missing this keyword are
-   * rejected. Tightens precision at the cost of dropping legit scoreboards
-   * where Vision misreads the sentinel.
+   * With `requireEndScreen=true`, frames matching none of these are rejected.
+   * Tightens precision at the cost of dropping legit scoreboards where OCR
+   * misreads every sentinel.
    */
-  endScreenSentinel?: string;
+  endScreenSentinels?: readonly string[];
   requireEndScreen: boolean;
   /**
-   * Max frame-id gap inside one "run" of confirmed frames. Used for two
-   * things: (1) the skip-ahead trigger looks for a gap of this size after
-   * the last confirmed frame to know a run has ended; (2) downstream dedup
-   * uses the same value to cluster confirmed records into matches.
+   * Max timestamp gap (seconds) inside one "run" of confirmed frames. Used
+   * for two things: (1) the skip-ahead trigger looks for a gap of this size
+   * after the last confirmed frame to know a run has ended; (2) downstream
+   * dedup uses the same value to cluster confirmed records into matches.
    */
-  dedupGap: number;
+  dedupGapSec: number;
   /**
-   * After a confirmed run ends, jump this many frame IDs forward before
-   * resuming OCR. 0 disables skip-ahead (the loop OCRs every frame).
+   * After a confirmed run ends, skip frames until this many seconds past the
+   * last confirmed frame. 0 disables skip-ahead (the loop OCRs every frame).
    *
-   * NOTE: this is in *frame ID space*, not array-index space — so it works
-   * correctly whether OCR is seeing the full frame sequence (--no-phash) or
-   * a sparse pHash-survivor subset.
+   * Timestamps rather than frame IDs, so it behaves the same for 1 fps
+   * samples, keyframe samples, and sparse pHash survivors.
    */
-  skipAheadFrames: number;
+  skipAheadSec: number;
   /**
    * Number of persistent OCR workers to keep alive. Results are still applied
    * in frame order so skip-ahead behavior matches the sequential state machine.
    */
   concurrency: number;
 }
+
+const MAX_CONSECUTIVE_FAILURES = 5;
 
 interface OcrAttempt {
   frame: FrameRecord;
@@ -55,17 +60,17 @@ interface OcrDaemonResponse {
  * Runs OCR over the given frames, returning the ones that meet the keyword
  * threshold (and the end-screen sentinel rule, if enabled).
  *
- * OCR is executed through one or more persistent vision-ocr daemon workers so
- * the Swift/Vision process startup cost is paid once per worker, not once per
+ * OCR is executed through one or more persistent daemon workers (Apple Vision
+ * or RapidOCR) so engine startup cost is paid once per worker, not once per
  * frame. Results are applied in ascending frame order to preserve the original
  * skip-ahead state machine.
  *
  * SKIP-AHEAD: once a run of confirmed frames ends — defined as seeing an
- * unconfirmed frame whose frameId is more than `dedupGap` past the last
- * confirmed frameId — the loop fast-forwards by `skipAheadFrames` frame IDs
- * before resuming. This relies on real games having a minimum interval
- * between consecutive end-of-match scoreboards (e.g., RL ≥ 3 min = ≥ 180
- * frames at 1 fps). See games/<id>.ts for per-game settings.
+ * unconfirmed frame more than `dedupGapSec` after the last confirmed one —
+ * the loop skips frames until `skipAheadSec` past that confirmed frame. This
+ * relies on real games having a minimum interval between consecutive
+ * end-of-match scoreboards (e.g., RL ≥ 3 min). See games/<id>.ts for
+ * per-game settings.
  *
  * @param frames - Candidate frames in ascending frameId order. Either the full
  *   sample sequence (--no-phash) or pHash survivors.
@@ -77,26 +82,25 @@ export async function ocrFrames(
   opts: OcrOptions,
 ): Promise<OcrRecord[]> {
   const out: OcrRecord[] = [];
-  const sentinel = opts.endScreenSentinel?.toUpperCase();
-  const keywords = opts.keywords.map((keyword) => ({
-    raw: keyword,
-    upper: keyword.toUpperCase(),
-  }));
+  const sentinels = opts.endScreenSentinels ?? [];
   const concurrency = Number.isFinite(opts.concurrency)
     ? Math.max(1, Math.floor(opts.concurrency))
     : 1;
 
   // State for skip-ahead.
-  let lastConfirmedFrameId = -1;
+  let lastConfirmedSec = -Infinity;
   let inRun = false;
-  let skipToFrameId = -1;
+  let skipToSec = -Infinity;
   let skippedTotal = 0;
   let ignoredInFlight = 0;
+  let consecutiveFailures = 0;
 
   if (frames.length === 0) return out;
 
-  console.log(`[ocr] starting ${concurrency} persistent worker(s)`);
-  const workerPool = new OcrWorkerPool(opts.visionOcrPath, concurrency);
+  console.log(
+    `[ocr] starting ${concurrency} persistent ${opts.engine.name} worker(s)`,
+  );
+  const workerPool = new OcrWorkerPool(opts.engine, concurrency);
   const inflight = new Map<number, Promise<OcrAttempt>>();
   const skippedIndices = new Set<number>();
   let nextToSchedule = 0;
@@ -112,7 +116,7 @@ export async function ocrFrames(
       const frame = frames[index];
       nextToSchedule++;
 
-      if (opts.skipAheadFrames > 0 && frame.frameId < skipToFrameId) {
+      if (opts.skipAheadSec > 0 && frame.timestampSec < skipToSec) {
         skippedTotal++;
         skippedIndices.add(index);
         continue;
@@ -160,7 +164,7 @@ export async function ocrFrames(
       const attempt = await pending;
       inflight.delete(nextToProcess);
 
-      if (opts.skipAheadFrames > 0 && attempt.frame.frameId < skipToFrameId) {
+      if (opts.skipAheadSec > 0 && attempt.frame.timestampSec < skipToSec) {
         ignoredInFlight++;
         logProgress(nextToProcess);
         nextToProcess++;
@@ -168,37 +172,28 @@ export async function ocrFrames(
       }
 
       if (attempt.error) {
-        console.warn(
-          `[ocr] frame ${attempt.frame.frameId} failed: ${
-            attempt.error instanceof Error
-              ? attempt.error.message
-              : attempt.error
-          }`,
-        );
+        const message =
+          attempt.error instanceof Error
+            ? attempt.error.message
+            : String(attempt.error);
+        console.warn(`[ocr] frame ${attempt.frame.frameId} failed: ${message}`);
+        // A dead engine would otherwise look like "no scoreboards found".
+        if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES)
+          throw new Error(`OCR engine keeps failing: ${message}`);
         logProgress(nextToProcess);
         nextToProcess++;
         continue;
       }
+      consecutiveFailures = 0;
 
       const lines = attempt.lines ?? [];
-      const upperLines = lines.map((line) => line.toUpperCase());
-      const matched = keywords
-        .filter((keyword) =>
-          upperLines.some((line) => line.includes(keyword.upper)),
-        )
-        .map((keyword) => keyword.raw);
+      const matched = matchKeywords(lines, opts.keywords, opts.keywordNoise);
 
       const passesKeywordCount = matched.length >= opts.minKeywords;
-      // Sentinel can be detected either via the keyword-match list OR by
-      // scanning OCR lines directly. The latter handles game profiles that
-      // declare an endScreenSentinel that is NOT also in `keywords` — without
-      // the line-scan, those profiles would always fail when requireEndScreen
-      // is on, even with a perfect OCR result.
       const passesSentinelRule =
         !opts.requireEndScreen ||
-        sentinel === undefined ||
-        matched.some((k) => k.toUpperCase() === sentinel) ||
-        upperLines.some((line) => line.includes(sentinel));
+        sentinels.length === 0 ||
+        matchKeywords(lines, sentinels).length > 0;
 
       if (passesKeywordCount && passesSentinelRule) {
         out.push({
@@ -206,18 +201,18 @@ export async function ocrFrames(
           text: lines,
           matchedKeywords: [...matched],
         });
-        lastConfirmedFrameId = attempt.frame.frameId;
+        lastConfirmedSec = attempt.frame.timestampSec;
         inRun = true;
       } else if (
         inRun &&
-        attempt.frame.frameId - lastConfirmedFrameId > opts.dedupGap
+        attempt.frame.timestampSec - lastConfirmedSec > opts.dedupGapSec
       ) {
         // We just confirmed we've exited a run. Schedule a skip-ahead.
-        if (opts.skipAheadFrames > 0) {
-          skipToFrameId = lastConfirmedFrameId + opts.skipAheadFrames;
+        if (opts.skipAheadSec > 0) {
+          skipToSec = lastConfirmedSec + opts.skipAheadSec;
           console.log(
-            `[ocr] skip-ahead: run ended at frame ${lastConfirmedFrameId}, ` +
-              `jumping past frame ${skipToFrameId - 1}`,
+            `[ocr] skip-ahead: run ended at ${Math.round(lastConfirmedSec)}s, ` +
+              `resuming at ${Math.round(skipToSec)}s`,
           );
         }
         inRun = false;
@@ -244,7 +239,7 @@ export async function ocrFrames(
 }
 
 /**
- * Manages a pool of persistent vision-ocr daemon processes.
+ * Manages a pool of persistent OCR daemon processes.
  */
 class OcrWorkerPool {
   private readonly workers: OcrDaemonWorker[];
@@ -253,13 +248,13 @@ class OcrWorkerPool {
   /**
    * Creates a pool of daemon workers.
    *
-   * @param binPath - Resolved path to the vision-ocr binary.
+   * @param engine - OCR daemon command.
    * @param concurrency - Number of workers to spawn.
    */
-  constructor(binPath: string, concurrency: number) {
+  constructor(engine: OcrEngine, concurrency: number) {
     this.workers = Array.from(
       { length: concurrency },
-      (_, index) => new OcrDaemonWorker(binPath, index + 1),
+      (_, index) => new OcrDaemonWorker(engine, index + 1),
     );
   }
 
@@ -284,9 +279,8 @@ class OcrWorkerPool {
 }
 
 /**
- * Wraps one long-lived vision-ocr --daemon process.
- *
- * @param binPath - Resolved path to the vision-ocr binary.
+ * Wraps one long-lived OCR daemon process (`vision-ocr --daemon` or
+ * `rapid-ocr-daemon.py --daemon`; both speak the same line protocol).
  */
 class OcrDaemonWorker {
   private readonly proc: ChildProcessWithoutNullStreams;
@@ -302,14 +296,16 @@ class OcrDaemonWorker {
   /**
    * Starts one daemon process.
    *
-   * @param binPath - Resolved path to the vision-ocr binary.
+   * @param engine - OCR daemon command.
    * @param id - Worker ID used in diagnostics.
    */
   constructor(
-    binPath: string,
+    engine: OcrEngine,
     private readonly id: number,
   ) {
-    this.proc = spawn(binPath, ["--daemon"]);
+    this.proc = spawn(engine.command, engine.args, {
+      env: { ...process.env, ...engine.env },
+    });
     this.proc.stdout.on("data", (data) => this.handleStdout(data));
     this.proc.stderr.on("data", (data) => {
       this.stderr = (this.stderr + String(data)).slice(-4000);
@@ -320,7 +316,7 @@ class OcrDaemonWorker {
       const suffix = this.stderr.trim() ? `: ${this.stderr.trim()}` : "";
       this.rejectPending(
         new Error(
-          `vision-ocr worker ${this.id} exited with code ${code}${suffix}`,
+          `ocr worker ${this.id} exited with code ${code}${suffix}`,
         ),
       );
     });
@@ -335,7 +331,7 @@ class OcrDaemonWorker {
   recognize(imagePath: string): Promise<string[]> {
     if (this.proc.exitCode !== null)
       return Promise.reject(
-        new Error(`vision-ocr worker ${this.id} is not running`),
+        new Error(`ocr worker ${this.id} is not running`),
       );
 
     return new Promise((resolve, reject) => {
@@ -404,7 +400,7 @@ class OcrDaemonWorker {
     } catch (err) {
       request.reject(
         new Error(
-          `vision-ocr worker ${this.id} emitted invalid JSON for ${request.imagePath}: ${
+          `ocr worker ${this.id} emitted invalid JSON for ${request.imagePath}: ${
             err instanceof Error ? err.message : err
           }`,
         ),
@@ -424,7 +420,7 @@ class OcrDaemonWorker {
       new Error(
         typeof parsed.error === "string"
           ? parsed.error
-          : `vision-ocr worker ${this.id} failed on ${request.imagePath}`,
+          : `ocr worker ${this.id} failed on ${request.imagePath}`,
       ),
     );
   }
