@@ -6,16 +6,22 @@ import {
   resolvePreviewOrigins,
   type AuthBaseUrlEnv,
 } from "./base-url";
+import {
+  createEmailOtpPlugins,
+  resolveEmailOtpConfig,
+  type EmailOtpEnv,
+} from "./email-otp";
 
 export type SocialProviderId = "github" | "google";
 
-type AuthEnv = AuthBaseUrlEnv & {
-  BETTER_AUTH_SECRET?: string;
-  AUTH_GITHUB_ID?: string;
-  AUTH_GITHUB_SECRET?: string;
-  AUTH_GOOGLE_ID?: string;
-  AUTH_GOOGLE_SECRET?: string;
-};
+type AuthEnv = AuthBaseUrlEnv &
+  EmailOtpEnv & {
+    BETTER_AUTH_SECRET?: string;
+    AUTH_GITHUB_ID?: string;
+    AUTH_GITHUB_SECRET?: string;
+    AUTH_GOOGLE_ID?: string;
+    AUTH_GOOGLE_SECRET?: string;
+  };
 
 type ProviderCredentials = {
   clientId: string;
@@ -125,6 +131,7 @@ export function createAuth<const TFields extends UserAdditionalFields>({
   onError,
 }: CreateAuthOptions<TFields>) {
   const { secret, socialProviders } = resolveAuthEnvironment(env);
+  const emailOtp = resolveEmailOtpConfig(env, true);
 
   return betterAuth({
     appName,
@@ -163,6 +170,9 @@ export function createAuth<const TFields extends UserAdditionalFields>({
       additionalFields: userAdditionalFields,
     },
     ...(onError ? { onAPIError: { onError } } : {}),
-    plugins: [nextCookies()],
+    plugins: [
+      ...(emailOtp ? createEmailOtpPlugins(emailOtp, appName) : []),
+      nextCookies(),
+    ],
   });
 }

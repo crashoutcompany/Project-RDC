@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { EmailOtpForm } from "@/components/auth/email-otp-form";
+import { AuthDivider, ProviderIcon } from "@/components/auth/sign-in-parts";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
 import {
@@ -16,8 +18,10 @@ const PROVIDER_LABELS: Record<SocialProvider, string> = {
 
 export function SignInButtons({
   providers,
+  emailOtpEnabled = false,
 }: {
   providers: SocialProvider[];
+  emailOtpEnabled?: boolean;
 }) {
   const [pendingProvider, setPendingProvider] =
     useState<SocialProvider | null>(null);
@@ -39,7 +43,7 @@ export function SignInButtons({
     }
   }
 
-  if (providers.length === 0) {
+  if (providers.length === 0 && !emailOtpEnabled) {
     return (
       <p role="status" className="text-muted-foreground text-sm">
         No social sign-in providers are currently configured.
@@ -48,15 +52,17 @@ export function SignInButtons({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex w-full flex-col gap-3">
       {providers.map((provider) => (
         <Button
           key={provider}
           type="button"
-          className="focus-visible:bg-primary/90 cursor-pointer text-white"
+          variant="outline"
+          className="h-11 w-full cursor-pointer gap-3 text-[15px] transition-colors"
           disabled={pendingProvider !== null}
           onClick={() => void signIn(provider)}
         >
+          <ProviderIcon provider={provider} className="size-5" />
           {pendingProvider === provider
             ? "Redirecting…"
             : `Sign in with ${PROVIDER_LABELS[provider]}`}
@@ -66,6 +72,12 @@ export function SignInButtons({
         <p role="alert" className="text-destructive text-sm">
           {errorMessage}
         </p>
+      ) : null}
+      {emailOtpEnabled ? (
+        <>
+          {providers.length > 0 ? <AuthDivider /> : null}
+          <EmailOtpForm callbackURL="/" />
+        </>
       ) : null}
     </div>
   );
