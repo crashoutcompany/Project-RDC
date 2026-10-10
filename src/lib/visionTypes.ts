@@ -32,3 +32,28 @@ export type AnalysisResults =
       message: string;
     }
   | { status: VisionResultCodes.Failed; message: string };
+
+type PlayerField = {
+  type: string;
+  content: string;
+  valueString?: string;
+  valueInteger?: number;
+  confidence: number;
+};
+
+export type AnalyzedPlayer = {
+  type: "object";
+  valueObject: {
+    [fieldName: string]: PlayerField;
+  };
+};
+
+export type AnalyzedTeamData = {
+  teamName: string;
+  players: AnalyzedPlayersObj;
+};
+
+export type AnalyzedPlayersObj = {
+  type: "array";
+  valueArray: AnalyzedPlayer[];
+};

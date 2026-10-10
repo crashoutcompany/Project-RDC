@@ -23,7 +23,9 @@ import {
   AnalyzedPlayer,
   AnalyzedPlayersObj,
   AnalyzedTeamData,
-} from "@/app/actions/visionAction";
+  Stat,
+  VisionPlayer,
+} from "@/lib/visionTypes";
 import { Player } from "@/generated/prisma/client";
 import {
   findPlayer,
@@ -31,7 +33,6 @@ import {
   PlayerNotFoundError,
 } from "@/app/(routes)/admin/_utils/player-mappings";
 import { STAT_CONFIGS, getStatConfigByFieldKey } from "../stat-configs";
-import { Stat, VisionPlayer } from "../visionTypes";
 
 type WinnerType = "TEAM" | "INDIVIDUAL";
 
