@@ -14,8 +14,10 @@ async function loadGroundTruth(sessionId: number, statNames: StatName[]) {
     where: { sessionId },
     include: {
       sets: {
+        orderBy: { setId: "asc" },
         include: {
           matches: {
+            orderBy: { matchId: "asc" },
             include: {
               matchWinners: true,
               playerSessions: {
@@ -142,4 +144,52 @@ export async function buildDataset(args: {
 
 export function loadDataset(file: string): Dataset {
   return JSON.parse(fs.readFileSync(file, "utf8")) as Dataset;
+}
+
+/**
+ * Pairs collected scoreboard images with the session's database matches by
+ * play order (set, then match). Refuses to pair when the counts differ: a
+ * wrong count means the detector is wrong, and pairing would hide that.
+ */
+export async function datasetFromCollection(args: {
+  name: string;
+  game: string;
+  sessionId: number;
+  collectionFile: string;
+  outDir: string;
+}): Promise<Dataset> {
+  const spec = resolveGame(args.game);
+  const statNames = screenStatConfigs(spec).map((c) => c.name);
+  const { videoId, matches } = await loadGroundTruth(args.sessionId, statNames);
+  await prisma.$disconnect();
+
+  const collection = JSON.parse(fs.readFileSync(args.collectionFile, "utf8")) as {
+    detections: { index: number; imagePath: string; frameSec: number }[];
+  };
+  const ordered = [...matches.entries()];
+  if (collection.detections.length !== ordered.length)
+    throw new Error(
+      `${args.name}: ${collection.detections.length} scoreboards found but ${ordered.length} matches in the database; not pairing`,
+    );
+
+  const datasetDir = path.join(args.outDir, args.name);
+  fs.mkdirSync(datasetDir, { recursive: true });
+  const cases: DatasetCase[] = collection.detections.map((d, i) => {
+    const [matchId, expected] = ordered[i];
+    const id = `match-${String(d.index).padStart(2, "0")}`;
+    const image = path.join(datasetDir, `${id}.png`);
+    fs.copyFileSync(d.imagePath, image);
+    return { id, image, matchId, timestampSec: Math.round(d.frameSec), expected };
+  });
+
+  const dataset: Dataset = {
+    name: args.name,
+    game: spec.id,
+    source: { sessionId: args.sessionId, videoId, recordedMatches: matches.size },
+    pairing: "play order: scoreboard n ↔ n-th match by set and match id; counts equal",
+    cases,
+  };
+  fs.writeFileSync(path.join(datasetDir, "dataset.json"), JSON.stringify(dataset, null, 2));
+  console.log(`[dataset] ${cases.length} cases → ${path.join(datasetDir, "dataset.json")}`);
+  return dataset;
 }

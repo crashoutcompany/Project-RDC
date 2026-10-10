@@ -95,127 +95,43 @@ export function summarize(dataset: Dataset, calls: CallRecord[]): MethodSummary[
   });
 }
 
-const AZURE_IDS: string[] = [];
 
-/**
- * Azure baseline: the more accurate of `azure` (every member as candidates) and
- * `azure-roster` (the session's real players, as in production). Using the
- * stronger one keeps every comparison conservative against the LLMs.
- */
-function azureBaseline(summaries: MethodSummary[]): MethodSummary | undefined {
-  return summaries
-    .filter((s) => AZURE_IDS.includes(s.method))
-    .sort((a, b) => b.accuracy - a.accuracy)[0];
-}
+/** Pre-registered bar: the reader must match the database on this share of values, with no invented players. */
+export const PIVOT_ACCURACY = 0.98;
 
-/** Sibling pairs for H2: [smaller, larger]. */
-const SIBLINGS: [string, string][] = [
-  ["claude-haiku", "claude-sonnet"],
-  ["claude-sonnet", "claude-opus"],
-];
-
-/**
- * Pre-registered decision thresholds, relative to Azure measured in the same
- * run (or the saved baseline when Azure wasn't re-run): Azure read 367 of 390
- * values (94.1%) on rl-session33 during the harvester validation.
- */
-const SAVED_AZURE_ACCURACY: Record<string, number> = { "rl-session33": 367 / 390 };
-/** Within this many percentage points of Azure still qualifies for new games. */
-const NEW_GAMES_MARGIN = 0.03;
-
-export function evaluateHypotheses(summaries: MethodSummary[]): string[] {
-  const azure = azureBaseline(summaries);
-  const llms = summaries.filter((s) => !AZURE_IDS.includes(s.method) && s.method !== "oracle");
-  const lines: string[] = [];
+export function evaluateHypotheses(summaries: MethodSummary[], nCases: number): string[] {
+  const readers = summaries.filter((s) => s.method !== "oracle");
   const verdict = (ok: boolean | null) => (ok === null ? "not testable" : ok ? "supported" : "not supported");
-  const fmt = (s: MethodSummary) => `${s.method} ${s.correctPerPass.toFixed(1)}/${s.cellsPerPass}`;
-
-  if (!azure) lines.push("Azure was not run in this experiment, so H1, H3, H4 and H5 have no baseline.");
-
-  const h1 = azure && llms.length ? llms.filter((s) => s.correctPerPass >= azure.correctPerPass - 1) : null;
+  const lines: string[] = [];
+  const h1 = readers.length ? readers.every((s) => s.accuracy >= PIVOT_ACCURACY && s.invented === 0) : null;
   lines.push(
-    `H1 (an LLM within 1 value of Azure): ${verdict(h1 ? h1.length > 0 : null)}` +
-      (h1?.length ? ` — ${h1.map(fmt).join(", ")}` : ""),
+    `H1 (the reader matches the database on ≥ ${PIVOT_ACCURACY * 100}% of values with no invented players): ${verdict(h1)}` +
+      (readers.length ? ` — ${readers.map((s) => `${s.method} ${(s.accuracy * 100).toFixed(1)}%`).join(", ")}` : ""),
   );
-
-  const pairs = SIBLINGS.flatMap(([small, large]) => {
-    const a = summaries.find((s) => s.method === small);
-    const b = summaries.find((s) => s.method === large);
-    return a && b ? [{ small: a, large: b, holds: b.accuracy > a.accuracy }] : [];
-  });
+  const h2 = readers.length ? readers.every((s) => s.winnerExactPerPass >= nCases) : null;
   lines.push(
-    `H2 (larger sibling more accurate): ${verdict(pairs.length ? pairs.every((p) => p.holds) : null)}` +
-      (pairs.length
-        ? ` — ${pairs.map((p) => `${p.large.method} ${(p.large.accuracy * 100).toFixed(1)}% vs ${p.small.method} ${(p.small.accuracy * 100).toFixed(1)}%`).join("; ")}`
-        : ""),
+    `H2 (every scoreboard's winner is read correctly): ${verdict(h2)}` +
+      (readers.length ? ` — ${readers.map((s) => `${s.method} ${s.winnerExactPerPass.toFixed(1)}/${nCases}`).join(", ")}` : ""),
   );
-
-  const h3 = azure && llms.length ? llms.filter((s) => s.allPlayersFoundPerPass > azure.allPlayersFoundPerPass) : null;
-  lines.push(
-    `H3 (LLMs find all players more often than Azure, ${azure?.allPlayersFoundPerPass.toFixed(1) ?? "?"} per pass): ${verdict(h3 ? h3.length === llms.length : null)}` +
-      (h3 ? ` — ${h3.length}/${llms.length} LLMs` : ""),
-  );
-
-  // Only methods billed per call can be compared on cost; plan-usage methods are skipped.
-  const billed = llms.filter((s) => s.costPerScoreboard !== null);
-  const h4 =
-    azure?.costPerScoreboard != null
-      ? billed.filter((s) => s.costPerScoreboard! < azure.costPerScoreboard!)
-      : null;
-  lines.push(
-    `H4 (every API-billed LLM cheaper than Azure per scoreboard): ${verdict(h4 ? h4.length === billed.length : null)}` +
-      (billed.length < llms.length ? ` — ${llms.length - billed.length} plan-usage method(s) not compared` : ""),
-  );
-
-  const h5 =
-    azure?.latencyMeanMs != null
-      ? llms.filter((s) => s.latencyMeanMs !== null && s.latencyMeanMs > azure.latencyMeanMs!)
-      : null;
-  lines.push(
-    `H5 (LLMs slower than Azure, ${azure?.latencyMeanMs ? (azure.latencyMeanMs / 1000).toFixed(1) + " s" : "?"}): ${verdict(h5 ? h5.length === llms.length : null)}` +
-      (h5 ? ` — ${h5.length}/${llms.length} slower` : ""),
-  );
+  const h3 = readers.length && readers.some((s) => s.costPerScoreboard !== null) ? readers.every((s) => s.costPerScoreboard === null || s.costPerScoreboard < 0.03) : null;
+  lines.push(`H3 (cost per scoreboard below the $0.03 Azure price): ${verdict(h3)}`);
   return lines;
 }
 
-type Verdict = "pivot" | "new-games" | "keep-azure";
-
-/** Where one method lands on one dataset under the pre-registered rules. */
-export function verdictFor(
-  summary: MethodSummary,
-  summaries: MethodSummary[],
-  datasetName: string,
-): Verdict | null {
-  const azure = azureBaseline(summaries);
-  const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
-  if (baseline === undefined) return null;
-  const cheaper =
-    azure?.costPerScoreboard == null ||
-    (summary.costPerScoreboard ?? Infinity) < azure.costPerScoreboard;
-  if (summary.invented > 0) return "keep-azure";
-  if (summary.accuracy >= baseline && cheaper) return "pivot";
-  if (summary.accuracy >= baseline - NEW_GAMES_MARGIN) return "new-games";
-  return "keep-azure";
+/** One reader on one dataset against the pre-registered bar. */
+export function verdictFor(summary: MethodSummary): "pivot" | "keep" {
+  return summary.accuracy >= PIVOT_ACCURACY && summary.invented === 0 ? "pivot" : "keep";
 }
 
-/** Applies the decision rules fixed in the test plan. */
-export function decide(summaries: MethodSummary[], datasetName: string): string {
-  const azure = azureBaseline(summaries);
-  const baseline = azure?.accuracy ?? SAVED_AZURE_ACCURACY[datasetName];
-  if (baseline === undefined) return "No Azure baseline for this dataset; include `azure` in the run.";
-  const baselineLabel = azure ? "Azure in this run" : "saved Azure baseline";
-  const llms = summaries
-    .filter((s) => !AZURE_IDS.includes(s.method) && s.method !== "oracle")
-    .sort((a, b) => b.accuracy - a.accuracy || (a.costPerScoreboard ?? Infinity) - (b.costPerScoreboard ?? Infinity));
-  const best = llms[0];
-  if (!best) return "No LLM results yet.";
-  const vs = `${(best.accuracy * 100).toFixed(1)}% vs ${(baseline * 100).toFixed(1)}% (${baselineLabel})`;
-  const cheaper = azure?.costPerScoreboard == null || (best.costPerScoreboard ?? Infinity) < azure.costPerScoreboard;
-  if (best.accuracy >= baseline && best.invented === 0 && cheaper)
-    return `Pivot candidate: ${best.method}, ${vs}, 0 invented players, cheaper than Azure. Keep Azure as fallback for 4 weekly runs.`;
-  if (best.accuracy >= baseline - NEW_GAMES_MARGIN && best.invented === 0)
-    return `Use ${best.method} for games without a trained Azure model (${vs}); keep Azure for trained games.`;
-  return `Keep Azure. Best LLM was ${best.method}, ${vs}${best.invented ? `, with ${best.invented} invented player(s)` : ""}.`;
+/** Applies the pre-registered bar. Azure isn't re-run, so the database is the reference. */
+export function decide(summaries: MethodSummary[]): string {
+  const readers = summaries.filter((s) => s.method !== "oracle").sort((a, b) => b.accuracy - a.accuracy);
+  const best = readers[0];
+  if (!best) return "No readers to compare.";
+  const pct = `${(best.accuracy * 100).toFixed(1)}% of values`;
+  if (best.accuracy >= PIVOT_ACCURACY && best.invented === 0)
+    return `Pivot candidate: ${best.method} (${pct}, 0 invented players). Keep the current path as fallback for 4 weekly runs.`;
+  return `Keep the current path. Best reader was ${best.method} (${pct}${best.invented ? `, ${best.invented} invented player(s)` : ""}).`;
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
@@ -253,11 +169,11 @@ export function writeReport(dataset: Dataset, runDir: string): MethodSummary[] {
     "",
     "## Hypotheses",
     "",
-    ...evaluateHypotheses(summaries).map((l) => `- ${l}`),
+    ...evaluateHypotheses(summaries, dataset.cases.length).map((l) => `- ${l}`),
     "",
     "## Decision (pre-registered rules)",
     "",
-    decide(summaries, dataset.name),
+    decide(summaries),
     "",
   ].join("\n");
 
@@ -303,19 +219,18 @@ export function writeCombined(runs: { runDir: string; dataset: Dataset }[], outF
   );
   const header = perRun.map((r) => r.dataset.name);
   const rows = methods.map((method) => {
-    const cells = perRun.map(({ summaries, dataset }) => {
+    const cells = perRun.map(({ summaries }) => {
       const s = summaries.find((x) => x.method === method);
-      return s ? { s, verdict: verdictFor(s, summaries, dataset.name) } : null;
+      return s ? { s, verdict: verdictFor(s) } : null;
     });
     const costs = cells.flatMap((c) => (c?.s.costPerScoreboard != null ? [c.s.costPerScoreboard] : []));
     const latencies = cells.flatMap((c) => (c?.s.latencyMeanMs != null ? [c.s.latencyMeanMs] : []));
     const qualifiesEverywhere =
-      !AZURE_IDS.includes(method) && cells.every((c) => c?.verdict === "pivot" || c?.verdict === "new-games");
+      cells.every((c) => c?.verdict === "pivot");
     return { method, cells, costs, latencies, qualifiesEverywhere };
   });
 
-  const label = (v: Verdict | null) =>
-    v === null ? "no baseline" : { pivot: "pivot", "new-games": "new games", "keep-azure": "—" }[v];
+  const label = (v: "pivot" | "keep") => (v === "pivot" ? "pivot" : "keep");
   const md = [
     "# Extraction benchmark — all games",
     "",
@@ -326,8 +241,8 @@ export function writeCombined(runs: { runDir: string; dataset: Dataset }[], outF
     ...rows.map(
       (r) =>
         `| ${r.method} | ${r.cells
-          .map((c) => (c ? `${pct(c.s.accuracy)} (${c.s.correctPerPass.toFixed(1)}/${c.s.cellsPerPass}) | ${AZURE_IDS.includes(r.method) ? "baseline" : label(c.verdict)}` : "not run | —"))
-          .join(" | ")} | ${r.costs.length ? money(r.costs.reduce((a, b) => a + b, 0) / r.costs.length) : "n/a"} | ${r.latencies.length ? secs(r.latencies.reduce((a, b) => a + b, 0) / r.latencies.length) : "n/a"} | ${AZURE_IDS.includes(r.method) ? "—" : r.qualifiesEverywhere ? "yes" : "no"} |`,
+          .map((c) => (c ? `${pct(c.s.accuracy)} (${c.s.correctPerPass.toFixed(1)}/${c.s.cellsPerPass}) | ${label(c.verdict)}` : "not run | —"))
+          .join(" | ")} | ${r.costs.length ? money(r.costs.reduce((a, b) => a + b, 0) / r.costs.length) : "n/a"} | ${r.latencies.length ? secs(r.latencies.reduce((a, b) => a + b, 0) / r.latencies.length) : "n/a"} | ${r.qualifiesEverywhere ? "yes" : "no"} |`,
     ),
     "",
     "## Recommendation for future games",

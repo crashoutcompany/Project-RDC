@@ -32,6 +32,8 @@ const { values, positionals } = parseArgs({
     run: { type: "string" },
     "retry-failed": { type: "boolean", default: false },
     video: { type: "string" },
+    "video-id": { type: "string" },
+    collection: { type: "string" },
     help: { type: "boolean", default: false },
   },
 });
@@ -66,6 +68,34 @@ async function main() {
               : "free";
       console.log(`${m.id.padEnd(20)} ${m.provider.padEnd(10)} ${price.padEnd(26)} ${missing.length ? `missing ${missing.join(", ")}` : "ready"}`);
     }
+    return;
+  }
+
+  if (command === "collect") {
+    const { collect } = await import("./collect");
+    await collect({
+      sessionId: Number(need(values.session, "session")),
+      game: need(values.game, "game"),
+      videoId: need(values["video-id"], "video-id"),
+    });
+    return;
+  }
+
+  if (command === "summary-collections") {
+    const { summarizeCollections } = await import("./collect");
+    console.log(summarizeCollections());
+    return;
+  }
+
+  if (command === "dataset-from-collection") {
+    const { datasetFromCollection } = await import("./dataset");
+    await datasetFromCollection({
+      name: need(values.name, "name"),
+      game: need(values.game, "game"),
+      sessionId: Number(need(values.session, "session")),
+      collectionFile: path.resolve(need(values.collection, "collection")),
+      outDir: path.join(BENCH_DIR, "datasets"),
+    });
     return;
   }
 

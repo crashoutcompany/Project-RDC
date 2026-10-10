@@ -183,7 +183,7 @@ export async function runFinder(args: {
  * One predicate call per frame, `concurrency` at a time. Results append to
  * `logPath` so an interrupted run resumes; failed frames are retried on rerun.
  */
-async function runDecisions(frames: FrameRecord[], question: string, logPath: string) {
+export async function runDecisions(frames: FrameRecord[], question: string, logPath: string) {
   const done = new Map<number, FrameVerdict>();
   if (fs.existsSync(logPath))
     for (const line of fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean)) {
