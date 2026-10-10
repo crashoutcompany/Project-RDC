@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Runs the whole experiment with one set of keys: every stat reader on every
-# dataset (3 passes), the scoreboard finder test, and the cross-game summary.
+# Runs the whole experiment: every stat reader on every dataset (3 passes),
+# the scoreboard finder test, and the cross-game summary. Claude is read in a
+# Claude Code session, so its transcriptions must already exist (see README).
 # Resumable: rerun after an interruption and it continues where it stopped.
 #
 #   scripts/extraction-benchmark/run-all.sh            # uses .env.bench.local
@@ -22,8 +23,21 @@ bench() { pnpm exec tsx --env-file="$ENV_FILE" scripts/extraction-benchmark/inde
 
 bench methods
 
+# Stat readers repeat REPEATS times. Claude Code gives one answer per
+# scoreboard, so it runs once, into the same run directory, and only when its
+# transcriptions exist for the dataset's game (see README, "Running Claude Code").
+STAT_READERS="azure,gemini-2.5-flash,gemini-3.8-flash"
+declare -A GAME=( [rl-session33]=rocket-league [mk8-session41]=mario-kart-8 )
 for dataset in rl-session33 mk8-session41; do
-  bench run --dataset "$BENCH_DIR/datasets/$dataset/dataset.json" --run "$dataset-$TAG"
+  run="$dataset-$TAG"
+  bench run --dataset "$BENCH_DIR/datasets/$dataset/dataset.json" --methods "$STAT_READERS" \
+    --repeats "${REPEATS:-3}" --run "$run"
+  if [ -d "$BENCH_DIR/claude-code/${GAME[$dataset]}" ]; then
+    bench run --dataset "$BENCH_DIR/datasets/$dataset/dataset.json" --methods claude-code \
+      --repeats 1 --run "$run"
+  else
+    echo "[run-all] no Claude Code transcriptions for ${GAME[$dataset]}; skipping claude-code"
+  fi
 done
 
 bench combine --run "rl-session33-$TAG,mk8-session41-$TAG"

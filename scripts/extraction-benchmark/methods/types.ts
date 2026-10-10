@@ -23,11 +23,13 @@ export interface ExtractResult {
 export type Price =
   | { kind: "tokens"; inputPerM: number; outputPerM: number }
   | { kind: "call"; perCall: number }
-  | { kind: "free" };
+  | { kind: "free" }
+  /** Billed through a subscription, not per call: cost is reported as n/a. */
+  | { kind: "subscription" };
 
 export interface Method {
   id: string;
-  provider: "azure" | "anthropic" | "openai" | "google" | "oracle";
+  provider: "azure" | "claude-code" | "google" | "oracle";
   model: string;
   price: Price;
   /** Env vars that must be set; the method is skipped (not failed) without them. */
@@ -39,6 +41,7 @@ export const NO_USAGE: Usage = { inputTokens: null, outputTokens: null, reasonin
 
 export function costOf(price: Price, usage: Usage): number | null {
   if (price.kind === "free") return 0;
+  if (price.kind === "subscription") return null;
   if (price.kind === "call") return price.perCall;
   if (usage.inputTokens === null || usage.outputTokens === null) return null;
   return (

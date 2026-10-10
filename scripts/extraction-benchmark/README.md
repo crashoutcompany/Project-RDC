@@ -6,8 +6,13 @@ Compares ways of turning an end-of-match scoreboard screenshot into stats — th
 
 | Job | Methods |
 |---|---|
-| Read stats from a scoreboard | `azure` (production), `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `gpt-6-luna`, `gpt-6-sol`, `gemini-2.5-flash`, `gemini-3.8-flash` |
-| Find scoreboards in a video | `rapidocr` (production harvester gate), `decisions` (OpenAI Decisions predicate per keyframe) |
+| Read stats from a scoreboard | `azure` (production), `claude-code` (Claude in a Claude Code session), `gemini-2.5-flash`, `gemini-3.8-flash` (AI SDK) |
+| Find scoreboards in a video | `rapidocr` (production harvester gate), `decisions` (OpenAI Decisions predicate per keyframe, `gpt-6-luna`) |
+
+Access rules (set by the project owner):
+- **Claude is read in Claude Code**, never through the Anthropic API. Its answers are written by hand into `claude-code/<game>/<case>.json` (see below).
+- **OpenAI is used only through the Decisions API, and only `gpt-6-luna`.** No OpenAI model reads stats. The Responses API isn't used.
+- Gemini is used through the Vercel AI SDK with structured output.
 
 `oracle` returns the database answer. It isn't a contender: it proves the scorer gives 100% to a perfect reading, and runs with no keys.
 
@@ -15,13 +20,36 @@ Compares ways of turning an end-of-match scoreboard screenshot into stats — th
 
 - **Same input:** every method reads the same frozen PNGs.
 - **Same instructions:** every LLM gets the same system prompt, user prompt, and JSON schema, generated from the game spec in `games.ts`. The run records a fingerprint of all three (`prompt.txt`, `run.json`).
-- **Same reasoning level:** "low" effort on every provider. Claude: `effort: "low"` (thinking can't be turned off on Opus 5.5). OpenAI: `reasoning.effort: "low"`. Gemini 3.x: `thinkingLevel: "low"`. Gemini 2.5 has no levels, so it gets a 1,024-token budget.
+- **Same reasoning level:** Gemini 3.x runs at `thinkingLevel: "low"`; Gemini 2.5 has no levels, so it gets a 1,024-token budget. Claude Code runs at its default and reports its usage as is.
 - **No silent retries:** SDK retries are off (`maxRetries: 0`), so latency is one attempt. Failed calls are logged; `--retry-failed` reruns them.
-- **No model substitution:** Claude's server-side refusal fallback is off, because it would answer with a different model. A refusal counts as a failed call.
+- **No silent model changes:** each method is one model, recorded in `run.json`.
 - **Fair ordering:** calls run one at a time, ordered repeat → scoreboard → method, so methods interleave instead of each getting its own time window.
 - **Same scorer:** every output is normalized to one shape (`normalize.ts`) and scored by the same code (`score.ts`).
 
 Azure gets no prompt or gamertag list: it's the production path, called exactly as the admin "RDC Vision" button calls it.
+
+### Running Claude Code
+
+Claude doesn't use the API here. For each dataset case, read the image blind (no database lookups), and write the answer as JSON to:
+
+```
+~/ocrbench/experiment/claude-code/<game>/<case-id>.json
+```
+
+in this shape, with the stats in the game's column keys (`rl_goals`, `mk8_place`, ...), `member` set to a member name or `null`, and `winning_team` set to the team label or `null`:
+
+```json
+{
+  "players": [
+    { "gamertag": "Dpatel254", "member": "Dylan", "team": "BLUE",
+      "stats": { "rl_score": 353, "rl_goals": 1, "rl_assists": 1, "rl_saves": 1, "rl_shots": 3 } }
+  ],
+  "winning_team": "BLUE",
+  "latencyMs": 42000
+}
+```
+
+Include `latencyMs`, plus `inputTokens` and `outputTokens` if the session reports them. The answers are then run through the same scorer as every other method: `pnpm exec tsx ... run --methods claude-code`. Use `--repeats 1` for the session, since each repeat is another full read.
 
 ## Datasets
 
@@ -39,8 +67,7 @@ How the MK8 images were chosen: race ends were located by OCR, then the frame sh
 Put keys in a gitignored env file at the repo root, e.g. `.env.bench.local`:
 
 ```bash
-ANTHROPIC_API_KEY=...
-OPENAI_API_KEY=...
+OPENAI_API_KEY=...                 # Decisions only (gpt-6-luna)
 GOOGLE_GENERATIVE_AI_API_KEY=...
 DOCUMENT_INTELLIGENCE_ENDPOINT=...
 DOCUMENT_INTELLIGENCE_API_KEY=...

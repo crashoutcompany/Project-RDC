@@ -1,9 +1,8 @@
 import os from "os";
 import path from "path";
-import { anthropicMethod } from "./methods/anthropic";
 import { azureMethod } from "./methods/azure";
+import { claudeCodeMethod } from "./methods/claude-code";
 import { geminiMethod } from "./methods/gemini";
-import { openaiMethod } from "./methods/openai";
 import { oracleMethod } from "./methods/oracle";
 import type { Method } from "./methods/types";
 
@@ -22,16 +21,17 @@ export const DEFAULT_REPEATS = 3;
 export const PRICES_CHECKED = "2026-10-10";
 
 /**
- * Every stat reader in the experiment. Reasoning is set to each provider's
- * "low" level so no model gets more thinking than another.
+ * Every stat reader in the experiment. Access rules, set by the user:
+ * - Claude runs in a Claude Code session (`claude-code`), never through the API.
+ * - OpenAI is used only through the Decisions API, and only gpt-6-luna. So no
+ *   OpenAI model reads stats; Decisions is the scoreboard finder below.
+ * - Gemini runs through the Vercel AI SDK with structured output.
+ * Gemini reasoning is set to its "low" level so it gets no more thinking than
+ * the other readers.
  */
 export const METHODS: Method[] = [
   azureMethod({ kind: "call", perCall: 0.03 }),
-  anthropicMethod("claude-haiku-5-5", "claude-haiku-5-5", { kind: "tokens", inputPerM: 0.1, outputPerM: 0.5 }),
-  anthropicMethod("claude-sonnet-5-5", "claude-sonnet-5-5", { kind: "tokens", inputPerM: 2, outputPerM: 10 }),
-  anthropicMethod("claude-opus-5-5", "claude-opus-5-5", { kind: "tokens", inputPerM: 4, outputPerM: 20 }),
-  openaiMethod("gpt-6-luna", "gpt-6-luna", { kind: "tokens", inputPerM: 0.1, outputPerM: 0.5 }),
-  openaiMethod("gpt-6-sol", "gpt-6-sol", { kind: "tokens", inputPerM: 2, outputPerM: 10 }),
+  claudeCodeMethod,
   // Gemini 2.5 has no thinking levels; a 1,024-token budget is its "low".
   geminiMethod("gemini-2.5-flash", "gemini-2.5-flash", { kind: "tokens", inputPerM: 0.3, outputPerM: 2.5 }, { thinkingBudget: 1024 }),
   // Intro price through 2026-12-31; it doubles to $1.50 / $7.50 after.
@@ -52,8 +52,11 @@ export const DECISIONS = {
 export const WEEKLY_SCOREBOARDS = 52;
 export const WEEKLY_VIDEOS = 4;
 
+/** Methods run by default. `oracle` is a self-check; `claude-code` needs transcriptions first. */
+const OPT_IN = new Set(["oracle", "claude-code"]);
+
 export function resolveMethods(ids: string[] | undefined): Method[] {
-  if (!ids || ids.length === 0) return METHODS.filter((m) => m.id !== "oracle");
+  if (!ids || ids.length === 0) return METHODS.filter((m) => !OPT_IN.has(m.id));
   return ids.map((id) => {
     const method = METHODS.find((m) => m.id === id);
     if (!method)
