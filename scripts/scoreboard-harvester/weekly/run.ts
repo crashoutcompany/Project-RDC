@@ -28,6 +28,7 @@ type Outcome =
 
 interface StateEntry {
   outcome: Outcome;
+  /** Consecutive failed runs; reset by any other outcome. */
   attempts: number;
   lastRun: string;
   sessionId?: number;
@@ -147,7 +148,11 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
       const key = stateKey(candidate);
       state[key] = {
         outcome: line.outcome,
-        attempts: (state[key]?.attempts ?? 0) + 1,
+        // Consecutive failures only, so dry runs don't count toward MAX_ATTEMPTS.
+        attempts:
+          line.outcome === "failed"
+            ? (state[key]?.outcome === "failed" ? state[key].attempts : 0) + 1
+            : 0,
         lastRun: new Date().toISOString(),
         sessionId: line.sessionId,
         message: line.detail,

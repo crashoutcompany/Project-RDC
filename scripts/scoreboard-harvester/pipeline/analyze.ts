@@ -105,19 +105,21 @@ export async function analyzeJobs(args: {
     }
     for (const t of todo) {
       const r = batched.get(keyOf(t));
-      if (r && "fields" in r)
-        save(t.j, t.m, {
-          analysis: await withQuietLogs(async () =>
-            processScoreboard({
-              fields: r.fields,
-              gameId: jobs[t.j].gameId,
-              sessionPlayers: players,
-              ocrCorrections: false,
-            }),
-          ),
-          reader: { id: "gemini-batch", fallbacks: [] },
-        });
-      else batchFailures.set(keyOf(t), r?.error ?? "missing from batch");
+      if (!r || !("fields" in r)) {
+        batchFailures.set(keyOf(t), r?.error ?? "missing from batch");
+        continue;
+      }
+      const analysis = await withQuietLogs(async () =>
+        processScoreboard({
+          fields: r.fields,
+          gameId: jobs[t.j].gameId,
+          sessionPlayers: players,
+          ocrCorrections: false,
+        }),
+      );
+      // A Failed result goes down the interactive chain, same as an API error.
+      if (analysis.status === VisionResultCodes.Failed) batchFailures.set(keyOf(t), analysis.message);
+      else save(t.j, t.m, { analysis, reader: { id: "gemini-batch", fallbacks: [] } });
     }
   }
 

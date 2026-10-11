@@ -86,8 +86,20 @@ export async function readWithGeminiBatch(
   const deadline = Date.now() + (opts.timeoutMs ?? 24 * 60 * 60 * 1000);
   const pending = new Set(submitted);
   while (pending.size > 0) {
-    for (const entry of [...pending]) {
-      const status = await call(entry.name);
+    // Poll every job at once. A failed poll (after retries) leaves that job
+    // pending until the deadline instead of discarding everyone's results.
+    const polls = await Promise.all(
+      [...pending].map(async (entry) => {
+        try {
+          return { entry, status: await call(entry.name) };
+        } catch (err) {
+          log(`[batch] poll ${entry.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+          return { entry, status: null };
+        }
+      }),
+    );
+    for (const { entry, status } of polls) {
+      if (!status) continue;
       const state = stateOf(status);
       if (!DONE_STATES.has(state)) continue;
       pending.delete(entry);

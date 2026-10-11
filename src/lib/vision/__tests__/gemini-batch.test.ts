@@ -56,6 +56,23 @@ describe("readWithGeminiBatch", () => {
     expect(results.get("a")).toEqual({ error: "batch JOB_STATE_EXPIRED" });
   });
 
+  it("keeps polling when one status check fails", async () => {
+    let polls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") return json({ name: "batches/abc" });
+      // A 400 isn't retried, so the first poll fails outright.
+      if (++polls === 1) return new Response("bad", { status: 400 });
+      return json({ metadata: { state: "BATCH_STATE_EXPIRED" } });
+    });
+    const results = await readWithGeminiBatch([{ key: "a", gameId: 1, base64Source: "iVBORw0KGgo=" }], {
+      apiKey: "test",
+      pollMs: 0,
+      log: () => {},
+    });
+    expect(polls).toBe(2);
+    expect(results.get("a")).toEqual({ error: "batch JOB_STATE_EXPIRED" });
+  });
+
   it("fails items for games Gemini has no spec for without submitting them", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const results = await readWithGeminiBatch([{ key: "a", gameId: 999, base64Source: "x" }], { apiKey: "test" });

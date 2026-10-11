@@ -11,6 +11,8 @@ import { screenStatConfigs, specForGameId, type GameSpec } from "./scoreboard-sp
 export const GEMINI_MODEL = "gemini-3.8-flash";
 /** The setting the benchmark validated: "low" thinking for Gemini 3.x. */
 export const GEMINI_THINKING = { thinkingLevel: "low" } as const;
+/** Reads take ~5s; a hung request times out (retryable) so the fallback still gets a turn. */
+const GEMINI_TIMEOUT_MS = 60_000;
 
 /** Media type from the file's magic bytes; screenshots arrive as bare base64. */
 export function sniffMediaType(base64: string): string {
@@ -44,6 +46,7 @@ export async function extractWithGemini(args: {
   });
   const result = await generateText({
     model: google(args.model ?? GEMINI_MODEL),
+    abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     system: SYSTEM_PROMPT,
     messages: [
       {
