@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { H1 } from "@/components/headings";
+import { Breadcrumbs } from "@/components/arcade/ui";
 import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import Mariokart from "./_components/games/mariokart";
@@ -63,11 +64,17 @@ export default function Page({
   params: Promise<{ slug: string }>;
 }) {
   return (
-    <div className="m-16">
-      <H1 className="my-0" data-testid="game-detail-shell-marker">
-        Game Stats
-      </H1>
-      <Suspense fallback={<Skeleton className="mt-4 h-64 w-full" />}>
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <div data-testid="game-detail-shell-marker">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Games", href: "/games" },
+            { label: "Dashboard" },
+          ]}
+        />
+      </div>
+      <Suspense fallback={<Skeleton className="h-72 w-full" />}>
         <GameDetailContent params={params} />
       </Suspense>
     </div>
@@ -168,7 +175,7 @@ async function GameDetailContent({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div data-testid="game-detail-content">
       <GameDashboard data={dashboardData}>{gameComponent}</GameDashboard>
     </div>
   );

@@ -1,239 +1,68 @@
-import {
-  NavigationMenu,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  NavigationMenuItem,
-  NavigationMenuContent,
-  NavigationMenuLink,
-  navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
-import { ModeToggle } from "./modetoggle";
-import { FillText } from "./fill-text";
 import Link from "next/link";
-import React, { Suspense } from "react";
-import { cn } from "@/lib/utils";
-import Image from "next/image";
-import Icon from "@/app/favicon.ico";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
-import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { getGamesNav } from "@/lib/constants";
-import { getMembersNav } from "prisma/lib/members";
+import { Suspense } from "react";
 import { getRscSession } from "@/lib/auth/server";
-import { AuthButton, ToggleThemeButton } from "./client-buttons";
-import { Skeleton } from "./ui/skeleton";
+import { NavLinks, SignOutButton } from "./nav-links";
 
-export const Navbar = async () => {
+export const Navbar = () => {
   return (
-    <NavigationMenu
-      className="sticky top-0 z-20 mx-auto w-screen rounded-lg bg-inherit px-2"
+    <header
+      className="border-ac-gold bg-ac-panel/95 sticky top-0 z-40 border-b-2 backdrop-blur"
       data-testid="navbar-shell-marker"
     >
-      <NavigationMenuList>
-        <NavigationMenuItem className={navigationMenuTriggerStyle()}>
-          <Link href="/" data-testid="nav-home-link">
-            <FillText text="Home" className="text-chart-4" />
-          </Link>
-        </NavigationMenuItem>
-        <NavigationMenuItem className={navigationMenuTriggerStyle()}>
-          <Link href="/about" data-testid="nav-about-link">
-            <FillText text="About" className="text-chart-4" />
-          </Link>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuTrigger data-testid="nav-games-trigger">
-            <FillText className="text-chart-4" text="Games" />
-          </NavigationMenuTrigger>
-          <NavigationMenuContent>
-            <Suspense
-              fallback={
-                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px]">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </ul>
-              }
-            >
-              <GamesNavItems />
-            </Suspense>
-          </NavigationMenuContent>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuTrigger data-testid="nav-members-trigger">
-            <FillText className="text-chart-4" text="Members" />
-          </NavigationMenuTrigger>
-          <NavigationMenuContent>
-            <Suspense
-              fallback={
-                <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px]">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </ul>
-              }
-            >
-              <MembersNavItems />
-            </Suspense>
-          </NavigationMenuContent>
-        </NavigationMenuItem>
-        <Suspense fallback={<Skeleton className="h-full w-9" />}>
-          <AdminSection />
-        </Suspense>
-
-        <NavigationMenuItem className="md:hidden">
-          <NavigationMenuTrigger>
-            <HamburgerMenuIcon />
-          </NavigationMenuTrigger>
-          <NavigationMenuContent>
-            <ul>
-              <ListItem href="/about">About</ListItem>
-              <Suspense fallback={<Skeleton className="h-full w-9" />}>
-                <AuthSection />
-              </Suspense>
-              <ToggleThemeButton />
-            </ul>
-          </NavigationMenuContent>
-        </NavigationMenuItem>
-
-        <Suspense fallback={<Skeleton className="size-10 rounded-full" />}>
-          <ProfileSection />
-        </Suspense>
-        <NavigationMenuItem className="hidden sm:block">
-          <ModeToggle className="" />
-        </NavigationMenuItem>
-      </NavigationMenuList>
-    </NavigationMenu>
-  );
-};
-
-async function GamesNavItems() {
-  "use cache";
-  const games = await getGamesNav();
-  return (
-    <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
-      {games.map((game) => (
-        <ListItem key={game.url} href={game.url} title={game.name}>
-          {game.desc}
-        </ListItem>
-      ))}
-    </ul>
-  );
-}
-
-async function MembersNavItems() {
-  "use cache";
-  const members = await getMembersNav();
-  return (
-    <ul className="grid gap-3 p-4 md:w-[400px] lg:w-[500px] lg:grid-cols-[.75fr_1fr]">
-      {members.map((rdc) => (
-        <li key={rdc.url} className="flex grow gap-5">
-          <Avatar>
-            <Image
-              alt={rdc.alt}
-              src={rdc.src || Icon}
-              height={60}
-              width={60}
-            />
-          </Avatar>
-          <NavigationMenuLink asChild>
-            <Link
-              prefetch={true}
-              href={rdc.url}
-              className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block shrink-0 space-y-1 rounded-md p-3 leading-none no-underline outline-hidden transition-colors select-none"
-            >
-              <div className="text-sm leading-none font-medium">
-                {rdc.navName}
-              </div>
-            </Link>
-          </NavigationMenuLink>
-        </li>
-      ))}
-      <ListItem
-        className="col-span-full"
-        href="/members"
-        title="Browse all members"
-      />
-    </ul>
-  );
-}
-
-const ListItem = React.forwardRef<
-  React.ComponentRef<"a">,
-  React.ComponentPropsWithoutRef<"a">
->(({ className, title, children, href = "", ...props }, ref) => {
-  return (
-    <li className="grow">
-      <NavigationMenuLink asChild>
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 px-4 py-2 md:h-14 md:py-0">
         <Link
-          prefetch={true}
-          href={href}
-          ref={ref}
-          className={cn(
-            "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block space-y-1 rounded-md p-3 leading-none no-underline outline-hidden transition-colors select-none",
-            className,
-          )}
-          {...props}
+          href="/"
+          className="ac-title text-ac-gold relative shrink-0 text-base"
+          aria-label="RDC Stats home"
         >
-          <div className="text-sm leading-none font-medium">{title}</div>
-          <p className="text-muted-foreground line-clamp-2 text-sm leading-snug">
-            {children}
-          </p>
+          RDC Stats
+          <span aria-hidden className="ac-tag text-ac-pink absolute -top-3 -right-10 text-lg">
+            fan made!
+          </span>
         </Link>
-      </NavigationMenuLink>
-    </li>
-  );
-});
-ListItem.displayName = "ListItem";
-
-const AuthSection = async () => {
-  const session = await getRscSession();
-  return (
-    <>
-      {session && <ListItem href="/admin">Admin</ListItem>}
-      <AuthButton hideOnSmallScreens={false} hasSession={Boolean(session)} />
-    </>
+        <NavLinks className="border-ac-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0" />
+        <div className="flex shrink-0 items-center gap-2">
+          <Suspense fallback={<LoginLink />}>
+            <SessionControls />
+          </Suspense>
+        </div>
+      </div>
+    </header>
   );
 };
 
-const ProfileSection = async () => {
+const LoginLink = () => (
+  <span className="flex items-center gap-4">
+    <span className="ac-label text-ac-cream/60 hidden lg:inline">Credit 00</span>
+    <Link
+      href="/signin"
+      className="ac-label bg-ac-gold text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
+    >
+      1P Login
+    </Link>
+  </span>
+);
+
+async function SessionControls() {
   const session = await getRscSession();
+  if (!session) return <LoginLink />;
+
   return (
     <>
-      <NavigationMenuItem className="hidden sm:block">
-        {session && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger>
-                <Avatar asChild>
-                  <Link href="/profile">
-                    <AvatarImage src={session.user?.image || Icon.src} />
-                    <AvatarFallback>Icon</AvatarFallback>
-                  </Link>
-                </Avatar>
-              </TooltipTrigger>
-              <TooltipContent>{session.user?.name}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </NavigationMenuItem>
-      <AuthButton hideOnSmallScreens hasSession={Boolean(session)} />
-    </>
-  );
-};
-
-const AdminSection = async () => {
-  return (
-    <NavigationMenuItem className="hidden md:block">
       <Link
-        className={navigationMenuTriggerStyle()}
         href="/admin"
         data-testid="nav-admin-link"
+        className="ac-label bg-ac-red text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
       >
-        <FillText className="text-chart-4" text="Admin" />
+        Admin
       </Link>
-    </NavigationMenuItem>
+      <Link
+        href="/profile"
+        className="ac-label text-ac-cream/70 hover:text-ac-cream hidden px-2 sm:block"
+      >
+        {session.user?.name?.split(" ")[0] ?? "Profile"}
+      </Link>
+      <SignOutButton />
+    </>
   );
-};
+}

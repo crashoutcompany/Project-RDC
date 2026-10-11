@@ -31,22 +31,23 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
   if (!session) {
     return (
       <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="bg-muted/40 flex aspect-video items-center justify-center rounded-lg border-2 border-dashed lg:col-span-3">
+        <div className="border-ac-panel-2 flex aspect-video items-center justify-center border-2 border-dashed bg-black lg:col-span-3">
           <div className="text-center">
-            <h3 className="text-lg font-semibold">No Replay Selected</h3>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <h3 className="ac-title text-ac-cream text-xl">No replay selected</h3>
+            <p className="text-ac-cream/70 mt-1 text-sm">
               Select a session from the library to preview.
             </p>
+            <p className="ac-label text-ac-gold mt-3">▲ Pick a tape</p>
           </div>
-        </Card>
-        <Card className="bg-muted/40 flex min-h-[200px] items-center justify-center rounded-lg border-2 border-dashed lg:col-span-2">
+        </div>
+        <div className="border-ac-panel-2 bg-ac-panel flex min-h-[200px] items-center justify-center border-2 border-dashed p-6 lg:col-span-2">
           <div className="text-center">
-            <h3 className="text-lg font-semibold">Session Info</h3>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <h3 className="ac-title text-ac-cream text-xl">Session info</h3>
+            <p className="text-ac-cream/70 mt-1 text-sm">
               Stats will appear here when a session is selected.
             </p>
           </div>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -55,10 +56,10 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold uppercase tracking-wide">
-            Replay Viewer
+          <h2 className="ac-title text-ac-cream text-2xl">
+            Replay <span className="text-ac-gold">viewer</span>
           </h2>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-ac-cream/70 text-sm">
             Active session preview
           </p>
         </div>
@@ -69,7 +70,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
             href={session.sessionUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="group relative block overflow-hidden rounded-lg"
+            className="group relative block overflow-hidden"
           >
             <div className="relative aspect-video">
               <Image
@@ -80,7 +81,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
                 className="object-cover transition-transform group-hover:scale-105"
               />
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90">
+                <div className="bg-ac-gold ac-skew-sm flex h-14 w-16 items-center justify-center">
                   <svg
                     className="ml-1 h-6 w-6 text-black"
                     fill="currentColor"
@@ -92,7 +93,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
               </div>
             </div>
             <div className="mt-2">
-              <h3 className="font-semibold group-hover:underline">
+              <h3 className="ac-title text-ac-cream text-base group-hover:text-ac-gold">
                 {session.sessionName}
               </h3>
               <p className="text-muted-foreground text-xs">
@@ -107,8 +108,8 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
         </div>
 
         <div className="flex flex-col gap-3 lg:col-span-2">
-          <Card className="flex flex-1 flex-col overflow-hidden p-4">
-            <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider">
+          <Card className="border-ac-gold flex flex-1 flex-col overflow-hidden border-2 p-4">
+            <h4 className="ac-title text-ac-cream mb-2 text-lg">
               Session Info
             </h4>
             <div className="text-muted-foreground mb-3 space-y-1 text-sm">
@@ -133,7 +134,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
             </div>
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="mt-auto w-full">
+                <Button className="ac-title mt-auto w-full text-xs">
                   View Full Stats
                 </Button>
               </DialogTrigger>

@@ -1,5 +1,15 @@
 import Image from "next/image";
+import { Tag } from "@/components/arcade/ui";
 import type { DashboardBannerStats } from "../../_helpers/dashboard";
+
+const BANNER_TAGS: Record<string, string> = {
+  "Mario Kart 8": "full send!!",
+  "Rocket League": "boost!!",
+  "Call of Duty": "no scope!!",
+  "Lethal Company": "quota!!",
+  SpeedRunners: "gotta go!!",
+  "Marvel Rivals": "ult ready!!",
+};
 
 type GameBannerProps = {
   gameName: string;
@@ -7,39 +17,33 @@ type GameBannerProps = {
   stats: DashboardBannerStats;
 };
 
-/**
- * Renders the hero banner for a game dashboard with the game image
- * and overlay stats (total matches, total sets, last played).
- *
- * @param props - Contains gameName, gameImage path, and banner stats.
- * @returns The game banner JSX element.
- */
 export function GameBanner({ gameName, gameImage, stats }: GameBannerProps) {
+  const hasData = stats.totalMatches > 0;
   return (
-    <div className="relative h-56 w-full overflow-hidden rounded-xl bg-muted sm:h-64 md:h-72">
+    <div className="border-ac-gold from-ac-ink relative overflow-hidden border-4 bg-linear-to-r via-[#14205a] to-[#c2621b]">
       {gameImage ? (
         <Image
           src={gameImage}
-          alt={gameName}
+          alt=""
           fill
-          className="object-cover"
-          sizes="100vw"
+          className="ac-pixel object-cover object-right opacity-45"
+          sizes="160px"
           priority
         />
       ) : null}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-      <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-8">
-        <h1 className="mb-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl">
-          {gameName.toUpperCase()}{" "}
-          <span className="text-chart-1 font-black">DASHBOARD</span>
+      <div className="from-ac-ink via-ac-ink/70 absolute inset-0 bg-linear-to-r to-transparent" />
+      <Tag tone="green" className="absolute top-5 right-6 z-10">
+        {BANNER_TAGS[gameName] ?? "game on!!"}
+      </Tag>
+      <div className="relative px-6 pt-16 pb-6 sm:px-8">
+        <h1 className="ac-title text-ac-cream text-2xl sm:text-3xl md:text-4xl">
+          {gameName} <span className="text-ac-gold">Dashboard</span>
         </h1>
-        <div className="flex flex-wrap gap-6 text-white sm:gap-10">
-          <BannerStat label="Total Matches" value={stats.totalMatches.toLocaleString()} />
-          <BannerStat label="Total Sets" value={stats.totalSets.toLocaleString()} />
-          {stats.lastPlayed && (
-            <BannerStat label="Last Played" value={stats.lastPlayed} />
-          )}
-        </div>
+        <dl className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
+          <BannerStat label="Total matches" value={hasData ? stats.totalMatches.toLocaleString() : "--"} />
+          <BannerStat label="Total sets" value={hasData ? stats.totalSets.toLocaleString() : "--"} />
+          <BannerStat label="Last played" value={stats.lastPlayed ?? "--"} />
+        </dl>
       </div>
     </div>
   );
@@ -48,10 +52,8 @@ export function GameBanner({ gameName, gameImage, stats }: GameBannerProps) {
 function BannerStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wider text-white/70">
-        {label}
-      </p>
-      <p className="text-xl font-bold sm:text-2xl">{value}</p>
+      <dt className="ac-label text-ac-cream/70">{label}</dt>
+      <dd className="text-ac-cream text-4xl">{value}</dd>
     </div>
   );
 }

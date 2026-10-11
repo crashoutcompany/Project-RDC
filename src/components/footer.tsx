@@ -1,44 +1,26 @@
 import Link from "next/link";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-} from "./ui/breadcrumb";
-import { ModeToggle } from "./modetoggle";
 
 export const Footer = () => {
   return (
-    <footer className="relative bottom-0 h-72 border-t-2 border-t-stone-800">
-      <Breadcrumb className="mx-auto my-6 w-fit">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/">Home</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/about">About</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem className="flex flex-col">
-            <Link className="hover:text-white" href="/games">
-              Games
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <Link className="hover:text-white" href="/members">
-              Members
-            </Link>
-          </BreadcrumbItem>
-          <ModeToggle />
-        </BreadcrumbList>
-      </Breadcrumb>
+    <footer className="border-ac-panel-2 bg-ac-panel border-t-2">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8">
+        <Link href="/" className="ac-title text-ac-gold text-xs">
+          RDC Stats
+        </Link>
+        <p className="text-ac-cream/70 text-lg">
+          A fan-made stat tracker. Found a bug?{" "}
+          <Link
+            href="https://github.com/crashoutcompany/Project-RDC/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-ac-cream underline underline-offset-2"
+          >
+            Report it on GitHub
+          </Link>
+          .
+        </p>
+        <span className="ac-label text-ac-cream animate-blink">Insert coin</span>
+      </div>
     </footer>
   );
 };

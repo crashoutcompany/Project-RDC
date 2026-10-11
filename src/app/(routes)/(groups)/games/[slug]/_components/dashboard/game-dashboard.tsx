@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Separator } from "@/components/ui/separator";
 import { GameBanner } from "./game-banner";
 import { PilotProfile } from "./pilot-profile";
 import { SquadLeaderboard } from "./squad-leaderboard";
@@ -43,7 +42,7 @@ export function GameDashboard({ data, children }: GameDashboardProps) {
         stats={data.bannerStats}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2">
         <PilotProfile mvp={data.mvpProfile} gameName={data.gameName} />
         <SquadLeaderboard
           leaderboard={data.leaderboard}
@@ -51,27 +50,29 @@ export function GameDashboard({ data, children }: GameDashboardProps) {
         />
       </div>
 
-      <Separator />
+      <Rule />
 
       <ReplayLibrary
         sessions={data.sessions}
         onSelectSession={handleSelectSession}
       />
 
-      <Separator />
+      <Rule />
 
       <ReplayViewer session={activeSession} />
 
-      <Separator />
+      <Rule />
 
-      <RecentMatches matches={data.recentMatches} />
+      <RecentMatches matches={data.recentMatches} gameName={data.gameName} />
 
       {children && (
         <>
-          <Separator />
+          <Rule />
           {children}
         </>
       )}
     </div>
   );
 }
+
+const Rule = () => <div className="bg-ac-gold h-1" />;

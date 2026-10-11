@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Inter } from "next/font/google";
+import { Press_Start_2P, Sedgwick_Ave_Display, VT323 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -13,7 +13,21 @@ import { DbSwitchNotifier } from "@/components/DbSwitchNotifier";
 import { CSPostHogProvider } from "@/posthog/client-init";
 import PostHogIdentify from "@/posthog/PosthogIdentify";
 
-const inter = Inter({ subsets: ["latin"] });
+const pressStart = Press_Start_2P({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-press-start",
+});
+const vt323 = VT323({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-vt323",
+});
+const sedgwick = Sedgwick_Ave_Display({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-sedgwick",
+});
 
 export const metadata: Metadata = {
   title: "RDC Stats Tracker",
@@ -26,9 +40,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html className="h-screen" lang="en" suppressHydrationWarning>
+    <html
+      className={`${pressStart.variable} ${vt323.variable} ${sedgwick.variable} h-screen`}
+      lang="en"
+      suppressHydrationWarning
+    >
       {/* <ReactScan /> */}
-      <body className={inter.className}>
+      <body className="flex min-h-screen flex-col">
         {process.env.NODE_ENV === "development" ? (
           <Script
             src="https://unpkg.com/react-scan/dist/auto.global.js"
@@ -37,15 +55,14 @@ export default function RootLayout({
         ) : null}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          forcedTheme="dark"
           disableTransitionOnChange
         >
           <CSPostHogProvider>
             <PostHogIdentify />
             {/* Comment this out to see ssg */}
             <Navbar />
-            <main>{children}</main>
+            <main className="flex-1">{children}</main>
             <Toaster />
             {process.env.NODE_ENV === "development" && <DbSwitchNotifier />}
             <Footer />
