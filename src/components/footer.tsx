@@ -1,44 +1,26 @@
 import Link from "next/link";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-} from "./ui/breadcrumb";
-import { ModeToggle } from "./modetoggle";
 
 export const Footer = () => {
   return (
-    <footer className="relative bottom-0 h-72 border-t-2 border-t-stone-800">
-      <Breadcrumb className="mx-auto my-6 w-fit">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/">Home</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/about">About</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem className="flex flex-col">
-            <Link className="hover:text-white" href="/games">
-              Games
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <Link className="hover:text-white" href="/members">
-              Members
-            </Link>
-          </BreadcrumbItem>
-          <ModeToggle />
-        </BreadcrumbList>
-      </Breadcrumb>
+    <footer className="border-vs-panel-2 bg-vs-ink border-t-2">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8">
+        <Link href="/" className="vs-title text-vs-gold text-2xl">
+          RDC <span className="text-vs-cream">Stats</span>
+        </Link>
+        <p className="text-vs-cream/70 text-sm">
+          A fan-made stat tracker. Found a bug?{" "}
+          <Link
+            href="https://github.com/crashoutcompany/Project-RDC/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-vs-cream underline underline-offset-2"
+          >
+            Report it on GitHub
+          </Link>
+          .
+        </p>
+        <span className="vs-label text-vs-cream/60">K.O.</span>
+      </div>
     </footer>
   );
 };

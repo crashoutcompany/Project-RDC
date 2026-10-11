@@ -49,17 +49,21 @@ export function SignInButtons({
 
   return (
     <div className="flex flex-col gap-4">
-      {providers.map((provider) => (
+      {providers.map((provider, i) => (
         <Button
           key={provider}
           type="button"
-          className="focus-visible:bg-primary/90 cursor-pointer text-white"
+          className={
+            i === 0
+              ? "font-display bg-vs-gold text-vs-ink hover:bg-vs-gold/90 h-14 cursor-pointer text-2xl tracking-wider uppercase shadow-[4px_4px_0_var(--vs-red)]"
+              : "font-display bg-vs-cream text-vs-ink hover:bg-vs-cream/90 h-14 -skew-x-3 cursor-pointer text-2xl tracking-wider uppercase shadow-[4px_4px_0_var(--vs-blue)]"
+          }
           disabled={pendingProvider !== null}
           onClick={() => void signIn(provider)}
         >
           {pendingProvider === provider
             ? "Redirecting…"
-            : `Sign in with ${PROVIDER_LABELS[provider]}`}
+            : `Continue with ${PROVIDER_LABELS[provider]}`}
         </Button>
       ))}
       {errorMessage ? (

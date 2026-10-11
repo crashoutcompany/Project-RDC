@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { H1 } from "@/components/headings";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import Image from "next/image";
-import Link from "next/link";
-import { getGamesNav } from "@/lib/constants";
 import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { connection } from "next/server";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ARENA_BAR, ArenaCard } from "@/components/versus/arena-card";
+import { Breadcrumbs, Eyebrow, VsHeading } from "@/components/versus/ui";
+import { WinsMatrix } from "@/components/versus/wins-matrix";
+import { GamesEnum } from "@/lib/constants";
+import { getArenas, getRoster } from "@/lib/rdc-stats";
 
 export const metadata: Metadata = {
   title: "RDC Games",
@@ -14,70 +14,107 @@ export const metadata: Metadata = {
     "Browse RDC game statistics, player rankings, and session data across Mario Kart, Rocket League, and more.",
 };
 
+const SHORT_NAMES: Record<GamesEnum, string> = {
+  [GamesEnum.MarioKart8]: "MK8",
+  [GamesEnum.RocketLeague]: "Rocket",
+  [GamesEnum.CallOfDuty]: "COD",
+  [GamesEnum.LethalCompany]: "Lethal",
+  [GamesEnum.SpeedRunners]: "Speed",
+  [GamesEnum.MarvelRivals]: "Rivals",
+};
+
 export default function Page() {
   return (
-    <div className="m-16">
-      <H1 data-testid="games-shell-marker">Games</H1>
-      <Suspense fallback={<GamesGridSkeleton />}>
-        <GamesGrid />
-      </Suspense>
-      <div className="mt-10 flex gap-10">
-        <Card className="h-64 flex-1">
-          <CardHeader>
-            <CardTitle>Chart</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="h-64 flex-1">
-          <CardHeader>
-            <CardTitle>Chart</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-    </div>
+    <>
+      <section className="vs-dusk relative overflow-hidden [--sun-x:80%]">
+        <div className="mx-auto max-w-6xl px-4 pt-8 pb-12">
+          <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Games" }]} />
+          <Eyebrow>Game statistics</Eyebrow>
+          <h1
+            data-testid="games-shell-marker"
+            className="vs-title text-vs-cream animate-slam-in mt-3 text-7xl md:text-8xl"
+          >
+            Choose your <span className="text-vs-blue drop-shadow-[3px_3px_0_#0d0b10]">arena</span>
+          </h1>
+          <p className="text-vs-cream mt-3 max-w-md font-medium">
+            Game statistics, player rankings and session data for every game
+            the crew plays.
+          </p>
+        </div>
+      </section>
+      <section className="bg-vs-ink">
+        <div className="mx-auto max-w-6xl px-4 py-14">
+          <VsHeading lead="All" accent="arenas" className="mb-8" />
+          <Suspense fallback={<GamesGridSkeleton />}>
+            <GamesGrid />
+          </Suspense>
+        </div>
+      </section>
+      <section className="bg-vs-panel border-vs-gold border-t-4">
+        <div className="mx-auto max-w-6xl px-4 py-14">
+          <VsHeading lead="Wins by" accent="arena" tone="red" />
+          <p className="text-vs-cream/70 mt-2 mb-4">
+            Every fighter across every arena. Brighter means more wins.
+          </p>
+          <Suspense fallback={<Skeleton className="h-96" />}>
+            <Matrix />
+          </Suspense>
+        </div>
+      </section>
+    </>
   );
 }
 
 async function GamesGrid() {
   await connection();
-  const games = await getGamesNav();
+  const arenas = await getArenas();
   return (
     <div
-      className="flex flex-wrap justify-center gap-10"
+      className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
       data-testid="games-content"
     >
-      {games.map((game) => (
-        <div key={game.url}>
-          {game.src && (
-            <Card className="group relative aspect-square h-52 w-full min-w-24 overflow-hidden transition-transform duration-700 sm:w-52">
-              <Link href={game.url} className="relative block h-full w-full">
-                <Image
-                  className="object-cover transition-transform duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-125"
-                  fill
-                  sizes="(max-width: 639px) 100vw, 208px"
-                  alt={game.name}
-                  src={game.src || ""}
-                />
-                <CardHeader className="relative h-1/4 bg-black/50">
-                  <CardTitle className="absolute font-extrabold text-white opacity-100">
-                    {game.name}
-                  </CardTitle>
-                </CardHeader>
-              </Link>
-            </Card>
-          )}
-        </div>
+      {arenas.map((arena) => (
+        <ArenaCard key={arena.slug} arena={arena} showStats />
       ))}
     </div>
   );
 }
 
+async function Matrix() {
+  await connection();
+  const [arenas, roster] = await Promise.all([getArenas(), getRoster()]);
+  return (
+    <WinsMatrix
+      arenas={arenas.map((a) => ({
+        slug: a.slug,
+        short: SHORT_NAMES[a.slug] ?? a.name,
+        bar: ARENA_BAR[a.slug] ?? "bg-vs-gold",
+      }))}
+      rows={roster.map((f) => ({
+        slug: f.slug,
+        name: f.name,
+        portrait: f.art.portrait,
+        cells: Object.fromEntries(
+          arenas.map((a) => {
+            if (!a.matches) return [a.slug, null];
+            const r = a.records[f.slug];
+            return [
+              a.slug,
+              { matches: r?.matches ?? 0, sets: r?.sets ?? 0, days: r?.days ?? 0 },
+            ];
+          }),
+        ),
+      }))}
+    />
+  );
+}
+
 function GamesGridSkeleton() {
   return (
-    <div className="flex flex-wrap justify-center gap-10">
-      <Skeleton className="h-52 w-52" />
-      <Skeleton className="h-52 w-52" />
-      <Skeleton className="h-52 w-52" />
-      <Skeleton className="h-52 w-52" />
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }, (_, i) => (
+        <Skeleton key={i} className="h-36 -skew-x-6" />
+      ))}
     </div>
   );
 }

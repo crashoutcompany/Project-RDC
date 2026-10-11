@@ -1,5 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
 import { capitalizeFirst } from "@/lib/utils";
 import type { MvpProfile } from "../../_helpers/dashboard";
 
@@ -8,69 +7,47 @@ type PilotProfileProps = {
   gameName: string;
 };
 
-/**
- * Displays the most recent MVP's profile card, including avatar, description,
- * and key stats. Generic to any game — labels come from the data.
- *
- * @param props - Contains mvp profile data and gameName for context.
- * @returns A card JSX element with the MVP profile or a placeholder.
- */
+const RAILS = ["border-l-vs-gold", "border-l-vs-cream", "border-l-[#6b8cff]", "border-l-vs-red"];
+const VALUE_COLORS = ["text-vs-gold", "text-vs-cream", "text-[#6b8cff]", "text-vs-red"];
+const EMPTY_STATS = ["Matches won", "Sets won", "Days won", "MVPs"];
+
+/** Most recent MVP for the game, or a "No MVP yet" card with empty stat slots. */
 export function PilotProfile({ mvp, gameName }: PilotProfileProps) {
-  if (!mvp) {
-    return (
-      <Card className="flex h-full min-h-[280px] flex-col justify-center">
-        <CardContent className="text-center">
-          <p className="text-muted-foreground text-sm">
-            No MVP has been selected for {gameName} yet.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const stats = mvp?.stats.length
+    ? mvp.stats.slice(0, 4).map((s) => ({ label: capitalizeFirst(s.statName), value: String(s.sum) }))
+    : EMPTY_STATS.map((label) => ({ label, value: "--" }));
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
-          Player Profile
-        </CardTitle>
-        <div className="flex items-center gap-3">
-          <Avatar className="border-primary/20 h-16 w-16 border-2">
-            <AvatarImage src={mvp.image} alt={mvp.playerName} />
-            <AvatarFallback>{mvp.playerName[0]}</AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="text-xl font-bold">{mvp.playerName.toUpperCase()}</h3>
-            {mvp.description && (
-              <p className="text-muted-foreground line-clamp-2 text-xs">
-                {mvp.description}
-              </p>
-            )}
+    <div className="border-vs-gold vs-shadow bg-vs-ink flex h-full flex-col border-4 p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="vs-label text-vs-cream/80">Player profile</p>
+        <span className="vs-label bg-vs-red text-vs-cream px-2 py-0.5 tracking-wider">MVP</span>
+      </div>
+      <div className="mb-5 flex items-center gap-4">
+        {mvp?.image ? (
+          <div className="vs-skew relative h-24 w-20 shrink-0 overflow-hidden">
+            <Image src={mvp.image} alt={mvp.playerName} fill sizes="80px" className="object-cover" />
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 pt-0">
-        {mvp.stats.length > 0 && (
-          <div className="grid grid-cols-2 gap-2">
-            {mvp.stats.slice(0, 4).map((stat) => (
-              <div
-                key={stat.statName}
-                className="bg-muted rounded-md p-2"
-              >
-                <p className="text-muted-foreground text-xs font-medium">
-                  {capitalizeFirst(stat.statName)}
-                </p>
-                <p className="text-lg font-bold">{stat.sum}</p>
-                {stat.average !== undefined && (
-                  <p className="text-muted-foreground text-xs">
-                    avg: {stat.average}
-                  </p>
-                )}
-              </div>
-            ))}
+        ) : (
+          <div className="vs-skew bg-vs-panel-2 vs-title text-vs-cream/40 grid h-24 w-20 shrink-0 place-items-center text-5xl">
+            ?
           </div>
         )}
-      </CardContent>
-    </Card>
+        <div className="min-w-0">
+          <p className="vs-title text-vs-cream text-5xl">{mvp ? mvp.playerName : "No MVP yet"}</p>
+          <p className="text-vs-cream/80 line-clamp-2 text-sm">
+            {mvp?.description ?? `MVP data for ${gameName} will appear here once a session is logged.`}
+          </p>
+        </div>
+      </div>
+      <dl className="mt-auto grid grid-cols-2 gap-3">
+        {stats.map((stat, i) => (
+          <div key={stat.label} className={`bg-vs-panel border-l-4 px-3 py-2 ${RAILS[i]}`}>
+            <dt className="vs-label text-vs-cream/70 truncate">{stat.label}</dt>
+            <dd className={`vs-title text-3xl not-italic ${VALUE_COLORS[i]}`}>{stat.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
