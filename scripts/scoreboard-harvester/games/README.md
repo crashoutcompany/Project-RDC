@@ -35,8 +35,7 @@ export const yourGame: GameProfile = {
     sampling: "keyframes",
     minMatchIntervalSec: 120, // skip-ahead floor; shortest realistic match
   },
-  referenceFileName: "scoreboard.png",
-  azureGameId: 3, // games.game_id; picks the Azure model + processor
+  gameId: 3, // games.game_id; picks the Gemini/Decisions spec, Azure model and processor
   setRule: { kind: "single" }, // or { kind: "firstTo", wins: 3 } / { kind: "fixed", size: 4 }
   sheetAliases: ["your game", "yg"],
 };

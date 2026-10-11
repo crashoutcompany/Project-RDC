@@ -103,7 +103,7 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
       const session = existing.find(
         (s) =>
           s.videoId === candidate.videoId &&
-          s.gameId === candidate.profile.azureGameId,
+          s.gameId === candidate.profile.gameId,
       );
       if (session) {
         if (prior?.outcome !== "exists" && prior?.outcome !== "drafted")
@@ -185,7 +185,7 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
           jobs: toRead.map((h) => ({
             matches: h.manifest.matches,
             workDir: h.workDir,
-            gameId: h.candidate.profile.azureGameId!,
+            gameId: h.candidate.profile.gameId,
           })),
           players,
           reader: opts.configFor(toRead[0]?.candidate.profile ?? opts.profiles[0]).reader,
@@ -243,7 +243,6 @@ async function harvestCandidate(
   deferAnalysis: boolean,
 ): Promise<Harvested> {
   const { manifest, workDir } = await harvestVideo({
-    mode: "extract",
     profile: candidate.profile,
     config: opts.configFor(candidate.profile),
     deps: opts.deps,
@@ -286,7 +285,7 @@ async function draftCandidate(
   });
   const result = await writeDraftSession({
     prisma,
-    gameId: profile.azureGameId!,
+    gameId: profile.gameId,
     video,
     draft,
   });

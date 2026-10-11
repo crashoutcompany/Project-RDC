@@ -3,22 +3,18 @@
  * RDC Scoreboard Harvester.
  *
  * Downloads (or accepts) a video, finds the end-of-match scoreboards
- * (Decisions API, or RapidOCR), and reads their stats (Gemini, or the game's
+ * (Decisions API, or local OCR), and reads their stats (Gemini, or the game's
  * Azure model). Each step falls back to the other option on errors.
  * Game-agnostic — the actual scoreboard recognition is driven by a per-game
  * profile in games/. See README.md for full docs.
  *
- *   pnpm harvest -- extract   --game rocket-league --url <youtube> [--finder rapidocr] [--reader azure] [--batch]
- *   pnpm harvest -- bootstrap --game rocket-league --from ./shot.png
+ *   pnpm harvest -- extract   --game rocket-league --url <youtube> [--finder ocr] [--reader azure] [--batch]
  *   pnpm harvest -- weekly    [--write] [--limit 4]
  */
 import { parseArgs } from "util";
 import path from "path";
-import fs from "fs";
-import sharp from "sharp";
 
 import { checkDeps } from "./pipeline/deps";
-import { loadReferenceHash } from "./pipeline/phash";
 import { harvestVideo } from "./harvest";
 import {
   extractYoutubeId,
@@ -38,7 +34,7 @@ import { READER_IDS, type ReaderId } from "@/lib/vision/readers";
 
 // Not __dirname: the generated Prisma client overwrites the global one.
 const HARVESTER_ROOT = import.meta.dirname;
-const COMMANDS = ["extract", "bootstrap", "weekly"] as const;
+const COMMANDS = ["extract", "weekly"] as const;
 const DEFAULT_SAMPLE_WIDTH = 1280;
 const DEFAULT_JPEG_QUALITY = 3;
 const DEFAULT_OCR_CONCURRENCY = 2;
@@ -53,13 +49,10 @@ const OPTIONS = {
   url: { type: "string" },
   video: { type: "string" },
   videos: { type: "string" },
-  from: { type: "string" },
   out: { type: "string", default: "./out" },
   fps: { type: "string" },
   sampling: { type: "string" },
   "ocr-engine": { type: "string", default: "auto" },
-  "no-phash": { type: "boolean", default: false },
-  "phash-threshold": { type: "string", default: "12" },
   "ocr-min-keywords": { type: "string" },
   "require-end-screen": { type: "boolean" },
   "no-require-end-screen": { type: "boolean", default: false },
@@ -77,13 +70,10 @@ const OPTIONS = {
   "keep-video": { type: "boolean", default: false },
   start: { type: "string" },
   end: { type: "string" },
-  reference: { type: "string" },
   finder: { type: "string", default: "decisions" },
   reader: { type: "string", default: "gemini" },
   batch: { type: "boolean", default: false },
   "decisions-concurrency": { type: "string" },
-  // Accepted so old commands still parse; reading stats is now the default.
-  analyze: { type: "boolean", default: false },
   "no-analyze": { type: "boolean", default: false },
   write: { type: "boolean", default: false },
   limit: { type: "string", default: String(DEFAULT_WEEKLY_LIMIT) },
@@ -179,15 +169,6 @@ function resolveConfig(
     fps,
     sampling,
     ocrEngine,
-    // RDC uploads are stream VODs whose overlays defeat whole-frame pHash.
-    noPhash: command === "weekly" || Boolean(values["no-phash"]),
-    phashThreshold: parseFiniteNumber({
-      name: "phash-threshold",
-      raw: values["phash-threshold"],
-      kind: "int",
-      min: 0,
-      max: 64,
-    })!,
     ocrMinKeywords,
     requireEndScreen: values["no-require-end-screen"]
       ? false
@@ -244,67 +225,7 @@ function resolveConfig(
         min: 1,
         max: 64,
       }) ?? (batch ? BATCH_DECISIONS_CONCURRENCY : DEFAULT_DECISIONS_CONCURRENCY),
-    referencePath: values.reference
-      ? path.resolve(values.reference)
-      : path.join(
-          HARVESTER_ROOT,
-          "reference",
-          profile.id,
-          profile.referenceFileName,
-        ),
   };
-}
-
-/**
- * Validates an arbitrary image file and copies it into the reference path.
- * Used by `bootstrap --from <image>` to short-circuit the slow OCR-every-frame
- * path when the caller already has a clean scoreboard screenshot in hand.
- */
-async function bootstrapFromImage(
-  sourcePath: string,
-  referencePath: string,
-): Promise<void> {
-  const absSource = path.resolve(sourcePath);
-  if (!fs.existsSync(absSource)) {
-    console.error(`[bootstrap] image not found: ${absSource}`);
-    process.exit(1);
-  }
-
-  let width: number | undefined;
-  let height: number | undefined;
-  try {
-    const meta = await sharp(absSource).metadata();
-    width = meta.width;
-    height = meta.height;
-  } catch (err) {
-    console.error(
-      `[bootstrap] not a valid image: ${absSource}`,
-      err instanceof Error ? err.message : err,
-    );
-    process.exit(1);
-  }
-
-  if (!width || !height) {
-    console.error("[bootstrap] could not read image dimensions");
-    process.exit(1);
-  }
-  if (width < 640 || height < 360) {
-    console.error(
-      `[bootstrap] image too small (${width}x${height}); need at least 640x360 for reliable pHash`,
-    );
-    process.exit(1);
-  }
-
-  fs.mkdirSync(path.dirname(referencePath), { recursive: true });
-  // Re-encode through sharp to normalize (strips EXIF, ensures PNG, consistent color profile).
-  await sharp(absSource).png().toFile(referencePath);
-
-  const hash = await loadReferenceHash(referencePath);
-  console.log(
-    `[bootstrap] reference saved → ${referencePath} (${width}x${height})`,
-  );
-  console.log(`[bootstrap] pHash=${hash?.toString(16) ?? "?"}`);
-  console.log("[bootstrap] ready — `extract` will now use the fast path.");
 }
 
 function printUsage(): void {
@@ -315,19 +236,16 @@ RDC Scoreboard Harvester
 Usage:
   pnpm harvest -- extract   --game <id> --url <youtube> [--finder <f>] [--reader <r>] [--batch]
   pnpm harvest -- extract   --game <id> --video ./game.mp4
-  pnpm harvest -- bootstrap --game <id> --from ./shot.png   (fast)
-  pnpm harvest -- bootstrap --game <id> --url <youtube>     (slow)
   pnpm harvest -- weekly    [--write] [--limit ${DEFAULT_WEEKLY_LIMIT}] [--videos <id,id> --game <id>]
 
 Commands:
   extract     (default) Find and read the scoreboards in one video.
-  bootstrap   Set the pHash reference image for a given --game.
   weekly      Find uploads missing from the database (Google Sheet "Truth"),
               harvest + analyze them, and save unapproved draft sessions.
 
 Setup (each step falls back to the other option on errors):
-  --finder <name>         decisions (default) | rapidocr
-                          decisions → RapidOCR for frames it can't answer
+  --finder <name>         decisions (default) | ocr
+                          decisions → OCR for frames it can't answer
   --reader <name>         gemini (default) | azure
                           gemini → Azure for scoreboards it can't read
   --batch                 Bulk mode: Gemini reads through its Batch API (half
@@ -343,7 +261,6 @@ Game selection:
 Input source:
   --url <url>             YouTube URL
   --video <path>          Local video file
-  --from <path>           Bootstrap-only: use an existing screenshot
 
 Weekly:
   --write                 Save drafts to the database (otherwise dry run:
@@ -356,10 +273,8 @@ Weekly:
 
 Detection tuning (defaults come from the active --game profile):
   --sampling <mode>       fps | keyframes (decode I-frames only; much faster)
-  --ocr-engine <name>     RapidOCR finder's engine: auto | vision | rapidocr
+  --ocr-engine <name>     OCR finder's engine: auto | vision | rapidocr
                           (auto = Vision on macOS)
-  --no-phash              Skip pHash pre-filter; OCR every frame
-  --phash-threshold <n>   Hamming distance cutoff 0-64 (default: 12)
   --ocr-min-keywords <n>  Min game keywords to confirm a frame
   --require-end-screen    Reject frames missing the game's end-screen sentinel
   --no-require-end-screen Turn that off for games that default it on
@@ -377,7 +292,6 @@ I/O:
   --ocr-concurrency <n>   Persistent OCR workers (default: ${DEFAULT_OCR_CONCURRENCY})
   --start <sec>           Start time slice (debugging)
   --end <sec>             End time slice (debugging)
-  --reference <path>      Override pHash reference image
   --keep-frames           Don't delete temp frames after run
   --help                  This message
 `);
@@ -449,16 +363,9 @@ async function main(): Promise<void> {
       (config.requireEndScreen ? " require-end-screen" : ""),
   );
 
-  // Fast path: bootstrap from an existing screenshot. Skips deps + video
-  // pipeline — sharp alone handles it.
-  if (command === "bootstrap" && values.from) {
-    await bootstrapFromImage(values.from, config.referencePath);
-    return;
-  }
-
   if (!values.url && !values.video) {
     console.error(
-      "Must provide --url <youtube>, --video <path>, or (bootstrap only) --from <image>",
+      "Must provide --url <youtube> or --video <path>",
     );
     printUsage();
     process.exit(1);
@@ -480,7 +387,6 @@ async function main(): Promise<void> {
   }
 
   await harvestVideo({
-    mode: command,
     profile,
     config,
     deps,

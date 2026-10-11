@@ -4,15 +4,12 @@ import type { Player } from "@/generated/prisma/client";
 import { DepCheckResult } from "./pipeline/deps";
 import { downloadVideo, probeDuration } from "./pipeline/download";
 import { sampleFrames } from "./pipeline/sample";
-import { filterByPHash, loadReferenceHash } from "./pipeline/phash";
 import { dedupAndSave } from "./pipeline/dedup";
 import { analyzeJobs } from "./pipeline/analyze";
 import { findScoreboards } from "./pipeline/finders";
 import { urlToSlug } from "./utils";
-import { FrameRecord, Manifest, ResolvedConfig } from "./types";
+import { Manifest, ResolvedConfig } from "./types";
 import type { GameProfile } from "./games/types";
-
-export type HarvestMode = "extract" | "bootstrap";
 
 export interface HarvestResult {
   workDir: string;
@@ -70,73 +67,15 @@ async function acquireVideo(args: {
 }
 
 /**
- * Decides whether to run the pHash filter and returns the surviving candidates.
- * In bootstrap mode we always skip pHash (we're trying to *find* the reference).
- * In extract mode we skip if no reference exists yet, falling back to OCR-only.
- */
-async function runPhashStage(args: {
-  mode: HarvestMode;
-  frames: FrameRecord[];
-  config: ResolvedConfig;
-}): Promise<FrameRecord[]> {
-  const { mode, frames, config } = args;
-
-  if (config.noPhash) {
-    console.log("[phash] --no-phash set → the finder will see every frame");
-    return frames;
-  }
-
-  if (mode === "bootstrap") {
-    console.log(
-      "[phash] bootstrap mode → skipping pHash, OCR will see every frame",
-    );
-    return frames;
-  }
-
-  if (!fs.existsSync(config.referencePath)) {
-    console.log(
-      `[phash] no reference at ${config.referencePath} → the finder will see every frame`,
-    );
-    return frames;
-  }
-
-  const refHash = await loadReferenceHash(config.referencePath);
-  if (!refHash) return frames;
-
-  console.log(`[phash] reference loaded, threshold=${config.phashThreshold}`);
-  const survivors = await filterByPHash({
-    frames,
-    refHash,
-    threshold: config.phashThreshold,
-  });
-  console.log(`[phash] ${survivors.length}/${frames.length} survived filter`);
-
-  if (survivors.length === 0 && frames.length > 0) {
-    // Stream overlays (face-cam, chat) change the whole-frame hash, so a
-    // reference from a clean capture can reject every frame. Finding nothing
-    // is worse than a slower run: fall back to OCR on every frame.
-    console.warn(
-      "[phash] 0 frames matched the reference (stream overlays?) → the finder will see every frame",
-    );
-    return frames;
-  }
-  return survivors;
-}
-
-/**
- * Runs one video through the pipeline: download → sample → (pHash) → find
- * scoreboards (Decisions or RapidOCR) → dedup → read stats (Gemini or Azure)
+ * Runs one video through the pipeline: download → sample → find
+ * scoreboards (Decisions or local OCR) → dedup → read stats (Gemini or Azure)
  * → manifest.json. Every stage is resumable from disk, so a crashed weekly
  * run picks up where it stopped.
  *
  * `deferAnalysis` stops before reading stats so a bulk run can read every
  * video's scoreboards in one batch (see `analyzeJobs`).
- *
- * In bootstrap mode the first confirmed scoreboard is saved as the game's
- * pHash reference instead (always found with RapidOCR).
  */
 export async function harvestVideo(args: {
-  mode: HarvestMode;
   profile: GameProfile;
   config: ResolvedConfig;
   deps: DepCheckResult;
@@ -146,7 +85,7 @@ export async function harvestVideo(args: {
   players?: Player[];
   deferAnalysis?: boolean;
 }): Promise<HarvestResult> {
-  const { mode, profile, config, deps, url, video } = args;
+  const { profile, config, deps, url, video } = args;
   const startTime = Date.now();
   if (!deps.ocrEngine) throw new Error("No OCR engine available");
 
@@ -168,16 +107,14 @@ export async function harvestVideo(args: {
   });
   console.log(`[sample] ${frames.length} frames ready`);
 
-  const candidates = await runPhashStage({ mode, frames, config });
-
   const found = await findScoreboards({
-    finder: mode === "bootstrap" ? "rapidocr" : config.finder,
-    frames: candidates,
+    finder: config.finder,
+    frames,
     profile,
     config,
     deps,
     workDir,
-    skipAheadSec: mode === "bootstrap" ? 0 : config.skipAheadSec,
+    skipAheadSec: config.skipAheadSec,
   });
   const confirmed = found.confirmed;
   console.log(
@@ -185,30 +122,16 @@ export async function harvestVideo(args: {
       (config.requireEndScreen && found.finder !== "decisions" ? " (require-end-screen=on)" : ""),
   );
 
-  if (mode === "bootstrap") {
-    if (confirmed.length === 0)
-      throw new Error("[bootstrap] no scoreboards found, cannot save reference");
-    fs.mkdirSync(path.dirname(config.referencePath), { recursive: true });
-    fs.copyFileSync(confirmed[0].filePath, config.referencePath);
-    console.log(`[bootstrap] saved reference → ${config.referencePath}`);
-  }
-
-  let matches =
-    mode === "extract"
-      ? await dedupAndSave({
-          confirmed,
-          outDir: workDir,
-          gapSec: config.dedupGapSec,
-        })
-      : [];
-  if (mode === "extract")
-    console.log(`[dedup] saved ${matches.length} match screenshot(s)`);
+  let matches = await dedupAndSave({
+    confirmed,
+    outDir: workDir,
+    gapSec: config.dedupGapSec,
+  });
+  console.log(`[dedup] saved ${matches.length} match screenshot(s)`);
 
   if (config.analyze && !args.deferAnalysis && matches.length > 0) {
-    if (!profile.azureGameId)
-      throw new Error(`${profile.displayName} has no azureGameId to analyze with`);
     [matches] = await analyzeJobs({
-      jobs: [{ matches, workDir, gameId: profile.azureGameId }],
+      jobs: [{ matches, workDir, gameId: profile.gameId }],
       players: args.players ?? [],
       reader: config.reader,
       batch: config.batch,

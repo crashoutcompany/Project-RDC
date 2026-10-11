@@ -4,19 +4,19 @@ Turns RDC stream VODs into **draft sessions**. It finds every end-of-match score
 
 ```text
 Google Sheet "Truth" ─► yt-dlp (video only) ─► ffmpeg keyframes ─► finder ─► dedup
-   (uploads not yet in DB)                         Decisions API (falls back to RapidOCR)
+   (uploads not yet in DB)                         Decisions API (falls back to local OCR)
         ─► reader ─► game processor ─► sets ─► unapproved session
            Gemini 3.8 Flash (falls back to Azure)
 ```
 
 | Step   | Default                       | Fallback, on errors                  | Flag                          |
 | ------ | ----------------------------- | ------------------------------------ | ----------------------------- |
-| Find   | Decisions API (`gpt-6-luna`)  | RapidOCR keyword gate, for the frames Decisions couldn't answer | `--finder decisions\|rapidocr` |
+| Find   | Decisions API (`gpt-6-luna`)  | Local OCR keyword gate (RapidOCR, or Apple Vision on macOS), for the frames Decisions couldn't answer | `--finder decisions\|ocr` |
 | Read   | Gemini 3.8 Flash              | Azure's per-game model               | `--reader gemini\|azure`       |
 
 The admin form only reads (admins upload the screenshots): Gemini, falling back to Azure.
 
-Errors are handled the same way everywhere (`src/lib/vision/api-errors.ts`). Rate limits (429), 5xx, timeouts and dropped connections are retried twice with backoff, honoring `Retry-After`. Bad keys, exhausted quota, bad requests and unusable output skip straight to the fallback. Decisions also gives up after 3 frames in a row fail, and hands the rest of the video to RapidOCR.
+Errors are handled the same way everywhere (`src/lib/vision/api-errors.ts`). Rate limits (429), 5xx, timeouts and dropped connections are retried twice with backoff, honoring `Retry-After`. Bad keys, exhausted quota, bad requests and unusable output skip straight to the fallback. Decisions also gives up after 3 frames in a row fail, and hands the rest of the video to local OCR.
 
 `--batch` is for bulk runs. Gemini reads every scoreboard in the run through its Batch API: half price, no minimum size, usually minutes but up to 24 h. Scoreboards the batch can't answer are read the normal way, fallback included. Decisions has no batch API, so `--batch` just raises its concurrency from 4 to 12.
 
@@ -99,19 +99,17 @@ Unknown gamertags are dropped: the processors map gamertags to members via `PLAY
 1. **Sample.** Keyframe mode (RL default) decodes only the video's I-frames, about one every 2–7s. On a Pi 5 that is ~15s for a 100-minute VOD, versus ~25 minutes for 1 fps. `fps` mode samples at a fixed rate for games whose results screen is brief.
 2. **Find.** By default each frame is one Decisions API predicate ("is this the end-of-match scoreboard?", from `src/lib/vision/scoreboard-specs.ts`), 4 at a time; a probability ≥ 0.5 is a scoreboard. Answers are logged to `decisions.jsonl`, so reruns only ask frames without one. Costs about $0.15 for a 100-minute VOD and takes about a minute.
 
-   **RapidOCR** (`--finder rapidocr`, and the fallback) puts each frame through a persistent OCR daemon: RapidOCR on Linux, Apple Vision on macOS. Both speak the same line protocol. A frame is a scoreboard when at least `minKeywords` of the game's keywords appear as **standalone OCR lines**. Stream VODs carry a live-chat overlay full of "score", "mvp", "goals", so substring matching gives false positives (see `pipeline/keywords.ts`). Games can also require an end-screen sentinel. RL requires `WINNER` or `NEXT MATCH IN`, which rejects the mid-game TAB scoreboard.
-3. **Skip-ahead** (RapidOCR only). After a scoreboard run ends, frames until `minMatchIntervalSec` later are skipped, since no match is that short.
+   **Local OCR** (`--finder ocr`, and the fallback) puts each frame through a persistent OCR daemon: RapidOCR on Linux, Apple Vision on macOS. Both speak the same line protocol. A frame is a scoreboard when at least `minKeywords` of the game's keywords appear as **standalone OCR lines**. Stream VODs carry a live-chat overlay full of "score", "mvp", "goals", so substring matching gives false positives (see `pipeline/keywords.ts`). Games can also require an end-screen sentinel. RL requires `WINNER` or `NEXT MATCH IN`, which rejects the mid-game TAB scoreboard.
+3. **Skip-ahead** (OCR finder only). After a scoreboard run ends, frames until `minMatchIntervalSec` later are skipped, since no match is that short.
 4. **Dedup.** Confirmed frames within `--dedup-gap` seconds form one match. The earliest frame of the run is saved as `match-NN_t=<hh-mm-ss>.png`: players who leave during the countdown disappear from the scoreboard, so later frames can be missing rows.
 5. **Read** (on by default; `--no-analyze` stops after the screenshots). Each PNG goes through the reader chain in `src/lib/vision/readers.ts`, the same code as the admin button, with every RDC member as the candidate roster. Gemini's answer is put in Azure's field layout and run through the same game processor, minus Azure-specific misread fixes. Results are cached as `match-NN.analysis.json`, with the reader that produced them and any fallbacks.
 6. **Draft** (`draft/build-draft.ts`). Matches are kept in video order and grouped by the game's `setRule`: RL is first-to-3 series that also break on roster changes, MK8 is 4-race cups, COD is one set.
-
-pHash pre-filtering (`bootstrap` + reference image) still works for clean captures. The weekly job skips it: overlays change the whole-frame hash, so on stream VODs it rejects real scoreboards.
 
 ## Validation
 
 ### Decisions + Gemini (current default)
 
-Extraction benchmark (`scripts/extraction-benchmark/`), 2026-10-10, against the stats stored in the database:
+Extraction benchmark (branch `exp/extraction-benchmark`), 2026-10-10, against the stats stored in the database:
 
 | Session | Matches in DB | Decisions found | Gemini values right (3 passes) | Winners | Invented players | Cost / scoreboard |
 | ------- | ------------- | --------------- | ------------------------------ | ------- | ---------------- | ----------------- |
@@ -141,7 +139,7 @@ Fixed along the way, in the shared processor code the admin button also uses:
 
 ## Game support
 
-A game needs a harvester profile (`games/`) to be found in videos, and a scoreboard spec (`src/lib/vision/scoreboard-specs.ts`) to be read by Gemini or found by Decisions. Without a spec, both fall back (to Azure and RapidOCR).
+A game needs a harvester profile (`games/`) to be found in videos, and a scoreboard spec (`src/lib/vision/scoreboard-specs.ts`) to be read by Gemini or found by Decisions. Without a spec, both fall back (to Azure and local OCR).
 
 | Game          | Harvester profile | Gemini / Decisions spec | Azure model | Notes                                                                                                                       |
 | ------------- | ----------------- | ----------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -157,7 +155,7 @@ A game needs a harvester profile (`games/`) to be found in videos, and a scorebo
 pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts \
   extract --game rocket-league --url 'https://youtu.be/<id>'
 # The original setup
-  ... extract --game rocket-league --url 'https://youtu.be/<id>' --finder rapidocr --reader azure
+  ... extract --game rocket-league --url 'https://youtu.be/<id>' --finder ocr --reader azure
 # Screenshots only
   ... extract --game rocket-league --url 'https://youtu.be/<id>' --no-analyze
 # Bulk: draft many videos, reading every scoreboard in one Gemini batch
@@ -175,7 +173,7 @@ Output goes to `out/<game-id>/<video-id>/`: `match-NN_*.png`, `match-NN.analysis
 | Symptom                        | Fix                                                                                       |
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | `yt-dlp` "Sign in to confirm"  | Run from a home connection (datacenter IPs get challenged); update yt-dlp.                |
-| No matches detected            | `--sampling fps`; with RapidOCR also `--ocr-min-keywords 3` or `--no-require-end-screen`. |
+| No matches detected            | `--sampling fps`; with `--finder ocr` also `--ocr-min-keywords 3` or `--no-require-end-screen`. |
 | Decisions keeps falling back   | Check `OPENAI_API_KEY` and quota; the reason is in the log and `manifest.json` (`finder`). |
 | Gemini keeps falling back      | Check `GOOGLE_GENERATIVE_AI_API_KEY`; each match's `reader.fallbacks` says why.           |
 | False positives                | Raise `--ocr-min-keywords`; add a sentinel to the profile.                                 |

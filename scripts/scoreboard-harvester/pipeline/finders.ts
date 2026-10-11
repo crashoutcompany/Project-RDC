@@ -6,15 +6,15 @@ import type { DepCheckResult } from "./deps";
 import { decideFrames, DECISIONS_INPUT_PER_M, DECISIONS_THRESHOLD } from "./decisions";
 import { ocrFrames } from "./ocr";
 
-export const FINDER_IDS = ["decisions", "rapidocr"] as const;
+export const FINDER_IDS = ["decisions", "ocr"] as const;
 export type FinderId = (typeof FINDER_IDS)[number];
 
 export interface FinderRun {
   /** Scoreboard frames, sorted by time. */
   confirmed: OcrRecord[];
-  /** "decisions", "rapidocr", or "decisions+rapidocr" when it fell back partway. */
+  /** e.g. "decisions", "ocr (rapidocr)", or "decisions+ocr (vision)" when it fell back partway. */
   finder: string;
-  /** Why it fell back to RapidOCR, if it did. */
+  /** Why it fell back to OCR, if it did. */
   fallback: string | null;
 }
 
@@ -23,7 +23,8 @@ export interface FinderRun {
  *
  * `decisions` asks the Decisions API about every frame. Any frames it can't
  * answer (after retries), or everything left when it gives up (bad key,
- * exhausted quota, repeated failures), go to RapidOCR, so a Decisions outage
+ * exhausted quota, repeated failures), go to local OCR (RapidOCR, or Apple
+ * Vision on macOS; see `--ocr-engine`), so a Decisions outage
  * slows a run down instead of failing it.
  */
 export async function findScoreboards(args: {
@@ -36,9 +37,9 @@ export async function findScoreboards(args: {
   skipAheadSec: number;
 }): Promise<FinderRun> {
   const { finder, frames, profile, config, workDir } = args;
-  if (finder === "rapidocr") return { confirmed: await rapidocr(args, frames), finder, fallback: null };
+  if (finder === "ocr") return { confirmed: await ocr(args, frames), finder: ocrLabel(args), fallback: null };
 
-  const question = profile.azureGameId ? specForGameId(profile.azureGameId)?.finderQuestion : undefined;
+  const question = specForGameId(profile.gameId)?.finderQuestion;
   if (!question) return fallBack(args, frames, `no Decisions question for ${profile.id}`);
   if (!process.env.OPENAI_API_KEY) return fallBack(args, frames, "OPENAI_API_KEY is not set");
 
@@ -65,19 +66,21 @@ export async function findScoreboards(args: {
   const rescued = await fallBack(args, run.unanswered, reason);
   return {
     confirmed: [...positives, ...rescued.confirmed].sort((a, b) => a.timestampSec - b.timestampSec),
-    finder: "decisions+rapidocr",
+    finder: `decisions+${ocrLabel(args)}`,
     fallback: reason,
   };
 }
 
 async function fallBack(args: Parameters<typeof findScoreboards>[0], frames: FrameRecord[], reason: string): Promise<FinderRun> {
-  console.warn(`[finder] falling back to RapidOCR for ${frames.length} frame(s): ${reason}`);
-  return { confirmed: await rapidocr(args, frames), finder: "rapidocr", fallback: reason };
+  console.warn(`[finder] falling back to ${ocrLabel(args)} for ${frames.length} frame(s): ${reason}`);
+  return { confirmed: await ocr(args, frames), finder: ocrLabel(args), fallback: reason };
 }
 
-function rapidocr(args: Parameters<typeof findScoreboards>[0], frames: FrameRecord[]): Promise<OcrRecord[]> {
+const ocrLabel = (args: Parameters<typeof findScoreboards>[0]) => `ocr (${args.deps.ocrEngine?.name ?? "none"})`;
+
+function ocr(args: Parameters<typeof findScoreboards>[0], frames: FrameRecord[]): Promise<OcrRecord[]> {
   const { deps, profile, config } = args;
-  if (!deps.ocrEngine) throw new Error("No OCR engine available for RapidOCR");
+  if (!deps.ocrEngine) throw new Error("No OCR engine available");
   return ocrFrames(frames, {
     engine: deps.ocrEngine,
     keywords: profile.keywords,

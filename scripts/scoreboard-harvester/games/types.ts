@@ -73,13 +73,11 @@ export interface GameProfile {
      */
     minMatchIntervalSec: number;
   };
-  /** Filename inside `reference/<id>/` to use as the pHash reference image. */
-  referenceFileName: string;
   /**
-   * Numeric game ID (games.game_id) — routes the screenshot to the game's
-   * Azure model and processor, and owns the drafted session.
+   * games.game_id: selects the scoreboard spec (Gemini, Decisions), the Azure
+   * model and processor, and owns the drafted session.
    */
-  azureGameId?: number;
+  gameId: number;
   /** How drafted matches are grouped into sets. Defaults to `single`. */
   setRule?: SetRule;
   /**

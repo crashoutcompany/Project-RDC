@@ -71,14 +71,13 @@ export function profilesForGamesCell(
 
 /**
  * Turns sheet rows into (video, game) work items: rows not yet marked
- * added_to_db whose games cell names a game the harvester can analyze.
+ * added_to_db whose games cell names a game with a harvester profile.
  * Newest first, so a backlog never starves this week's uploads.
  */
 export function candidatesFromSheet(
   rows: SheetRow[],
   profiles: readonly GameProfile[],
 ): CandidateVideo[] {
-  const analyzable = profiles.filter((profile) => profile.azureGameId);
   const out: CandidateVideo[] = [];
   for (const row of rows) {
     if (row.addedToDb) continue;
@@ -86,7 +85,7 @@ export function candidatesFromSheet(
       extractYoutubeId(row.videoId) ??
       (/^[A-Za-z0-9_-]{11}$/.test(row.videoId.trim()) ? row.videoId.trim() : null);
     if (!videoId) continue;
-    for (const profile of profilesForGamesCell(row.games, analyzable))
+    for (const profile of profilesForGamesCell(row.games, profiles))
       out.push({ videoId, title: row.title, date: row.date, profile });
   }
   return out.sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || 0);

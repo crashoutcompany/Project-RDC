@@ -72,8 +72,8 @@ interface OcrDaemonResponse {
  * end-of-match scoreboards (e.g., RL ≥ 3 min). See games/<id>.ts for
  * per-game settings.
  *
- * @param frames - Candidate frames in ascending frameId order. Either the full
- *   sample sequence (--no-phash) or pHash survivors.
+ * @param frames - Candidate frames in ascending frameId order. Usually every
+ *   sampled frame, or the frames Decisions couldn't answer.
  * @param opts - OCR + game options. See OcrOptions JSDoc above.
  * @returns OCR records for confirmed frames only, in original order.
  */

@@ -7,16 +7,9 @@ const marioKart: GameProfile = {
   id: "mario-kart-8",
   displayName: "Mario Kart 8",
   sheetAliases: ["mario kart", "mk8"],
-  azureGameId: 1,
+  gameId: 1,
 };
-const noModel: GameProfile = {
-  ...rocketLeague,
-  id: "lethal-company",
-  displayName: "Lethal Company",
-  sheetAliases: [],
-  azureGameId: undefined,
-};
-const profiles = [rocketLeague, marioKart, noModel];
+const profiles = [rocketLeague, marioKart];
 
 test("matches free-text game cells by name or alias", () => {
   expect(profilesForGamesCell("Rocket League, MK8", profiles).map((p) => p.id)).toEqual([
@@ -27,7 +20,7 @@ test("matches free-text game cells by name or alias", () => {
   expect(profilesForGamesCell("Rocket League Sideswipe", profiles)).toEqual([]);
 });
 
-test("queues un-added rows for analyzable games, newest first", () => {
+test("queues un-added rows for games with a profile, newest first", () => {
   const rows = [
     { title: "old", videoId: "https://youtu.be/AAAAAAAAAAA", date: "2026-09-01", addedToDb: false, games: "Rocket League" },
     { title: "done", videoId: "BBBBBBBBBBB", date: "2026-10-01", addedToDb: true, games: "Rocket League" },

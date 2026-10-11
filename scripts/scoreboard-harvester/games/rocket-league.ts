@@ -41,8 +41,7 @@ export const rocketLeague: GameProfile = {
     sampling: "keyframes",
     minMatchIntervalSec: 180,
   },
-  referenceFileName: "scoreboard.png",
-  azureGameId: 2,
+  gameId: 2,
   setRule: { kind: "firstTo", wins: 3 },
   sheetAliases: ["rocket league", "rl"],
 };

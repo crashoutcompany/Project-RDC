@@ -13,8 +13,6 @@ export interface ResolvedConfig {
   /** Output root. Final per-run dir is `<out>/<gameId>/<videoId>/`. */
   out: string;
   fps: number;
-  noPhash: boolean;
-  phashThreshold: number;
   ocrMinKeywords: number;
   /**
    * If true, only accept frames whose OCR includes one of the active game's
@@ -46,7 +44,7 @@ export interface ResolvedConfig {
   end?: number;
   /** Read every saved scoreboard's stats. */
   analyze: boolean;
-  /** Finds scoreboard frames; `decisions` falls back to RapidOCR on errors. */
+  /** Finds scoreboard frames; `decisions` falls back to `ocr` on errors. */
   finder: FinderId;
   /** Reads stats; `gemini` falls back to Azure on errors. */
   reader: ReaderId;
@@ -57,7 +55,6 @@ export interface ResolvedConfig {
   batch: boolean;
   /** Decisions calls in flight at once. */
   decisionsConcurrency: number;
-  referencePath: string;
 }
 
 export interface FrameRecord {
@@ -66,12 +63,6 @@ export interface FrameRecord {
   filePath: string;
   /** Timestamp in seconds from the start of the source video */
   timestampSec: number;
-}
-
-export interface PHashRecord extends FrameRecord {
-  hashHex: string;
-  /** Hamming distance from the reference scoreboard hash (0–64) */
-  distance: number;
 }
 
 export interface OcrRecord extends FrameRecord {

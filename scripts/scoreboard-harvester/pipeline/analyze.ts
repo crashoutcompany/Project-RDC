@@ -57,9 +57,7 @@ export async function analyzeJobs(args: {
     job.matches.map((match): MatchManifest => {
       const cachePath = cachePathOf(job, match);
       if (!fs.existsSync(cachePath)) return match;
-      const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
-      // Older caches hold the bare analysis; newer ones also record the reader.
-      return "analysis" in cached ? { ...match, ...cached } : { ...match, analysis: cached };
+      return { ...match, ...JSON.parse(fs.readFileSync(cachePath, "utf8")) };
     }),
   );
   const save = (j: number, m: number, update: Pick<MatchManifest, "analysis" | "reader">) => {
