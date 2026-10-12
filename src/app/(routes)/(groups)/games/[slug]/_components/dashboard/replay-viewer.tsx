@@ -101,6 +101,8 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
+                  // Pin the zone so server and browser render the same date text.
+                  timeZone: "UTC",
                 })}
               </p>
             </div>
