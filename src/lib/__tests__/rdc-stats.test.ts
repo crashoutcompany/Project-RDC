@@ -84,6 +84,30 @@ describe("summarizeArena", () => {
       records: {},
     });
   });
+
+  it("reports the champion by display name while records stay keyed lowercase", () => {
+    const won = {
+      date: new Date("2025-06-23T12:00:00Z"),
+      dayWinners: [],
+      sets: [
+        {
+          setWinners: [],
+          matches: [
+            { matchWinners: [player("Ben Smith")], playerSessions: [] },
+            { matchWinners: [player("Ben Smith")], playerSessions: [] },
+            { matchWinners: [player("Dylan")], playerSessions: [] },
+          ],
+        },
+      ],
+    };
+    const arena = summarizeArena(
+      GamesEnum.MarioKart8,
+      "Mario Kart 8",
+      [won] as unknown as Sessions,
+    );
+    expect(arena.champion).toBe("Ben Smith");
+    expect(arena.records["ben smith"].matches).toBe(2);
+  });
 });
 
 describe("sorryScale", () => {

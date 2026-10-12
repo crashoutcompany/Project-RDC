@@ -25,6 +25,7 @@ export type Arena = {
   matches: number;
   sets: number;
   lastPlayed: string | null;
+  /** Display name of the player with the most match wins, or null. */
   champion: string | null;
   /** Keyed by lowercase player name. */
   records: Record<string, PlayerRecord>;
@@ -72,21 +73,29 @@ export const formatDate = (date: Date) =>
     year: "numeric",
   });
 
-/** Folds approved sessions into per-player match/set/day wins and avg position. */
+/**
+ * Folds sessions into per-player match/set/day wins and avg position. Callers
+ * pass only approved sessions: `getAllSessionsByGame` filters on `isApproved`.
+ */
 export function summarizeArena(
   slug: GamesEnum,
   name: string,
   sessions: Sessions,
 ): Omit<Arena, "index"> {
   const records: Record<string, PlayerRecord> = {};
-  const positions: Record<string, { sum: number; count: number }> = {};
-  const record = (player: string) =>
-    (records[player.toLowerCase()] ??= {
+  /** Display name per lowercase key, from the first spelling seen. */
+  const names: Record<string, string> = {};
+  const positions: Record<string, { name: string; sum: number; count: number }> = {};
+  const record = (player: string) => {
+    const key = player.toLowerCase();
+    names[key] ??= player;
+    return (records[key] ??= {
       matches: 0,
       sets: 0,
       days: 0,
       avgPos: null,
     });
+  };
 
   let matches = 0;
   let sets = 0;
@@ -110,7 +119,7 @@ export function summarizeArena(
             const value = Number(stat.value);
             if (!Number.isFinite(value) || value <= 0) continue;
             const key = stat.player.playerName.toLowerCase();
-            positions[key] ??= { sum: 0, count: 0 };
+            positions[key] ??= { name: stat.player.playerName, sum: 0, count: 0 };
             positions[key].sum += value;
             positions[key].count++;
           }
@@ -118,13 +127,14 @@ export function summarizeArena(
     }
   }
 
-  for (const [player, { sum, count }] of Object.entries(positions))
+  for (const { name: player, sum, count } of Object.values(positions))
     record(player).avgPos = sum / count;
 
-  const champion =
+  const championKey =
     Object.entries(records)
       .filter(([, r]) => r.matches > 0)
-      .sort(([, a], [, b]) => b.matches - a.matches)[0]?.[0] ?? null;
+      .sort(([, a], [, b]) => b.matches - a.matches)[0]?.[0];
+  const champion = championKey ? names[championKey] : null;
 
   return {
     slug,
