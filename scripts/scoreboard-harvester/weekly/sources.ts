@@ -19,10 +19,9 @@ export interface SheetRow {
 }
 
 /**
- * Reads the "Truth" sheet that the RDC Live scraper fills — the same sheet
- * and service account the /api/sheets cron route uses (SHEET_ID + base64
- * GCP_SA_KEY). Columns: title, video_id, date, added_to_db,
- * date_added_to_db, games, Day Winner(s).
+ * Reads the "Truth" sheet that the RDC Live scraper fills (SHEET_ID + base64
+ * GCP_SA_KEY). Columns are looked up by header name, since the sheet's column
+ * order has changed over time (has_screenshots, date_screenshotted).
  */
 export async function readTruthSheet(): Promise<SheetRow[]> {
   const spreadsheetId = process.env.SHEET_ID;
@@ -41,15 +40,29 @@ export async function readTruthSheet(): Promise<SheetRow[]> {
   const sheets = google.sheets({ version: "v4", auth });
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "Truth!A:G",
+    range: "Truth",
   });
 
-  return (data.values ?? []).slice(1).map((r) => ({
-    title: r[0] ?? "",
-    videoId: r[1] ?? "",
-    date: r[2] ?? "",
-    addedToDb: String(r[3] ?? "").toUpperCase() === "TRUE",
-    games: r[5] ?? "",
+  const [header = [], ...rows] = data.values ?? [];
+  const col = (name: string) => {
+    const i = header.findIndex((h) => String(h).trim().toLowerCase() === name);
+    if (i < 0) throw new Error(`Truth sheet has no "${name}" column`);
+    return i;
+  };
+  const [title, videoId, date, addedToDb, games] = [
+    "title",
+    "video_id",
+    "date",
+    "added_to_db",
+    "games",
+  ].map(col);
+
+  return rows.map((r) => ({
+    title: r[title] ?? "",
+    videoId: r[videoId] ?? "",
+    date: r[date] ?? "",
+    addedToDb: String(r[addedToDb] ?? "").toUpperCase() === "TRUE",
+    games: r[games] ?? "",
   }));
 }
 

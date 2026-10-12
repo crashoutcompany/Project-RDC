@@ -41,7 +41,7 @@ OPENAI_API_KEY=...                     # Decisions API (finder)
 # HARVEST_DECISIONS_MODEL=...          # optional: override the Decisions model (default gpt-6-luna)
 DOCUMENT_INTELLIGENCE_ENDPOINT=...     # Azure (reader fallback); same as the app
 DOCUMENT_INTELLIGENCE_API_KEY=...
-SHEET_ID=...                           # same values as the /api/sheets cron
+SHEET_ID=...                           # the "Truth" sheet
 GCP_SA_KEY=...                         # base64 service-account JSON
 # Optional: email the run report
 RESEND_API_KEY=...

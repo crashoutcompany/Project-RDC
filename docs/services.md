@@ -88,7 +88,6 @@ pnpm update-neon-branch
 
 **Cron Jobs**:
 
-- `/api/sheets` - Runs weekly (Mondays at 10:00 AM)
 - `/api/edit-sessions` - Runs weekly (Mondays at 10:00 AM)
 
 ---
@@ -248,18 +247,16 @@ pnpm update-neon-branch
 **Documentation**: [https://developers.google.com/sheets/api/guides/concepts](https://developers.google.com/sheets/api/guides/concepts)  
 **Console**: [https://console.cloud.google.com/apis/library/sheets.googleapis.com](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
 
-**Purpose**: Read and write data from Google Sheets for game session data management.
+**Purpose**: Reads the "Truth" sheet of uploaded RDC Live videos.
 
-**Environment Variables**:
+**Environment Variables** (harvester only, read from `.env.harvester.local`):
 
 - `SHEET_ID` - Google Sheets document ID
 - `GCP_SA_KEY` - Base64-encoded Google Cloud service account JSON key
 
 **Usage**:
 
-- Sheet data processing in `src/app/api/sheets/route.ts`
-- Service account authentication for server-to-server access
-- Weekly cron job to process sheet data
+- `scripts/scoreboard-harvester/weekly/sources.ts` reads the sheet for the weekly harvest
 
 **Setup**:
 

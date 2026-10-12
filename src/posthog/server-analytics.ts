@@ -148,33 +148,6 @@ export const logMvpUpdateSuccess = async (
   });
 };
 
-export const logDriveCronJobError = (
-  message: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.captureException(message, "cron-job", {
-      ...additionalInfo,
-    });
-  });
-};
-
-export const logDriveCronJobSuccess = (
-  message: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.capture({
-      event: PostHogEvents.DRIVE_READ_SUCCESS,
-      distinctId: "cron-job",
-      properties: {
-        message,
-        ...additionalInfo,
-      },
-    });
-  });
-};
-
 export const logEditSessionCleanupSuccess = (
   message: string,
   additionalInfo?: Record<string, unknown>,
@@ -197,34 +170,6 @@ export const logEditSessionCleanupError = (
 ) => {
   after(() => {
     posthog.captureException(message, "cron-job", {
-      ...additionalInfo,
-    });
-  });
-};
-
-export const logAiGenSuccess = (
-  event: PostHogEvents,
-  distinctId: string,
-  additionalInfo: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.capture({
-      event,
-      distinctId,
-      properties: {
-        ...additionalInfo,
-      },
-    });
-  });
-};
-
-export const logAiGenFailure = (
-  error: unknown,
-  distinctId: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.captureException(error, distinctId, {
       ...additionalInfo,
     });
   });
