@@ -1,6 +1,11 @@
-// shared:email-otp v2
+// shared:email-otp v3
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  formCsrfMiddleware,
+  isAPIError,
+} from "better-auth/api";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { Resend } from "resend";
 
@@ -21,15 +26,40 @@ export type EmailOtpConfig = {
 };
 
 /**
+ * Better Auth `disabledPaths` for OTP routes that are not sign-in. They set a
+ * password, verify an address, or change an email, and code sign-in does not
+ * need them. Spread this into `disabledPaths` only when email OTP is
+ * configured, so the routes stay disabled in every environment that uses it.
+ */
+export const EMAIL_OTP_DISABLED_PATHS: readonly string[] = [
+  "/email-otp/reset-password",
+  "/email-otp/verify-email",
+  "/email-otp/check-verification-otp",
+  "/email-otp/request-password-reset",
+  "/forget-password/email-otp",
+  "/email-otp/request-email-change",
+  "/email-otp/change-email",
+];
+
+const SEND_PATH = "/email-otp/send-verification-otp";
+const SIGN_IN_PATH = "/sign-in/email-otp";
+
+/**
  * Routes that consume an OTP for a given `email`. Unlisted emails are rejected
- * here before any code check runs.
+ * here before any code check runs. The disabled routes are listed too, so the
+ * check still holds if `disabledPaths` is not wired.
  */
 const GUARDED_OTP_PATHS = new Set([
-  "/sign-in/email-otp",
+  SIGN_IN_PATH,
   "/email-otp/verify-email",
   "/email-otp/check-verification-otp",
   "/email-otp/reset-password",
 ]);
+
+/** The one email rule for every OTP check: trimmed and lowercased. */
+export function normalizeOtpEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 /** Comma-separated, trimmed, lowercased, empties dropped, deduped. */
 export function parseOtpAllowlist(raw: string | undefined): string[] {
@@ -37,7 +67,7 @@ export function parseOtpAllowlist(raw: string | undefined): string[] {
     ...new Set(
       (raw ?? "")
         .split(",")
-        .map((email) => email.trim().toLowerCase())
+        .map(normalizeOtpEmail)
         .filter(Boolean),
     ),
   ];
@@ -47,7 +77,7 @@ export function isOtpEmailAllowed(
   email: string,
   allowlist: readonly string[],
 ): boolean {
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeOtpEmail(email);
   return normalized !== "" && allowlist.includes(normalized);
 }
 
@@ -101,9 +131,21 @@ export async function sendSignInOtpEmail(
   }
 }
 
+/** The single error every failed code sign-in returns. */
+function invalidOtpError(): APIError {
+  return APIError.from("BAD_REQUEST", {
+    code: "INVALID_OTP",
+    message: "Invalid OTP",
+  });
+}
+
 /**
- * Rejects unlisted emails on every OTP-consuming route. The error matches the
- * plugin's own wrong-code error, so it does not reveal the allowlist.
+ * Enforces the allowlist on OTP routes. Listed emails pass through with the
+ * email normalized. Every other request is answered before the endpoint runs:
+ * - send: an unlisted email or a non-sign-in type gets the endpoint's own
+ *   success body, so no verification row is stored and no email is sent;
+ * - sign-in and the other OTP-consuming routes: INVALID_OTP, the same error as
+ *   a wrong code.
  */
 function emailOtpAllowlistGuard(
   allowlist: readonly string[],
@@ -113,18 +155,56 @@ function emailOtpAllowlistGuard(
     hooks: {
       before: [
         {
+          matcher: (context) => context.path === SEND_PATH,
+          handler: createAuthMiddleware(async (ctx) => {
+            const body = ctx.body as { email?: unknown; type?: unknown } | undefined;
+            const email =
+              typeof body?.email === "string"
+                ? normalizeOtpEmail(body.email)
+                : "";
+            if (!body || body.type !== "sign-in" || !isOtpEmailAllowed(email, allowlist)) {
+              // Same CSRF check the endpoint would run first, then its success body.
+              await formCsrfMiddleware(ctx);
+              return ctx.json({ success: true });
+            }
+            return { context: { body: { ...body, email } } };
+          }),
+        },
+        {
           matcher: (context) => GUARDED_OTP_PATHS.has(context.path ?? ""),
           handler: createAuthMiddleware(async (ctx) => {
-            const email = (ctx.body as { email?: unknown } | undefined)?.email;
-            if (
-              typeof email !== "string" ||
-              !isOtpEmailAllowed(email, allowlist)
-            ) {
-              throw APIError.from("BAD_REQUEST", {
-                code: "INVALID_OTP",
-                message: "Invalid OTP",
-              });
+            const body = ctx.body as { email?: unknown } | undefined;
+            const email =
+              typeof body?.email === "string"
+                ? normalizeOtpEmail(body.email)
+                : "";
+            if (!isOtpEmailAllowed(email, allowlist)) {
+              throw invalidOtpError();
             }
+            return { context: { body: { ...body, email } } };
+          }),
+        },
+      ],
+      after: [
+        {
+          // The plugin's own failure codes (OTP_EXPIRED, TOO_MANY_ATTEMPTS) and
+          // body validation errors would reveal whether the address is listed or
+          // has a live code. They are rewritten to INVALID_OTP. Server errors
+          // (5xx) are left alone.
+          matcher: (context) => context.path === SIGN_IN_PATH,
+          handler: createAuthMiddleware(async (ctx) => {
+            const returned = ctx.context.returned;
+            if (!isAPIError(returned) || returned.statusCode >= 500) return;
+            // A thrown error keeps the endpoint's own status (403 for too many
+            // attempts), so over HTTP return the 400 response directly. Direct
+            // server calls have no request and get the APIError.
+            if (ctx.request) {
+              return Response.json(
+                { message: "Invalid OTP", code: "INVALID_OTP" },
+                { status: 400 },
+              );
+            }
+            throw invalidOtpError();
           }),
         },
       ],
@@ -144,8 +224,8 @@ export function createEmailOtpPlugins(
       disableSignUp: false,
       // Only a SHA-256 hash is stored, so a database read can't reveal a live code.
       storeOTP: "hashed",
-      // Unlisted emails and non-sign-in types get the same success response
-      // from the endpoint, but no email is sent.
+      // Defense in depth: the allowlist hook already answers these requests
+      // before a code is stored. This check keeps the plugin safe on its own.
       async sendVerificationOTP({ email, otp, type }) {
         if (
           type !== "sign-in" ||

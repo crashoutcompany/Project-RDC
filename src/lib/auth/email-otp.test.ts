@@ -53,7 +53,7 @@ type MemoryDb = {
   user: unknown[];
   session: unknown[];
   account: unknown[];
-  verification: Array<{ value: string }>;
+  verification: Array<{ value: string; expiresAt?: Date }>;
 };
 
 function emptyDb(): MemoryDb {
@@ -322,5 +322,124 @@ describe("createEmailOtpPlugins", () => {
       user: { email: "bot@example.com", emailVerified: true },
     });
     expect(response.headers.get("set-cookie")).toContain("session_token");
+  });
+});
+
+describe("email OTP hardening", () => {
+  it("stores no verification row for an unlisted email", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    const response = await sendCode(auth, "intruder@example.com");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(db.verification).toHaveLength(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("stores no verification row for a non-sign-in type, even for a listed email", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    for (const type of ["email-verification", "forget-password"]) {
+      const response = await sendCode(auth, "bot@example.com", type);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true });
+    }
+    expect(db.verification).toHaveLength(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("normalizes the email on send and sign-in", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    const sent = await sendCode(auth, "  BOT@Example.com ");
+    expect(sent.status).toBe(200);
+    expect(db.verification).toHaveLength(1);
+    expect(sendEmail.mock.lastCall?.[0].to).toBe("bot@example.com");
+    const otp = lastSentCode();
+
+    const response = await post(auth, "/sign-in/email-otp", {
+      email: " Bot@example.COM ",
+      otp,
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it("answers a missing code for a listed and an unlisted email the same way", async () => {
+    const auth = buildAuth();
+
+    const listed = await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+    });
+    const unlisted = await post(auth, "/sign-in/email-otp", {
+      email: "intruder@example.com",
+    });
+
+    const listedBody = await listed.json();
+    expect(listed.status).toBe(400);
+    expect(listedBody).toEqual({ code: "INVALID_OTP", message: "Invalid OTP" });
+    expect(unlisted.status).toBe(listed.status);
+    expect(await unlisted.json()).toEqual(listedBody);
+  });
+
+  it("gives direct server calls the same INVALID_OTP error", async () => {
+    const auth = buildAuth();
+    const api = auth.api as unknown as {
+      signInEmailOTP: (input: {
+        body: { email: string; otp: string };
+      }) => Promise<unknown>;
+    };
+
+    await expect(
+      api.signInEmailOTP({ body: { email: "bot@example.com", otp: "000000" } }),
+    ).rejects.toMatchObject({ body: { code: "INVALID_OTP" }, statusCode: 400 });
+  });
+
+  it("maps an expired code to the same INVALID_OTP body as a wrong code", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    for (const row of db.verification) {
+      row.expiresAt = new Date(Date.now() - 1000);
+    }
+
+    const expired = await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp,
+    });
+    const wrong = await post(buildAuth(), "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp: "000000",
+    });
+
+    expect(expired.status).toBe(400);
+    expect(await expired.json()).toEqual(await wrong.json());
+  });
+
+  it("maps too many attempts to the same INVALID_OTP body as a wrong code", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    // The stored value is "<hash>:<attempts>", so set the attempt count to the limit.
+    for (const row of db.verification) {
+      row.value = `${row.value}:${EMAIL_OTP_ALLOWED_ATTEMPTS}`;
+    }
+
+    const limited = await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp,
+    });
+    const wrong = await post(buildAuth(), "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp: "000000",
+    });
+
+    expect(limited.status).toBe(400);
+    expect(await limited.json()).toEqual(await wrong.json());
   });
 });

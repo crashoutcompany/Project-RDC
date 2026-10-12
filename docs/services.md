@@ -132,17 +132,28 @@ pnpm update-neon-branch
   production deployments
 - Email-code sign-in (`src/lib/auth/email-otp.ts`) is registered only when
   `AUTH_OTP_ALLOWED_EMAILS`, `AUTH_EMAIL_FROM` and `RESEND_API_KEY` are all set.
-  Codes are only ever sent for the `sign-in` type and only to listed
-  addresses; everyone else gets the same success response but no email, and
-  non-listed addresses are rejected at sign-in. Codes are 6 digits, expire after
+  Codes are only ever sent for the `sign-in` type and only to listed addresses.
+  An unlisted address, or a blocked one (see the admin guard), gets the same
+  `{ success: true }` response but no code is stored and no email is sent.
+  Emails are trimmed and lowercased everywhere. Codes are 6 digits, expire after
   5 minutes, and allow 3 attempts. New accounts get the `user` role.
-- Admin guard (`src/lib/auth/otp-admin-guard.ts`): email-code sign-in is refused
-  for admins and for any user who already has a linked OAuth or password
-  account, even if the address is listed. On send, a blocked address gets the
-  same `{ success: true }` response as an unlisted one, but no code is stored
-  and no email is sent. On verify, the refusal is the same `INVALID_OTP` error
-  as a wrong code, so the response does not reveal whether an account exists.
-  Listed addresses should still be bot inboxes that should never be admins.
+- Disabled routes: when email OTP is configured, the non-sign-in OTP routes
+  (`/email-otp/reset-password`, `/email-otp/verify-email`,
+  `/email-otp/check-verification-otp`, `/email-otp/request-password-reset`,
+  `/forget-password/email-otp`, `/email-otp/request-email-change`,
+  `/email-otp/change-email`) are listed in Better Auth `disabledPaths`, so they
+  are not served. Code sign-in is the only OTP flow.
+- Failed sign-in codes all return the same `400` with `INVALID_OTP`, whether the
+  code is wrong, expired, out of attempts, malformed, or the address is unlisted
+  or blocked, so the response does not reveal whether an account exists.
+- Admin guard (`src/lib/auth/otp-admin-guard.ts`): email-code sign-in and send
+  are refused for admins and for any user who already has a linked OAuth or
+  password account, even if the address is listed. The user is found by email,
+  then accounts are loaded by `userId`. A failed lookup is retried once; if the
+  retry also fails, the guard logs `otp_guard_lookup_failed` (attempts and
+  error, never the email) and rejects the request, so it fails closed. On send,
+  a blocked address gets the same `{ success: true }` response as an unlisted
+  one. Listed addresses should still be bot inboxes that should never be admins.
 - Delivery failures: if Resend rejects a code email, the error is logged as
   `[auth] sign-in code email failed` and is not shown to the user. The user sees
   the same success response as an unlisted address.

@@ -7,6 +7,7 @@ import {
   getEnabledSocialProviders,
   resolveAuthEnvironment,
 } from "./create-auth";
+import { EMAIL_OTP_DISABLED_PATHS } from "./email-otp";
 
 const SECRET = "test-better-auth-secret-at-least-32-characters";
 
@@ -101,6 +102,55 @@ describe("createAuth", () => {
       "email-otp-admin-guard",
       "next-cookies",
     ]);
+
+    warn.mockRestore();
+  });
+
+  it("disables the non-sign-in OTP routes only when email OTP is configured", () => {
+    vi.mocked(nextCookies).mockReturnValue({ id: "next-cookies" } as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const disabledPathsFor = (env: Record<string, string>) => {
+      createAuth({
+        appName: "Project RDC",
+        database: {} as never,
+        env: { BETTER_AUTH_SECRET: SECRET, ...env },
+        productionUrl: "https://rdcstats.com",
+      });
+      const options = vi
+        .mocked(betterAuth)
+        .mock.calls.at(-1)?.[0] as unknown as {
+        disabledPaths?: string[];
+      };
+      return options.disabledPaths;
+    };
+
+    expect(disabledPathsFor({})).toBeUndefined();
+    expect(
+      disabledPathsFor({
+        AUTH_OTP_ALLOWED_EMAILS: "bot@example.com",
+        RESEND_API_KEY: "re_test",
+      }),
+    ).toBeUndefined();
+
+    const configured = disabledPathsFor({
+      AUTH_OTP_ALLOWED_EMAILS: "bot@example.com",
+      RESEND_API_KEY: "re_test",
+      AUTH_EMAIL_FROM: "auth@rdcstats.com",
+    });
+    expect(configured).toEqual([...EMAIL_OTP_DISABLED_PATHS]);
+    expect(configured).toEqual(
+      expect.arrayContaining([
+        "/email-otp/reset-password",
+        "/email-otp/verify-email",
+        "/email-otp/check-verification-otp",
+        "/email-otp/request-password-reset",
+        "/forget-password/email-otp",
+        "/email-otp/request-email-change",
+        "/email-otp/change-email",
+      ]),
+    );
+    expect(configured).not.toContain("/sign-in/email-otp");
+    expect(configured).not.toContain("/email-otp/send-verification-otp");
 
     warn.mockRestore();
   });
