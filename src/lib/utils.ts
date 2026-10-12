@@ -14,3 +14,16 @@ export const capitalizeFirst = <T>(text: T) => {
 };
 
 export const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * Short date label ("Jun 23, 2025") pinned to UTC so server and browser render
+ * the same text. Without an explicit timeZone, the browser's local zone can
+ * shift the day and cause hydration mismatches.
+ */
+export const formatSessionDate = (date: Date | string) =>
+  new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });

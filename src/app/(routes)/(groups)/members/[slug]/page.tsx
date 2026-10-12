@@ -63,6 +63,8 @@ async function MemberDetailContent({
 }) {
   await connection();
   const { slug } = await params;
+  // Roster and record keys are lowercase; URLs may not be.
+  const key = slug.toLowerCase();
   const [member, roster, arenas] = await Promise.all([
     getMember(slug),
     getRoster(),
@@ -71,14 +73,14 @@ async function MemberDetailContent({
 
   if (!member.success || !member.data || slug === "__placeholder__") notFound();
 
-  const index = roster.findIndex((f) => f.slug === slug);
+  const index = roster.findIndex((f) => f.slug === key);
   const fighter = roster[index];
   if (!fighter) notFound();
 
   const ranked = sorryScale(roster, arenas)
     .filter((e) => e.avgRank !== null)
     .sort((a, b) => a.avgRank! - b.avgRank!);
-  const sorryRank = ranked.findIndex((e) => e.fighter.slug === slug);
+  const sorryRank = ranked.findIndex((e) => e.fighter.slug === key);
   const wins = {
     matches: member.data.matchWins.length,
     sets: member.data.setWins.length,
@@ -156,7 +158,7 @@ async function MemberDetailContent({
               </thead>
               <tbody>
                 {arenas.map((arena) => {
-                  const r = arena.records[slug];
+                  const r = arena.records[key];
                   return (
                     <tr key={arena.slug} className="bg-ac-ink">
                       <td className="relative py-3 pr-4 pl-6">

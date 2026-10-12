@@ -5,9 +5,12 @@ import { getAllMembers } from "prisma/lib/members";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { gameImages, GamesEnum } from "@/lib/constants";
 import { getFighterArt, ROSTER_ORDER, type FighterArt } from "@/lib/fighters";
+import { formatSessionDate } from "@/lib/utils";
 import type { Sessions } from "@/app/(routes)/(groups)/games/[slug]/_helpers/dashboard";
 
 export type PlayerRecord = {
+  /** Display name as stored on the player row (first seen). */
+  name: string;
   matches: number;
   sets: number;
   days: number;
@@ -25,8 +28,9 @@ export type Arena = {
   matches: number;
   sets: number;
   lastPlayed: string | null;
+  /** Display name of the arena's top match winner. */
   champion: string | null;
-  /** Keyed by lowercase player name. */
+  /** Keyed by lowercase player name (the roster slug). */
   records: Record<string, PlayerRecord>;
 };
 
@@ -65,23 +69,23 @@ export const FEATURED_ARENA = GamesEnum.MarioKart8;
 
 export const toSlug = (name: string) => name.replace(/\s/g, "").toLowerCase();
 
-export const formatDate = (date: Date) =>
-  date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+export const formatDate = (date: Date) => formatSessionDate(date);
 
-/** Folds approved sessions into per-player match/set/day wins and avg position. */
+/**
+ * Folds sessions into per-player match/set/day wins and avg position.
+ * `sessions` must already be approved: `getAllSessionsByGame` applies
+ * `approvedSession`, and every nested set/match/stat hangs off that session.
+ */
 export function summarizeArena(
   slug: GamesEnum,
   name: string,
   sessions: Sessions,
 ): Omit<Arena, "index"> {
   const records: Record<string, PlayerRecord> = {};
-  const positions: Record<string, { sum: number; count: number }> = {};
+  const positions: Record<string, { name: string; sum: number; count: number }> = {};
   const record = (player: string) =>
     (records[player.toLowerCase()] ??= {
+      name: player,
       matches: 0,
       sets: 0,
       days: 0,
@@ -110,7 +114,11 @@ export function summarizeArena(
             const value = Number(stat.value);
             if (!Number.isFinite(value) || value <= 0) continue;
             const key = stat.player.playerName.toLowerCase();
-            positions[key] ??= { sum: 0, count: 0 };
+            positions[key] ??= {
+              name: stat.player.playerName,
+              sum: 0,
+              count: 0,
+            };
             positions[key].sum += value;
             positions[key].count++;
           }
@@ -118,13 +126,13 @@ export function summarizeArena(
     }
   }
 
-  for (const [player, { sum, count }] of Object.entries(positions))
+  for (const { name: player, sum, count } of Object.values(positions))
     record(player).avgPos = sum / count;
 
   const champion =
-    Object.entries(records)
-      .filter(([, r]) => r.matches > 0)
-      .sort(([, a], [, b]) => b.matches - a.matches)[0]?.[0] ?? null;
+    Object.values(records)
+      .filter((r) => r.matches > 0)
+      .sort((a, b) => b.matches - a.matches)[0]?.name ?? null;
 
   return {
     slug,
@@ -199,14 +207,14 @@ export const getRoster = cache(async (): Promise<Fighter[]> => {
     });
 });
 
-/** Top `count` players by match wins in an arena. */
+/** Top `count` players by match wins in an arena. `slug` is the lookup key. */
 export function topFive(arena: Arena | undefined, count = 5) {
   if (!arena) return [];
   return Object.entries(arena.records)
     .filter(([, r]) => r.matches > 0)
     .sort(([, a], [, b]) => b.matches - a.matches)
     .slice(0, count)
-    .map(([player, r]) => ({ player, wins: r.matches }));
+    .map(([slug, r]) => ({ slug, player: r.name, wins: r.matches }));
 }
 
 /**
@@ -219,7 +227,7 @@ export function sorryScale(roster: Fighter[], arenas: Arena[]): SorryEntry[] {
   for (const arena of arenas) {
     const board = topFive(arena, Infinity);
     maxRank = Math.max(maxRank, board.length);
-    board.forEach(({ player }, i) => (ranks[player] ??= []).push(i + 1));
+    board.forEach(({ slug }, i) => (ranks[slug] ??= []).push(i + 1));
   }
 
   return roster.map((fighter) => {
