@@ -12,13 +12,33 @@ const LINKS = [
   { href: "/about", label: "About", testId: "nav-about-link" },
 ];
 
+/**
+ * Reads the pathname for the active link. Must render inside a Suspense
+ * boundary: usePathname() during static prerender otherwise fails the build.
+ */
 export function NavLinks({ className }: { className?: string }) {
   const pathname = usePathname();
+  return <NavLinkList className={className} pathname={pathname} />;
+}
+
+/** Same links with no active state; used as the Suspense fallback. */
+export function NavLinksFallback({ className }: { className?: string }) {
+  return <NavLinkList className={className} pathname={null} />;
+}
+
+function NavLinkList({
+  className,
+  pathname,
+}: {
+  className?: string;
+  pathname: string | null;
+}) {
   return (
     <nav aria-label="Main" className={cn("flex items-center gap-1", className)}>
       {LINKS.map(({ href, label, testId }) => {
         const active =
-          href === "/" ? pathname === "/" : pathname.startsWith(href);
+          pathname !== null &&
+          (href === "/" ? pathname === "/" : pathname.startsWith(href));
         return (
           <Link
             key={href}

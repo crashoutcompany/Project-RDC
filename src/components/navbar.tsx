@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getRscSession } from "@/lib/auth/server";
-import { NavLinks, SignOutButton } from "./nav-links";
+import { NavLinks, NavLinksFallback, SignOutButton } from "./nav-links";
+
+const navLinksClass =
+  "border-ac-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0";
 
 export const Navbar = () => {
   return (
@@ -16,11 +19,16 @@ export const Navbar = () => {
           aria-label="RDC Stats home"
         >
           RDC Stats
-          <span aria-hidden className="ac-tag text-ac-pink absolute -top-3 -right-10 text-lg">
+          <span
+            aria-hidden
+            className="ac-tag text-ac-pink absolute -top-3 -right-10 text-lg"
+          >
             fan made!
           </span>
         </Link>
-        <NavLinks className="border-ac-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0" />
+        <Suspense fallback={<NavLinksFallback className={navLinksClass} />}>
+          <NavLinks className={navLinksClass} />
+        </Suspense>
         <div className="flex shrink-0 items-center gap-2">
           <Suspense fallback={<LoginLink />}>
             <SessionControls />
@@ -33,7 +41,9 @@ export const Navbar = () => {
 
 const LoginLink = () => (
   <span className="flex items-center gap-4">
-    <span className="ac-label text-ac-cream/60 hidden lg:inline">Credit 00</span>
+    <span className="ac-label text-ac-cream/60 hidden lg:inline">
+      Credit 00
+    </span>
     <Link
       href="/signin"
       className="ac-label bg-ac-gold text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
