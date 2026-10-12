@@ -13,6 +13,8 @@ const ADMIN_GUARDED_OTP_PATHS = new Set([
   "/email-otp/reset-password",
 ]);
 
+const SEND_OTP_PATH = "/email-otp/send-verification-otp";
+
 export function isAdminAccount(
   user: { role?: unknown } | null | undefined,
 ): boolean {
@@ -28,6 +30,10 @@ export function isAdminAccount(
  * never reveals that an account exists. A failed user lookup throws and the
  * request is rejected (fail closed). A new allowlisted email has no account yet,
  * so it passes and gets a plain user with no admin role.
+ *
+ * On send, a blocked sign-in returns the endpoint's own `{ success: true }`
+ * without storing a code or emailing one, so the response matches an unlisted
+ * email's.
  */
 export const otpAdminGuardPlugin = {
   id: "email-otp-admin-guard",
@@ -39,14 +45,11 @@ export const otpAdminGuardPlugin = {
           const email = (ctx.body as { email?: unknown } | undefined)?.email;
           if (typeof email !== "string") return;
 
-          const existing = await ctx.context.internalAdapter.findUserByEmail(
-            email.trim().toLowerCase(),
-            { includeAccounts: true },
-          );
           if (
-            existing &&
-            (isAdminAccount(existing.user as { role?: unknown }) ||
-              existing.accounts.length > 0)
+            await isBlockedOtpAccount(
+              ctx.context.internalAdapter,
+              email,
+            )
           ) {
             throw APIError.from("BAD_REQUEST", {
               code: "INVALID_OTP",
@@ -55,6 +58,52 @@ export const otpAdminGuardPlugin = {
           }
         }),
       },
+      {
+        matcher: (context) => context.path === SEND_OTP_PATH,
+        handler: createAuthMiddleware(async (ctx) => {
+          const body = ctx.body as
+            | { email?: unknown; type?: unknown }
+            | undefined;
+          // Only sign-in sends a code. Other types already send nothing, and
+          // change-email must keep its own error, so they pass through.
+          if (body?.type !== "sign-in" || typeof body.email !== "string") {
+            return;
+          }
+
+          if (
+            await isBlockedOtpAccount(
+              ctx.context.internalAdapter,
+              body.email,
+            )
+          ) {
+            // Same body and status the endpoint returns for an unlisted email.
+            // Skipping the endpoint also skips storing a code.
+            return { success: true };
+          }
+        }),
+      },
     ],
   },
 } satisfies BetterAuthPlugin;
+
+async function isBlockedOtpAccount(
+  internalAdapter: {
+    findUserByEmail: (
+      email: string,
+      options: { includeAccounts: boolean },
+    ) => Promise<{
+      user: object;
+      accounts: unknown[];
+    } | null>;
+  },
+  email: string,
+): Promise<boolean> {
+  const existing = await internalAdapter.findUserByEmail(
+    email.trim().toLowerCase(),
+    { includeAccounts: true },
+  );
+  return (
+    existing !== null &&
+    (isAdminAccount(existing.user as { role?: unknown }) || existing.accounts.length > 0)
+  );
+}

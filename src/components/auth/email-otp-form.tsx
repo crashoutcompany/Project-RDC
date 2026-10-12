@@ -35,6 +35,8 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
       }
       setOtp("");
       setStep("code");
+    } catch {
+      setErrorMessage("Unable to send a code. Try again in a minute.");
     } finally {
       setPending(false);
     }
@@ -59,6 +61,8 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
       }
       router.replace(callbackURL ?? "/");
       router.refresh();
+    } catch {
+      setErrorMessage("Unable to sign in. Check the code and try again.");
     } finally {
       setPending(false);
     }

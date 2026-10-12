@@ -135,8 +135,20 @@ pnpm update-neon-branch
   Codes are only ever sent for the `sign-in` type and only to listed
   addresses; everyone else gets the same success response but no email, and
   non-listed addresses are rejected at sign-in. Codes are 6 digits, expire after
-  5 minutes, and allow 3 attempts. New accounts get the `user` role; only list
-  addresses that should never be admins.
+  5 minutes, and allow 3 attempts. New accounts get the `user` role.
+- Admin guard (`src/lib/auth/otp-admin-guard.ts`): email-code sign-in is refused
+  for admins and for any user who already has a linked OAuth or password
+  account, even if the address is listed. On send, a blocked address gets the
+  same `{ success: true }` response as an unlisted one, but no code is stored
+  and no email is sent. On verify, the refusal is the same `INVALID_OTP` error
+  as a wrong code, so the response does not reveal whether an account exists.
+  Listed addresses should still be bot inboxes that should never be admins.
+- Delivery failures: if Resend rejects a code email, the error is logged as
+  `[auth] sign-in code email failed` and is not shown to the user. The user sees
+  the same success response as an unlisted address.
+- Rate limiting: email-code routes rely on Better Auth's default rate limiter,
+  which is in-memory per server instance. Limits are not shared across instances
+  or restarts.
 
 **OAuth Provider Links**:
 

@@ -140,6 +140,23 @@ async function signInWithEmailCode(auth: TestAuth, email: string) {
   return post(auth, "/sign-in/email-otp", { email, otp });
 }
 
+/**
+ * Mints a sign-in code without the send endpoint, which now refuses to issue
+ * one for blocked accounts. Lets a test prove the verify guard refuses a valid
+ * code.
+ */
+async function signInWithMintedCode(auth: TestAuth, email: string) {
+  const api = auth.api as unknown as {
+    createVerificationOTP: (input: {
+      body: { email: string; type: "sign-in" };
+    }) => Promise<string>;
+  };
+  const otp = await api.createVerificationOTP({
+    body: { email, type: "sign-in" },
+  });
+  return post(auth, "/sign-in/email-otp", { email, otp });
+}
+
 beforeEach(() => {
   sendEmail.mockReset();
   sendEmail.mockResolvedValue({ data: { id: "email-id" }, error: null });
@@ -165,7 +182,7 @@ describe("otpAdminGuardPlugin", () => {
     const db = emptyDb([userRow("admin-1", "admin@example.com", "admin")]);
     const auth = buildAuth(db);
 
-    const response = await signInWithEmailCode(auth, "admin@example.com");
+    const response = await signInWithMintedCode(auth, "admin@example.com");
 
     expect(response.status).toBe(400);
     expect(response.headers.get("set-cookie")).toBeNull();
@@ -181,7 +198,7 @@ describe("otpAdminGuardPlugin", () => {
     ]);
     const auth = buildAuth(db);
 
-    const adminRefusal = await signInWithEmailCode(auth, "admin@example.com");
+    const adminRefusal = await signInWithMintedCode(auth, "admin@example.com");
     const adminBody = await adminRefusal.json();
     const wrongCode = await post(auth, "/sign-in/email-otp", {
       email: "bot@example.com",
@@ -207,7 +224,7 @@ describe("otpAdminGuardPlugin", () => {
     });
     const auth = buildAuth(db);
 
-    const response = await signInWithEmailCode(auth, "bot@example.com");
+    const response = await signInWithMintedCode(auth, "bot@example.com");
 
     expect(response.status).toBe(400);
     expect(response.headers.get("set-cookie")).toBeNull();
@@ -259,6 +276,61 @@ describe("otpAdminGuardPlugin", () => {
     expect(db.user).toHaveLength(1);
     expect(db.user[0]?.email).toBe("bot@example.com");
     expect(db.user[0]?.role).not.toBe("admin");
+  });
+
+  it("creates a plain user on first sign-in and keeps it account-free on the second", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    const first = await signInWithEmailCode(auth, "bot@example.com");
+    const second = await signInWithEmailCode(auth, "bot@example.com");
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(second.headers.get("set-cookie")).toContain("session_token");
+    expect(db.user).toHaveLength(1);
+    expect(db.user[0]).toMatchObject({ email: "bot@example.com", role: "user" });
+    expect(db.account).toHaveLength(0);
+  });
+
+  it("answers a blocked send like an unlisted email and sends and stores nothing", async () => {
+    const db = emptyDb([
+      userRow("admin-1", "admin@example.com", "admin"),
+      userRow("member-1", "bot@example.com", "user"),
+    ]);
+    db.account.push({
+      id: "acct-1",
+      userId: "member-1",
+      accountId: "gh-1",
+      providerId: "github",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const auth = buildAuth(db);
+
+    const blockedAdmin = await sendCode(auth, "admin@example.com");
+    const blockedMember = await sendCode(auth, "bot@example.com");
+    const blockedAdminBody = await blockedAdmin.json();
+    const blockedMemberBody = await blockedMember.json();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(db.verification).toHaveLength(0);
+
+    const unlisted = await sendCode(auth, "intruder@example.com");
+
+    expect(blockedAdmin.status).toBe(unlisted.status);
+    expect(blockedMember.status).toBe(unlisted.status);
+    expect(blockedAdminBody).toEqual(await unlisted.json());
+    expect(blockedMemberBody).toEqual({ success: true });
+  });
+
+  it("still sends a code to an allowlisted account with no admin role or linked accounts", async () => {
+    const db = emptyDb([userRow("bot-1", "bot@example.com", "user")]);
+    const auth = buildAuth(db);
+
+    const response = await sendCode(auth, "bot@example.com");
+
+    expect(response.status).toBe(200);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when the user lookup fails", async () => {
