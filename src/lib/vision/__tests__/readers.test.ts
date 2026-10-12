@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Player } from "@/generated/prisma/client";
 import { VisionResultCodes } from "@/lib/constants";
 import type { AnalysisResults } from "@/lib/visionTypes";
@@ -80,6 +80,10 @@ describe("readWithFallback", () => {
 });
 
 describe("missing Gemini key", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("falls back to Azure without calling Google", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const saved = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -98,6 +102,10 @@ describe("missing Gemini key", () => {
 });
 
 describe("Gemini output through the game processors", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const quiet = () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});

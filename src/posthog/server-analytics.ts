@@ -104,11 +104,14 @@ export const logFormSuccess = async (
 
 export const logVisionError = async (
   error: typeof ErrorModelOutput | unknown,
+  /** Which readers were tried and why each fell over, when the failure came from readWithFallback. */
+  reader?: { readerId: string; fallbacks: string[] },
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4(), {
+    ...(reader && { reader: reader.readerId, fallbacks: reader.fallbacks }),
     ...withSessionReplay(sessionReplayId),
   });
 };

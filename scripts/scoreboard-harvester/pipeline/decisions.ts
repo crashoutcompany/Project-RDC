@@ -3,10 +3,25 @@ import OpenAI from "openai";
 import { classificationOf, withRetry } from "@/lib/vision/api-errors";
 import type { FrameRecord } from "../types";
 
+const DEFAULT_DECISIONS_MODEL = "gpt-6-luna";
 /** Override with HARVEST_DECISIONS_MODEL (read when the module loads, via --env-file). */
-export const DECISIONS_MODEL = process.env.HARVEST_DECISIONS_MODEL || "gpt-6-luna";
-/** Input tokens only; Decisions doesn't bill output. */
+export const DECISIONS_MODEL = process.env.HARVEST_DECISIONS_MODEL || DEFAULT_DECISIONS_MODEL;
+/** Input tokens only; Decisions doesn't bill output. Assumes DEFAULT_DECISIONS_MODEL pricing. */
 export const DECISIONS_INPUT_PER_M = 0.1;
+
+/**
+ * A warning when HARVEST_DECISIONS_MODEL overrides the default, since the cost
+ * estimate only holds for the default model. Null when there's nothing to warn about.
+ */
+export function decisionsModelWarning(): string | null {
+  const override = process.env.HARVEST_DECISIONS_MODEL;
+  if (!override || override === DEFAULT_DECISIONS_MODEL) return null;
+  return (
+    `HARVEST_DECISIONS_MODEL=${override} overrides ${DEFAULT_DECISIONS_MODEL}; ` +
+    `the cost estimate (DECISIONS_INPUT_PER_M) assumes ${DEFAULT_DECISIONS_MODEL} pricing. ` +
+    `An unknown model name makes every Decisions call fail, which quietly sends frames to local OCR.`
+  );
+}
 /** Probability at which a frame counts as a scoreboard (13/13, 0 false positives in the benchmark). */
 export const DECISIONS_THRESHOLD = 0.5;
 /** Consecutive frames that fail even after retries before the finder gives up on Decisions. */

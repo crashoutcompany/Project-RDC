@@ -16,6 +16,7 @@ import path from "path";
 
 import { checkDeps } from "./pipeline/deps";
 import { harvestVideo } from "./harvest";
+import { DECISIONS_MODEL, decisionsModelWarning } from "./pipeline/decisions";
 import {
   extractYoutubeId,
   parseFiniteNumber,
@@ -308,6 +309,10 @@ async function main(): Promise<void> {
     printUsage();
     return;
   }
+
+  console.log(`[harvester] Decisions model: ${DECISIONS_MODEL}`);
+  const modelWarning = decisionsModelWarning();
+  if (modelWarning) console.warn(`[harvester] WARNING: ${modelWarning}`);
 
   const command = (positionals[0] ?? "extract") as Command;
   if (!COMMANDS.includes(command)) {
