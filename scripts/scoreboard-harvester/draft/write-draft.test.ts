@@ -90,3 +90,32 @@ test("writes nothing for an empty draft", async () => {
   });
   expect(db.session.findFirst).not.toHaveBeenCalled();
 });
+
+const uniqueViolation = () =>
+  Object.assign(new Error("Unique constraint failed on (gameId, videoId)"), { code: "P2002" });
+
+test("a unique-constraint race reports the session that won, not a failure", async () => {
+  db.gameStat.findMany.mockResolvedValue([] as never);
+  db.session.findFirst
+    .mockResolvedValueOnce(null as never) // our check: nothing saved yet
+    .mockResolvedValueOnce({ sessionId: 44 } as never); // after the conflict: the racing session
+  db.$transaction.mockRejectedValueOnce(uniqueViolation());
+
+  await expect(write()).resolves.toEqual({ status: "exists", sessionId: 44 });
+});
+
+test("rethrows a unique violation when no session can be found", async () => {
+  db.gameStat.findMany.mockResolvedValue([] as never);
+  db.$transaction.mockRejectedValueOnce(uniqueViolation());
+
+  await expect(write()).rejects.toThrow("Unique constraint failed");
+});
+
+test("rethrows errors that are not unique-constraint violations", async () => {
+  db.gameStat.findMany.mockResolvedValue([] as never);
+  db.session.findFirst.mockResolvedValueOnce(null as never);
+  db.$transaction.mockRejectedValueOnce(new Error("connection reset"));
+
+  await expect(write()).rejects.toThrow("connection reset");
+  expect(db.session.findFirst).toHaveBeenCalledTimes(1);
+});

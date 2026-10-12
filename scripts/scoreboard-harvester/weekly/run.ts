@@ -11,6 +11,7 @@ import type { GameProfile } from "../games/types";
 import type { Manifest, ResolvedConfig } from "../types";
 import { analyzeJobs } from "../pipeline/analyze";
 import { fmtTime } from "../utils";
+import { acquireLock } from "./lock";
 import {
   CandidateVideo,
   candidatesFromSheet,
@@ -341,21 +342,4 @@ async function emailReport(markdown: string, report: ReportLine[]) {
     text: markdown,
   });
   if (error) console.warn(`[weekly] report email failed: ${error.message}`);
-}
-
-/** Returns a release function, or null when a live process holds the lock. */
-function acquireLock(lockPath: string): (() => void) | null {
-  if (fs.existsSync(lockPath)) {
-    const pid = Number(fs.readFileSync(lockPath, "utf8"));
-    try {
-      if (pid) {
-        process.kill(pid, 0);
-        return null;
-      }
-    } catch {
-      // Stale lock from a crashed run.
-    }
-  }
-  fs.writeFileSync(lockPath, String(process.pid));
-  return () => fs.rmSync(lockPath, { force: true });
 }

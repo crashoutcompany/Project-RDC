@@ -58,12 +58,10 @@ pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index
 
 Install the systemd user timer (Mondays 03:00; catches up after downtime):
 
+From the repo root, this writes the unit files with this checkout's path and enables the timer:
+
 ```bash
-mkdir -p ~/.config/systemd/user
-cp scripts/scoreboard-harvester/schedule/rdc-harvester.{service,timer} ~/.config/systemd/user/
-# Edit ExecStart in the .service if the repo isn't at ~/Developer/Project-RDC
-systemctl --user daemon-reload
-systemctl --user enable --now rdc-harvester.timer
+scripts/scoreboard-harvester/schedule/install.sh
 sudo loginctl enable-linger "$USER"    # run even when nobody is logged in
 
 systemctl --user list-timers rdc-harvester.timer   # next run

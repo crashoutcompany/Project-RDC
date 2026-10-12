@@ -1,5 +1,5 @@
 # systemd user service for the weekly scoreboard harvest.
-# Install: see scripts/scoreboard-harvester/README.md ("Run it every week").
+# Don't copy this file directly: schedule/install.sh fills in @REPO@.
 [Unit]
 Description=RDC scoreboard harvester
 Wants=network-online.target
@@ -7,8 +7,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-# Edit if the repo lives somewhere else.
-ExecStart=%h/Developer/Project-RDC/scripts/scoreboard-harvester/schedule/run-weekly.sh
+ExecStart="@REPO@/scripts/scoreboard-harvester/schedule/run-weekly.sh"
 # Stay out of the way of anything interactive on the box.
 Nice=10
 IOSchedulingClass=idle

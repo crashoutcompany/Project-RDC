@@ -44,77 +44,105 @@ export async function writeDraftSession(args: {
   const gameStats = await prisma.gameStat.findMany({ where: { gameId } });
   const statIds = new Map(gameStats.map((gs) => [gs.statName, gs.statId]));
 
-  const sessionId = await prisma.$transaction(
-    async (tx) => {
-      const session = await tx.session.create({
-        data: {
-          gameId,
-          sessionName: video.title,
-          sessionUrl: video.url,
-          thumbnail: video.thumbnail,
-          date: video.date,
-          videoId: video.videoId,
-          isApproved: false,
-          createdBy: HARVESTER_AUTHOR,
-        },
-      });
-
-      for (const set of draft.sets) {
-        const newSet = await tx.gameSet.create({
+  const insertDraft = () =>
+    prisma.$transaction(
+      async (tx) => {
+        const session = await tx.session.create({
           data: {
-            sessionId: session.sessionId,
-            setWinners: {
-              connect: set.winnerIds.map((playerId) => ({ playerId })),
-            },
+            gameId,
+            sessionName: video.title,
+            sessionUrl: video.url,
+            thumbnail: video.thumbnail,
+            date: video.date,
+            videoId: video.videoId,
+            isApproved: false,
+            createdBy: HARVESTER_AUTHOR,
           },
         });
 
-        for (const match of set.matches) {
-          const newMatch = await tx.match.create({
+        for (const set of draft.sets) {
+          const newSet = await tx.gameSet.create({
             data: {
-              setId: newSet.setId,
-              date: video.date,
-              matchWinners: {
-                connect: match.winnerIds.map((playerId) => ({ playerId })),
+              sessionId: session.sessionId,
+              setWinners: {
+                connect: set.winnerIds.map((playerId) => ({ playerId })),
               },
             },
           });
 
-          for (const player of match.players) {
-            const playerSession = await tx.playerSession.create({
+          for (const match of set.matches) {
+            const newMatch = await tx.match.create({
               data: {
-                playerId: player.playerId,
-                sessionId: session.sessionId,
-                matchId: newMatch.matchId,
                 setId: newSet.setId,
+                date: video.date,
+                matchWinners: {
+                  connect: match.winnerIds.map((playerId) => ({ playerId })),
+                },
               },
             });
 
-            const stats = player.stats.flatMap((stat) => {
-              const statId = statIds.get(stat.stat);
-              if (statId === undefined) return [];
-              return [
-                {
+            for (const player of match.players) {
+              const playerSession = await tx.playerSession.create({
+                data: {
                   playerId: player.playerId,
-                  gameId,
-                  playerSessionId: playerSession.playerSessionId,
-                  statId,
-                  value: stat.statValue,
-                  date: video.date,
+                  sessionId: session.sessionId,
+                  matchId: newMatch.matchId,
+                  setId: newSet.setId,
                 },
-              ];
-            });
-            if (stats.length > 0) await tx.playerStat.createMany({ data: stats });
+              });
+
+              const stats = player.stats.flatMap((stat) => {
+                const statId = statIds.get(stat.stat);
+                if (statId === undefined) return [];
+                return [
+                  {
+                    playerId: player.playerId,
+                    gameId,
+                    playerSessionId: playerSession.playerSessionId,
+                    statId,
+                    value: stat.statValue,
+                    date: video.date,
+                  },
+                ];
+              });
+              if (stats.length > 0)
+                await tx.playerStat.createMany({ data: stats });
+            }
           }
         }
-      }
 
-      return session.sessionId;
-    },
-    // Sequential inserts over the Neon HTTP adapter take a few seconds for a
-    // 20-match session; the 5s default is too tight.
-    { timeout: 60_000, maxWait: 10_000 },
-  );
+        return session.sessionId;
+      },
+      // Sequential inserts over the Neon HTTP adapter take a few seconds for a
+      // 20-match session; the 5s default is too tight.
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+
+  let sessionId: number;
+  try {
+    sessionId = await insertDraft();
+  } catch (err) {
+    // Another run (or an admin) saved this video between our check and our insert.
+    if (!isUniqueViolation(err)) throw err;
+    const raced = await prisma.session.findFirst({
+      where: { gameId, videoId: video.videoId },
+      select: { sessionId: true },
+    });
+    if (raced) return { status: "exists", sessionId: raced.sessionId };
+    throw err;
+  }
 
   return { status: "created", sessionId };
+}
+
+/**
+ * Prisma's P2002 (unique constraint). Checked structurally rather than with
+ * `instanceof`, so it works without the runtime Prisma namespace.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "P2002"
+  );
 }

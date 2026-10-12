@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FrameRecord } from "../types";
 import { decideFrames } from "./decisions";
 
+vi.mock("@/lib/vision/api-errors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/vision/api-errors")>()),
+  // No backoff sleeps here; the retry policy is covered by its own tests.
+  withRetry: async <T>(fn: () => Promise<T>) => fn(),
+}));
+
 let dir: string;
 let frames: FrameRecord[];
 
@@ -28,8 +34,8 @@ const clientFrom = (create: (frameNo: number) => unknown) => {
   let n = 0;
   return { decisions: { create: vi.fn(async () => create(++n)) } } as unknown as OpenAI;
 };
-const run = (client: OpenAI) =>
-  decideFrames(frames, "scoreboard?", { logPath: path.join(dir, "log.jsonl"), concurrency: 1, client });
+const run = (client: OpenAI, logName = "log.jsonl") =>
+  decideFrames(frames, "scoreboard?", { logPath: path.join(dir, logName), concurrency: 1, client });
 
 describe("decideFrames", () => {
   it("answers every frame", async () => {
@@ -61,5 +67,22 @@ describe("decideFrames", () => {
     const result = await run(client);
     expect(client.decisions.create).toHaveBeenCalledTimes(5);
     expect(result.unanswered).toEqual([]);
+  });
+
+  it("counts consecutive failures per run, so a failing run doesn't stop a concurrent one", async () => {
+    const failing = clientFrom(() => {
+      throw Object.assign(new Error("server error"), { status: 500 });
+    });
+    const healthy = clientFrom(() => answer(0.1));
+
+    const [failed, ok] = await Promise.all([
+      run(failing, "failing.jsonl"),
+      run(healthy, "healthy.jsonl"),
+    ]);
+
+    expect(failed.abortReason).toMatch(/^3 frames in a row failed/);
+    expect(ok.abortReason).toBeNull();
+    expect(ok.unanswered).toEqual([]);
+    expect(healthy.decisions.create).toHaveBeenCalledTimes(frames.length);
   });
 });
