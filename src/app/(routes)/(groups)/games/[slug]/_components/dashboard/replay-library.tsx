@@ -18,7 +18,7 @@ const formatDate = (date: Date) =>
     day: "numeric",
     year: "numeric",
     // Pin the zone so server and browser render the same date text.
-    timeZone: "UTC",
+    timeZone: "America/New_York",
   });
 
 /**

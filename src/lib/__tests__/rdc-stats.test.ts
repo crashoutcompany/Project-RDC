@@ -85,7 +85,7 @@ describe("summarizeArena", () => {
     });
   });
 
-  it("reports the champion by display name while records stay keyed lowercase", () => {
+  it("reports the champion's display name and records slug while records stay keyed lowercase", () => {
     const won = {
       date: new Date("2025-06-23T12:00:00Z"),
       dayWinners: [],
@@ -105,7 +105,7 @@ describe("summarizeArena", () => {
       "Mario Kart 8",
       [won] as unknown as Sessions,
     );
-    expect(arena.champion).toBe("Ben Smith");
+    expect(arena.champion).toEqual({ name: "Ben Smith", slug: "ben smith" });
     expect(arena.records["ben smith"].matches).toBe(2);
   });
 });

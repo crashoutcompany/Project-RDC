@@ -120,7 +120,7 @@ async function ChampionAndTopFive() {
   const [arenas, roster] = await Promise.all([getArenas(), getRoster()]);
   const featured = arenas.find((a) => a.slug === FEATURED_ARENA);
   const board = topFive(featured);
-  const champ = roster.find((f) => f.slug === featured?.champion?.toLowerCase());
+  const champ = roster.find((f) => f.slug === featured?.champion?.slug);
 
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-2">

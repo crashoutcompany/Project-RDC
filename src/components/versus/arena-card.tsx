@@ -61,7 +61,7 @@ export function ArenaCard({
               <span>
                 Champ{" "}
                 {arena.champion ? (
-                  <span className="text-vs-gold">{arena.champion}</span>
+                  <span className="text-vs-gold">{arena.champion.name}</span>
                 ) : (
                   "???"
                 )}

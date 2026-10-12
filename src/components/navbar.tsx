@@ -17,7 +17,9 @@ export const Navbar = () => {
         >
           RDC <span className="text-vs-cream">Stats</span>
         </Link>
-        <NavLinks className="border-vs-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0" />
+        <Suspense fallback={null}>
+          <NavLinks className="border-vs-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0" />
+        </Suspense>
         <div className="flex shrink-0 items-center gap-2">
           <Suspense fallback={<LoginLink />}>
             <SessionControls />

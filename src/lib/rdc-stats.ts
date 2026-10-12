@@ -25,8 +25,8 @@ export type Arena = {
   matches: number;
   sets: number;
   lastPlayed: string | null;
-  /** Display name of the player with the most match wins, or null. */
-  champion: string | null;
+  /** Player with the most match wins, or null. `slug` is the `records` key. */
+  champion: { name: string; slug: string } | null;
   /** Keyed by lowercase player name. */
   records: Record<string, PlayerRecord>;
 };
@@ -134,7 +134,9 @@ export function summarizeArena(
     Object.entries(records)
       .filter(([, r]) => r.matches > 0)
       .sort(([, a], [, b]) => b.matches - a.matches)[0]?.[0];
-  const champion = championKey ? names[championKey] : null;
+  const champion = championKey
+    ? { name: names[championKey], slug: championKey }
+    : null;
 
   return {
     slug,
