@@ -12,9 +12,18 @@ if [ ! -x "$SCHEDULE/run-weekly.sh" ]; then
   exit 1
 fi
 
+# Fills in @REPO@ line by line. Bash pattern substitution with a quoted
+# replacement is literal, so paths containing |, &, \, or / are safe.
+render_unit() {
+  local template="$1" line
+  while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s\n' "${line//@REPO@/"$REPO"}"
+  done < "$template"
+}
+
 UNIT_DIR="$HOME/.config/systemd/user"
 mkdir -p "$UNIT_DIR"
-sed "s|@REPO@|$REPO|g" "$SCHEDULE/rdc-harvester.service.in" > "$UNIT_DIR/rdc-harvester.service"
+render_unit "$SCHEDULE/rdc-harvester.service.in" > "$UNIT_DIR/rdc-harvester.service"
 cp "$SCHEDULE/rdc-harvester.timer" "$UNIT_DIR/rdc-harvester.timer"
 
 systemctl --user daemon-reload

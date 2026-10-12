@@ -14,6 +14,12 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+/** Makes the lock look like it was written long enough ago to be stale. */
+function backdate(file: string): void {
+  const past = new Date(Date.now() - 60_000);
+  fs.utimesSync(file, past, past);
+}
+
 /** A PID that belonged to a process which has now exited. */
 function deadPid(): number {
   const child = spawnSync(process.execPath, ["-e", ""]);
@@ -48,11 +54,29 @@ describe("acquireLock", () => {
     release!();
   });
 
-  it("treats an unreadable PID in the lock as stale", () => {
+  it("treats an unreadable PID in an old lock as stale", () => {
     fs.writeFileSync(lockPath, "not-a-pid");
+    backdate(lockPath);
 
     const release = acquireLock(lockPath);
     expect(release).not.toBeNull();
+    release!();
+  });
+
+  it("treats a recently written empty lock as held by a starter mid-write", () => {
+    fs.writeFileSync(lockPath, "");
+
+    expect(acquireLock(lockPath)).toBeNull();
+    expect(fs.existsSync(lockPath)).toBe(true);
+  });
+
+  it("treats an old empty lock as stale", () => {
+    fs.writeFileSync(lockPath, "");
+    backdate(lockPath);
+
+    const release = acquireLock(lockPath);
+    expect(release).not.toBeNull();
+    expect(fs.readFileSync(lockPath, "utf8")).toBe(String(process.pid));
     release!();
   });
 
