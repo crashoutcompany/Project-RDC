@@ -388,6 +388,24 @@ describe("createAuthRateLimitStore", () => {
     );
   });
 
+  it("uses memory only when the URL is a vercel pull placeholder, and warns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    createAuthRateLimitStore({
+      env: {
+        UPSTASH_REDIS_REST_URL: "[SENSITIVE]",
+        UPSTASH_REDIS_REST_TOKEN: "[SENSITIVE]",
+      },
+      appSlug: "project-z",
+      secret: SECRET,
+    });
+
+    expect(redis.state.constructed).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("UPSTASH_REDIS_REST_URL"),
+    );
+  });
+
   it("falls back to memory on a Redis error and logs once", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     redis.state.mode = "error";
