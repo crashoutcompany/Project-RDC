@@ -95,7 +95,12 @@ describe("createAuth", () => {
         RESEND_API_KEY: "re_test",
         AUTH_EMAIL_FROM: "auth@rdcstats.com",
       }),
-    ).toEqual(["email-otp", "email-otp-allowlist", "next-cookies"]);
+    ).toEqual([
+      "email-otp",
+      "email-otp-allowlist",
+      "email-otp-admin-guard",
+      "next-cookies",
+    ]);
 
     warn.mockRestore();
   });

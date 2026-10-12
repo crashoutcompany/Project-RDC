@@ -11,6 +11,7 @@ import {
   resolveEmailOtpConfig,
   type EmailOtpEnv,
 } from "./email-otp";
+import { otpAdminGuardPlugin } from "./otp-admin-guard";
 
 export type SocialProviderId = "github" | "google";
 
@@ -171,7 +172,9 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     },
     ...(onError ? { onAPIError: { onError } } : {}),
     plugins: [
-      ...(emailOtp ? createEmailOtpPlugins(emailOtp, appName) : []),
+      ...(emailOtp
+        ? [...createEmailOtpPlugins(emailOtp, appName), otpAdminGuardPlugin]
+        : []),
       nextCookies(),
     ],
   });
