@@ -116,6 +116,9 @@ pnpm update-neon-branch
 - `AUTH_GOOGLE_SECRET` - Google OAuth Client Secret
 - `AUTH_OTP_ALLOWED_EMAILS` - Optional comma-separated allowlist for email-code sign-in
 - `AUTH_EMAIL_FROM` - Sender for sign-in codes (must be on a Resend-verified domain)
+- `UPSTASH_REDIS_REST_URL` - Optional Upstash Redis REST URL for shared auth rate limits (memory is used unless both Upstash variables are set)
+- `UPSTASH_REDIS_REST_TOKEN` - Optional Upstash Redis REST token, paired with the URL
+- `AUTH_RATE_LIMIT_PREFIX` - Optional key namespace for rate limits; defaults to the app name slug (`project-rdc`)
 - `BETTER_AUTH_SECRET` - Secret used to sign and encrypt auth data
 - `BETTER_AUTH_URL` - Optional canonical auth origin
 - `TEST_AUTH_SECRET` - Shared secret for the local authenticated E2E login
@@ -157,9 +160,25 @@ pnpm update-neon-branch
 - Delivery failures: if Resend rejects a code email, the error is logged as
   `[auth] sign-in code email failed` and is not shown to the user. The user sees
   the same success response as an unlisted address.
-- Rate limiting: email-code routes rely on Better Auth's default rate limiter,
-  which is in-memory per server instance. Limits are not shared across instances
-  or restarts.
+- Rate limiting (`src/lib/auth/rate-limit.ts`, shared between apps, wired in
+  `src/lib/auth/create-auth.ts`): two layers share one store.
+  - Per-IP limits are Better Auth's defaults for sign-in, sign-up and email-code
+    routes. They are enforced only when `NODE_ENV=production` (Vercel production
+    and preview, and `next start` in CI), and are off in dev and unit tests.
+  - Per-email lockout on the email-code routes counts every address, listed or
+    not, so the response does not reveal the allowlist. Limits are 5 code sends
+    and 10 sign-in attempts per 15 minutes per email. Over the send limit, the
+    route returns the normal `{ success: true }` response and sends nothing. Over
+    the sign-in limit, it returns `429 TOO_MANY_REQUESTS`. Keys are SHA-256
+    digests, so no raw email or IP is stored.
+  - Storage is Upstash Redis when both `UPSTASH_REDIS_REST_URL` and
+    `UPSTASH_REDIS_REST_TOKEN` are set. Otherwise it is memory, per server
+    instance. If a Redis call errors or takes over 1 second, that call falls back
+    to memory and logs `auth_rate_limit_redis_unavailable` (at most once a
+    minute, with the reason and error name only).
+  - `AUTH_RATE_LIMIT_PREFIX` namespaces the keys so apps can share one Upstash
+    database. It defaults to the app name slug, which is `project-rdc` for this
+    app.
 
 **OAuth Provider Links**:
 

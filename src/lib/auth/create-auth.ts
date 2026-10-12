@@ -9,15 +9,24 @@ import {
 import {
   createEmailOtpPlugins,
   EMAIL_OTP_DISABLED_PATHS,
+  normalizeOtpEmail,
   resolveEmailOtpConfig,
   type EmailOtpEnv,
 } from "./email-otp";
+import {
+  createAuthRateLimitStore,
+  createOtpEmailLockoutPlugin,
+  rateLimitPrefixFromAppName,
+  type RateLimitEnv,
+} from "./rate-limit";
 import { otpAdminGuardPlugin } from "./otp-admin-guard";
 
 export type SocialProviderId = "github" | "google";
 
 type AuthEnv = AuthBaseUrlEnv &
-  EmailOtpEnv & {
+  EmailOtpEnv &
+  RateLimitEnv & {
+    NODE_ENV?: string;
     BETTER_AUTH_SECRET?: string;
     AUTH_GITHUB_ID?: string;
     AUTH_GITHUB_SECRET?: string;
@@ -134,9 +143,22 @@ export function createAuth<const TFields extends UserAdditionalFields>({
 }: CreateAuthOptions<TFields>) {
   const { secret, socialProviders } = resolveAuthEnvironment(env);
   const emailOtp = resolveEmailOtpConfig(env, true);
+  // Per-IP limits (Better Auth) and the per-email lockout share one store, so
+  // both use Redis when it is configured and fall back to memory otherwise.
+  const rateLimitStore = createAuthRateLimitStore({
+    env,
+    defaultPrefix: rateLimitPrefixFromAppName(appName),
+  });
 
   return betterAuth({
     appName,
+    // On when NODE_ENV=production (Vercel production and preview, and
+    // `next start` in CI), off in dev and unit tests, matching Better Auth's
+    // default. Read from `env` so it can be tested.
+    rateLimit: {
+      enabled: env.NODE_ENV === "production",
+      customStorage: rateLimitStore,
+    },
     baseURL: resolveAuthBaseUrl(productionUrl, env),
     trustedOrigins: [
       ...new Set([
@@ -175,7 +197,17 @@ export function createAuth<const TFields extends UserAdditionalFields>({
     ...(emailOtp ? { disabledPaths: [...EMAIL_OTP_DISABLED_PATHS] } : {}),
     plugins: [
       ...(emailOtp
-        ? [...createEmailOtpPlugins(emailOtp, appName), otpAdminGuardPlugin]
+        ? [
+            // Order matters: before hooks run in this order. The email lockout
+            // comes first so over-limit requests stop before the allowlist and
+            // admin guard do any lookup.
+            createOtpEmailLockoutPlugin({
+              store: rateLimitStore,
+              normalizeEmail: normalizeOtpEmail,
+            }),
+            ...createEmailOtpPlugins(emailOtp, appName),
+            otpAdminGuardPlugin,
+          ]
         : []),
       nextCookies(),
     ],
