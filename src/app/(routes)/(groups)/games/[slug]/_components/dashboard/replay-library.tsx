@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import type { Sessions } from "../../_helpers/dashboard";
+import { formatSessionDate } from "@/lib/utils";
 
 type ReplayLibraryProps = {
   sessions: Sessions;
@@ -11,15 +12,6 @@ type ReplayLibraryProps = {
 
 const INITIAL_COUNT = 4;
 const PAGE_SIZE = 8;
-
-const formatDate = (date: Date) =>
-  new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    // Pin the zone so server and browser render the same date text.
-    timeZone: "America/New_York",
-  });
 
 /**
  * Grid of session "tapes". Shows 4, then reveals more in pages of 8 after
@@ -91,7 +83,7 @@ export function ReplayLibrary({
                 {session.sessionName}
               </p>
               <p className="text-vs-cream/60 text-xs">
-                {formatDate(session.date)}
+                {formatSessionDate(session.date)}
               </p>
             </div>
           </button>

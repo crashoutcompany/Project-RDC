@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { formatSessionDate } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -97,13 +98,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
                 {session.sessionName}
               </h3>
               <p className="text-muted-foreground text-xs">
-                {new Date(session.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  // Pin the zone so server and browser render the same date text.
-                  timeZone: "America/New_York",
-                })}
+                {formatSessionDate(session.date)}
               </p>
             </div>
           </Link>

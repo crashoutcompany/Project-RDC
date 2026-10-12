@@ -14,3 +14,15 @@ export const capitalizeFirst = <T>(text: T) => {
 };
 
 export const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * Formats a session date as e.g. "Oct 11, 2026", pinned to Eastern Time so the
+ * server (UTC) and the browser render the same day.
+ */
+export const formatSessionDate = (date: Date | string | number) =>
+  new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/New_York",
+  });

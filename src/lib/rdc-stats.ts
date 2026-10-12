@@ -4,6 +4,7 @@ import { getAllGames } from "prisma/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { gameImages, GamesEnum } from "@/lib/constants";
+import { formatSessionDate } from "@/lib/utils";
 import { getFighterArt, ROSTER_ORDER, type FighterArt } from "@/lib/fighters";
 import type { Sessions } from "@/app/(routes)/(groups)/games/[slug]/_helpers/dashboard";
 
@@ -65,14 +66,6 @@ const ARENA_ORDER = [
 export const FEATURED_ARENA = GamesEnum.MarioKart8;
 
 export const toSlug = (name: string) => name.replace(/\s/g, "").toLowerCase();
-
-export const formatDate = (date: Date) =>
-  date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/New_York",
-  });
 
 /**
  * Folds sessions into per-player match/set/day wins and avg position. Callers
@@ -146,7 +139,7 @@ export function summarizeArena(
     sessions: sessions.length,
     matches,
     sets,
-    lastPlayed: lastPlayed ? formatDate(lastPlayed) : null,
+    lastPlayed: lastPlayed ? formatSessionDate(lastPlayed) : null,
     champion,
     records,
   };
