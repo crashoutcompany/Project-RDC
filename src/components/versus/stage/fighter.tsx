@@ -84,18 +84,29 @@ function PoseGroup({
   );
 }
 
+/**
+ * Soft black radial blob (alpha 0.75 at the centre, fading to 0 at the rim).
+ * Built from pixels rather than a 2D canvas so render never touches `document`.
+ */
+function shadowTexture() {
+  const size = 64;
+  const half = size / 2;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x + 0.5 - half, y + 0.5 - half);
+      data[(y * size + x) * 4 + 3] = Math.round(255 * 0.75 * Math.max(0, 1 - d / half));
+    }
+  const texture = new THREE.DataTexture(data, size, size);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 function GroundShadow({ width }: { width: number }) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 64;
-    const ctx = canvas.getContext("2d")!;
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, "rgba(0,0,0,0.75)");
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
-    return new THREE.CanvasTexture(canvas);
-  }, []);
+  const texture = useMemo(() => shadowTexture(), []);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} scale={[width * 1.3, width * 0.5, 1]}>
