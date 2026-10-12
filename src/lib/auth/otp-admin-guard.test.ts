@@ -195,6 +195,25 @@ describe("otpAdminGuardPlugin", () => {
     expect(adminBody).toMatchObject({ code: "INVALID_OTP" });
   });
 
+  it("refuses email-code sign-in into a non-admin account that has a linked OAuth account", async () => {
+    const db = emptyDb([userRow("member-1", "bot@example.com", "user")]);
+    db.account.push({
+      id: "acct-1",
+      userId: "member-1",
+      accountId: "gh-1",
+      providerId: "github",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const auth = buildAuth(db);
+
+    const response = await signInWithEmailCode(auth, "bot@example.com");
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(db.session).toHaveLength(0);
+  });
+
   it("refuses an admin reset-password, so a code cannot change an admin password", async () => {
     const db = emptyDb([userRow("admin-1", "admin@example.com", "admin")]);
     const auth = buildAuth(db);

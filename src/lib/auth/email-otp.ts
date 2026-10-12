@@ -153,7 +153,13 @@ export function createEmailOtpPlugins(
         ) {
           return;
         }
-        await sendSignInOtpEmail(config, { appName, email, otp });
+        try {
+          await sendSignInOtpEmail(config, { appName, email, otp });
+        } catch (error) {
+          // Same response as an unlisted email, so a delivery failure does not
+          // reveal which addresses are listed. The failure is logged here.
+          console.error("[auth] sign-in code email failed", error);
+        }
       },
     }),
     emailOtpAllowlistGuard(config.allowlist),

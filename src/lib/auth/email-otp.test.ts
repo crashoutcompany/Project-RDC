@@ -239,6 +239,28 @@ describe("createEmailOtpPlugins", () => {
     expect(sendEmail.mock.lastCall?.[0].to).toBe("bot@example.com");
   });
 
+  it("gives a listed email the same response when Resend fails", async () => {
+    const auth = buildAuth();
+    const listed = await sendCode(auth, "bot@example.com");
+    const unlisted = await sendCode(auth, "intruder@example.com");
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    sendEmail.mockResolvedValueOnce({
+      data: null,
+      error: { message: "domain not verified" },
+    });
+
+    const failed = await sendCode(auth, "bot@example.com");
+
+    expect(failed.status).toBe(listed.status);
+    expect(await failed.json()).toEqual(await unlisted.json());
+    expect(error).toHaveBeenCalledWith(
+      "[auth] sign-in code email failed",
+      expect.any(Error),
+    );
+  });
+
   it("sends nothing for non-sign-in OTP types", async () => {
     const auth = buildAuth();
 

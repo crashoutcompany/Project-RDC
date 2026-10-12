@@ -20,8 +20,10 @@ export function isAdminAccount(
 }
 
 /**
- * Refuses OTP flows that would act on an existing admin account, even when the
- * admin's own email lands on the allowlist by mistake. The refusal reuses the
+ * Refuses OTP flows that would act on an existing admin account, or on any
+ * account a person already signs into another way (OAuth or password), even
+ * when that email lands on the allowlist by mistake. A user created by an
+ * email-code sign-in has no linked accounts, so bots keep signing in. The refusal reuses the
  * generic INVALID_OTP error that every other failure returns, so the response
  * never reveals that an account exists. A failed user lookup throws and the
  * request is rejected (fail closed). A new allowlisted email has no account yet,
@@ -39,8 +41,13 @@ export const otpAdminGuardPlugin = {
 
           const existing = await ctx.context.internalAdapter.findUserByEmail(
             email.trim().toLowerCase(),
+            { includeAccounts: true },
           );
-          if (existing && isAdminAccount(existing.user as { role?: unknown })) {
+          if (
+            existing &&
+            (isAdminAccount(existing.user as { role?: unknown }) ||
+              existing.accounts.length > 0)
+          ) {
             throw APIError.from("BAD_REQUEST", {
               code: "INVALID_OTP",
               message: "Invalid OTP",
