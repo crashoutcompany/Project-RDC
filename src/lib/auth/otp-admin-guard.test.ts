@@ -3,8 +3,12 @@ import { betterAuth } from "better-auth/minimal";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createEmailOtpPlugins, type EmailOtpConfig } from "./email-otp";
-import { isAdminAccount, otpAdminGuardPlugin } from "./otp-admin-guard";
+import {
+  createEmailOtpPlugins,
+  otpEmailLogHash,
+  type EmailOtpConfig,
+} from "./email-otp";
+import { createOtpAdminGuardPlugin, isAdminAccount } from "./otp-admin-guard";
 
 type SendResult = {
   data: { id: string } | null;
@@ -65,8 +69,11 @@ function emptyDb(users: UserRow[] = []): MemoryDb {
   return { user: users, session: [], account: [], verification: [] };
 }
 
-/** How many user lookups still fail. `Infinity` fails every lookup. */
-type LookupFailures = { remaining: number };
+/**
+ * How many user lookups still fail. `Infinity` fails every lookup. `message`
+ * is the error text, so a test can check that the logged text drops the email.
+ */
+type LookupFailures = { remaining: number; message?: string };
 
 /**
  * Mirrors the real RDC wiring: `role` is a declared, server-assigned user field,
@@ -82,7 +89,7 @@ function buildAuth(db: MemoryDb, failures: LookupFailures = { remaining: 0 }) {
       findOne: async (args: Parameters<typeof inner.findOne>[0]) => {
         if (args.model === "user" && failures.remaining > 0) {
           failures.remaining -= 1;
-          throw new Error("db down");
+          throw new Error(failures.message ?? "db down");
         }
         return inner.findOne(args);
       },
@@ -106,7 +113,10 @@ function buildAuth(db: MemoryDb, failures: LookupFailures = { remaining: 0 }) {
         },
       },
     },
-    plugins: [...createEmailOtpPlugins(CONFIG, "App"), otpAdminGuardPlugin],
+    plugins: [
+      ...createEmailOtpPlugins(CONFIG, "App", { logSecret: SECRET }),
+      createOtpAdminGuardPlugin({ logSecret: SECRET }),
+    ],
   });
 }
 
@@ -182,7 +192,12 @@ describe("isAdminAccount", () => {
   });
 });
 
-describe("otpAdminGuardPlugin", () => {
+/** The hash the guard logs for an address, keyed with the test secret. */
+function hashOf(email: string): string {
+  return otpEmailLogHash(email, SECRET);
+}
+
+describe("createOtpAdminGuardPlugin", () => {
   it("refuses email-code sign-in into an existing admin account", async () => {
     const db = emptyDb([userRow("admin-1", "admin@example.com", "admin")]);
     const auth = buildAuth(db);
@@ -403,7 +418,7 @@ describe("otpAdminGuardPlugin", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
-  it("denies sign-in and logs without the email when the lookup fails twice", async () => {
+  it("answers a failed sign-in lookup like a wrong code and logs by hash, not email", async () => {
     const error = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -417,18 +432,24 @@ describe("otpAdminGuardPlugin", () => {
       email: "bot@example.com",
       otp,
     });
+    const wrongCode = await post(buildAuth(emptyDb()), "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp: "000000",
+    });
 
-    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(response.status).toBe(wrongCode.status);
+    expect(await response.json()).toEqual(await wrongCode.json());
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(db.session).toHaveLength(0);
     expect(error).toHaveBeenCalledWith("otp_guard_lookup_failed", {
       attempts: 2,
-      error: expect.any(Error),
+      emailHash: hashOf("bot@example.com"),
+      error: { name: "Error", message: "db down" },
     });
     expect(JSON.stringify(error.mock.calls)).not.toContain("bot@example.com");
   });
 
-  it("denies a code send and logs without the email when the lookup fails twice", async () => {
+  it("answers a failed send like an unlisted email and stores and sends nothing", async () => {
     const error = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -437,14 +458,93 @@ describe("otpAdminGuardPlugin", () => {
     const auth = buildAuth(db, failures);
 
     const response = await sendCode(auth, "bot@example.com");
+    const unlisted = await sendCode(buildAuth(emptyDb()), "intruder@example.com");
 
-    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ success: true });
+    expect(body).toEqual(await unlisted.json());
     expect(sendEmail).not.toHaveBeenCalled();
     expect(db.verification).toHaveLength(0);
-    expect(error).toHaveBeenCalledWith("otp_guard_lookup_failed", {
-      attempts: 2,
-      error: expect.any(Error),
-    });
+    expect(error).toHaveBeenCalledWith(
+      "otp_guard_lookup_failed",
+      expect.objectContaining({ emailHash: hashOf("bot@example.com") }),
+    );
     expect(JSON.stringify(error.mock.calls)).not.toContain("bot@example.com");
+  });
+
+  it("redacts the address from a lookup error message before logging it", async () => {
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const db = emptyDb([userRow("bot-1", "bot@example.com", "user")]);
+    const failures: LookupFailures = {
+      remaining: Infinity,
+      message: "lookup failed for bot@example.com",
+    };
+    const auth = buildAuth(db, failures);
+
+    await sendCode(auth, "bot@example.com");
+
+    expect(error).toHaveBeenCalledWith(
+      "otp_guard_lookup_failed",
+      expect.objectContaining({
+        error: { name: "Error", message: "lookup failed for [redacted]" },
+      }),
+    );
+    expect(JSON.stringify(error.mock.calls)).not.toContain("bot@example.com");
+  });
+
+  it("logs a blocked account by hash, not by address", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const db = emptyDb([userRow("member-1", "bot@example.com", "user")]);
+    db.account.push({
+      id: "acct-1",
+      userId: "member-1",
+      accountId: "gh-1",
+      providerId: "github",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const auth = buildAuth(db);
+
+    await signInWithMintedCode(auth, "bot@example.com");
+
+    expect(warn).toHaveBeenCalledWith("otp_sign_in_failed", {
+      reason: "otp_account_blocked",
+      emailHash: hashOf("bot@example.com"),
+      userId: "member-1",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("bot@example.com");
+  });
+
+  it("never writes the raw email to the console on any guard path", async () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map(
+      (method) => vi.spyOn(console, method).mockImplementation(() => undefined),
+    );
+    const blockedAuth = buildAuth(
+      emptyDb([
+        userRow("admin-1", "admin@example.com", "admin"),
+        userRow("member-1", "bot@example.com", "user"),
+      ]),
+    );
+    const failingAuth = buildAuth(
+      emptyDb([userRow("bot-1", "bot@example.com", "user")]),
+      { remaining: Infinity, message: "failed for bot@example.com" },
+    );
+
+    await sendCode(blockedAuth, "admin@example.com");
+    await signInWithMintedCode(blockedAuth, "admin@example.com");
+    await sendCode(failingAuth, "bot@example.com");
+    await post(failingAuth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp: "000000",
+    });
+
+    const logged = JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
+    expect(logged).toContain("otp_guard_lookup_failed");
+    expect(logged).toContain("otp_account_blocked");
+    expect(logged).not.toContain("admin@example.com");
+    expect(logged).not.toContain("bot@example.com");
   });
 });

@@ -19,7 +19,7 @@ import {
   rateLimitPrefixFromAppName,
   type RateLimitEnv,
 } from "./rate-limit";
-import { otpAdminGuardPlugin } from "./otp-admin-guard";
+import { createOtpAdminGuardPlugin } from "./otp-admin-guard";
 
 export type SocialProviderId = "github" | "google";
 
@@ -147,7 +147,8 @@ export function createAuth<const TFields extends UserAdditionalFields>({
   // both use Redis when it is configured and fall back to memory otherwise.
   const rateLimitStore = createAuthRateLimitStore({
     env,
-    defaultPrefix: rateLimitPrefixFromAppName(appName),
+    appSlug: rateLimitPrefixFromAppName(appName),
+    secret,
   });
 
   return betterAuth({
@@ -205,8 +206,9 @@ export function createAuth<const TFields extends UserAdditionalFields>({
               store: rateLimitStore,
               normalizeEmail: normalizeOtpEmail,
             }),
-            ...createEmailOtpPlugins(emailOtp, appName),
-            otpAdminGuardPlugin,
+            // The auth secret keys the email hash in OTP failure logs.
+            ...createEmailOtpPlugins(emailOtp, appName, { logSecret: secret }),
+            createOtpAdminGuardPlugin({ logSecret: secret }),
           ]
         : []),
       nextCookies(),

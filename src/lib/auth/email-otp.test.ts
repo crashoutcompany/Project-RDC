@@ -1,6 +1,8 @@
 // RDC aliases bare "better-auth" to a Vitest mock; /minimal is the real factory.
 import { betterAuth } from "better-auth/minimal";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { createHash } from "node:crypto";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -10,10 +12,13 @@ import {
   createEmailOtpPlugins,
   isEmailOtpEnabled,
   isOtpEmailAllowed,
+  logOtpFailure,
+  otpEmailLogHash,
   parseOtpAllowlist,
   resolveEmailOtpConfig,
   sendSignInOtpEmail,
   type EmailOtpConfig,
+  type EmailOtpPluginOptions,
 } from "./email-otp";
 
 type SentEmail = { from: string; to: string; subject: string; text: string };
@@ -60,7 +65,10 @@ function emptyDb(): MemoryDb {
   return { user: [], session: [], account: [], verification: [] };
 }
 
-function buildAuth(db: MemoryDb = emptyDb()) {
+function buildAuth(
+  db: MemoryDb = emptyDb(),
+  options: EmailOtpPluginOptions = {},
+) {
   return betterAuth({
     appName: "App",
     baseURL: ORIGIN,
@@ -68,7 +76,7 @@ function buildAuth(db: MemoryDb = emptyDb()) {
     trustedOrigins: [ORIGIN],
     database: memoryAdapter(db),
     rateLimit: { enabled: false },
-    plugins: createEmailOtpPlugins(CONFIG, "App"),
+    plugins: createEmailOtpPlugins(CONFIG, "App", options),
   });
 }
 
@@ -441,5 +449,168 @@ describe("email OTP hardening", () => {
 
     expect(limited.status).toBe(400);
     expect(await limited.json()).toEqual(await wrong.json());
+  });
+});
+
+describe("email OTP change-email routes", () => {
+  it("rejects an unlisted newEmail on request-email-change and change-email", async () => {
+    const db = emptyDb();
+    const auth = buildAuth(db);
+
+    const request = await post(auth, "/email-otp/request-email-change", {
+      newEmail: "intruder@example.com",
+    });
+    const change = await post(auth, "/email-otp/change-email", {
+      newEmail: "intruder@example.com",
+      otp: "000000",
+    });
+
+    for (const response of [request, change]) {
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        code: "INVALID_OTP",
+        message: "Invalid OTP",
+      });
+    }
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(db.verification).toHaveLength(0);
+  });
+});
+
+describe("email OTP failure logging", () => {
+  const SECRET = "log-secret-at-least-thirty-two-characters-long";
+
+  function spyAllConsole() {
+    return (["log", "info", "warn", "error", "debug"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => undefined),
+    );
+  }
+
+  it("hashes with HMAC when a log secret is given, and plain SHA-256 otherwise", () => {
+    const hmacHash = otpEmailLogHash(" BOT@example.com ", SECRET);
+    const plainHash = otpEmailLogHash("bot@example.com");
+
+    expect(hmacHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(plainHash).toBe(
+      createHash("sha256").update("bot@example.com").digest("hex").slice(0, 16),
+    );
+    expect(hmacHash).not.toBe(plainHash);
+    expect(otpEmailLogHash("bot@example.com", SECRET)).toBe(hmacHash);
+  });
+
+  it("logOtpFailure writes a reason and hash, never the address", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    logOtpFailure("otp_unlisted", { email: "bot@example.com", logSecret: SECRET });
+
+    expect(warn).toHaveBeenCalledWith("otp_sign_in_failed", {
+      reason: "otp_unlisted",
+      emailHash: otpEmailLogHash("bot@example.com", SECRET),
+      userId: undefined,
+    });
+  });
+
+  it("logs an unlisted sign-in with the reason and the keyed hash", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const auth = buildAuth(emptyDb(), { logSecret: SECRET });
+
+    await post(auth, "/sign-in/email-otp", {
+      email: "intruder@example.com",
+      otp: "000000",
+    });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("otp_sign_in_failed", {
+      reason: "otp_unlisted",
+      emailHash: otpEmailLogHash("intruder@example.com", SECRET),
+      userId: undefined,
+    });
+  });
+
+  it("logs a wrong code as otp_invalid", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const auth = buildAuth(emptyDb(), { logSecret: SECRET });
+
+    await sendCode(auth, "bot@example.com");
+    await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp: "000000",
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      "otp_sign_in_failed",
+      expect.objectContaining({ reason: "otp_invalid" }),
+    );
+  });
+
+  it("logs an expired code as otp_expired", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const db = emptyDb();
+    const auth = buildAuth(db, { logSecret: SECRET });
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    for (const row of db.verification) {
+      row.expiresAt = new Date(Date.now() - 1000);
+    }
+
+    const response = await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp,
+    });
+
+    expect(response.status).toBe(400);
+    expect(warn).toHaveBeenCalledWith(
+      "otp_sign_in_failed",
+      expect.objectContaining({ reason: "otp_expired" }),
+    );
+  });
+
+  it("logs too many attempts as otp_too_many_attempts", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const db = emptyDb();
+    const auth = buildAuth(db, { logSecret: SECRET });
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    for (const row of db.verification) {
+      row.value = `${row.value}:${EMAIL_OTP_ALLOWED_ATTEMPTS}`;
+    }
+
+    const response = await post(auth, "/sign-in/email-otp", {
+      email: "bot@example.com",
+      otp,
+    });
+
+    expect(response.status).toBe(400);
+    expect(warn).toHaveBeenCalledWith(
+      "otp_sign_in_failed",
+      expect.objectContaining({ reason: "otp_too_many_attempts" }),
+    );
+  });
+
+  it("never writes the raw email to the console", async () => {
+    const spies = spyAllConsole();
+    const email = "intruder@example.com";
+    const db = emptyDb();
+    const auth = buildAuth(db, { logSecret: SECRET });
+
+    await sendCode(auth, email);
+    await post(auth, "/sign-in/email-otp", { email, otp: "000000" });
+    await sendCode(auth, "bot@example.com");
+    const otp = lastSentCode();
+    for (const row of db.verification) {
+      row.expiresAt = new Date(Date.now() - 1000);
+    }
+    await post(auth, "/sign-in/email-otp", { email: "bot@example.com", otp });
+
+    sendEmail.mockResolvedValueOnce({
+      data: null,
+      error: { message: "domain not verified" },
+    });
+    await sendCode(auth, "bot@example.com");
+
+    const logged = JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
+    expect(logged).toContain("otp_sign_in_failed");
+    expect(logged).not.toContain(email);
+    expect(logged).not.toContain("bot@example.com");
   });
 });

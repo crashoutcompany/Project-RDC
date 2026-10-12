@@ -253,16 +253,17 @@ describe("createAuth rate limiting", () => {
     expect(statuses.slice(0, 3).every((status) => status !== 429)).toBe(true);
   });
 
-  it("locks sends per email for listed and unlisted addresses alike", async () => {
+  it("locks sends per email and IP, and answers unlisted addresses the same way", async () => {
     resendSend.mockClear();
     const auth = buildOtpAuth();
 
+    // Listed: sends up to the email+IP limit, then the lockout body with no send.
     for (let i = 0; i < 5; i += 1) {
       const response = await post(
         auth,
         "/email-otp/send-verification-otp",
         { email: "bot@example.com", type: "sign-in" },
-        i,
+        10,
       );
       expect(response.status).toBe(200);
     }
@@ -279,39 +280,40 @@ describe("createAuth rate limiting", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(resendSend).toHaveBeenCalledTimes(5);
 
-    for (let i = 0; i < 5; i += 1) {
-      await post(
+    // Unlisted: the same over-limit body, and no send at any point.
+    resendSend.mockClear();
+    for (let i = 0; i < 6; i += 1) {
+      const response = await post(
         auth,
         "/email-otp/send-verification-otp",
         { email: "stranger@example.com", type: "sign-in" },
-        20 + i,
+        10,
       );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true });
     }
-    const strangerLocked = await post(
-      auth,
-      "/email-otp/send-verification-otp",
-      { email: "stranger@example.com", type: "sign-in" },
-      40,
-    );
-    expect(strangerLocked.status).toBe(200);
-    expect(await strangerLocked.json()).toEqual({ success: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(resendSend).not.toHaveBeenCalled();
   });
 
-  it("counts sign-in attempts for unlisted emails and answers 429 after the lockout", async () => {
+  it("answers an unlisted email's sign-in with 429 and Retry-After only after the lockout", async () => {
     const auth = buildOtpAuth();
     const statuses: number[] = [];
+    let locked: Response | undefined;
 
     for (let i = 0; i < 11; i += 1) {
       const response = await post(
         auth,
         "/sign-in/email-otp",
         { email: "stranger@example.com", otp: "000000" },
-        100 + i,
+        100,
       );
       statuses.push(response.status);
+      if (i === 10) locked = response;
     }
 
     expect(statuses.slice(0, 10).every((status) => status === 400)).toBe(true);
     expect(statuses[10]).toBe(429);
+    expect(Number(locked?.headers.get("retry-after"))).toBeGreaterThan(0);
   });
 });

@@ -116,9 +116,11 @@ pnpm update-neon-branch
 - `AUTH_GOOGLE_SECRET` - Google OAuth Client Secret
 - `AUTH_OTP_ALLOWED_EMAILS` - Optional comma-separated allowlist for email-code sign-in
 - `AUTH_EMAIL_FROM` - Sender for sign-in codes (must be on a Resend-verified domain)
-- `UPSTASH_REDIS_REST_URL` - Optional Upstash Redis REST URL for shared auth rate limits (memory is used unless both Upstash variables are set)
+- `UPSTASH_REDIS_REST_URL` - Optional Upstash Redis REST URL for shared auth rate limits (memory is used unless a complete URL and token pair is set)
 - `UPSTASH_REDIS_REST_TOKEN` - Optional Upstash Redis REST token, paired with the URL
-- `AUTH_RATE_LIMIT_PREFIX` - Optional key namespace for rate limits; defaults to the app name slug (`project-rdc`)
+- `KV_REST_API_URL` - Optional fallback to the Vercel Upstash integration's URL name, read when the `UPSTASH_REDIS_REST_*` pair is unset
+- `KV_REST_API_TOKEN` - Optional fallback token name, paired with `KV_REST_API_URL`
+- `AUTH_RATE_LIMIT_PREFIX` - Optional key namespace for rate limits; defaults to `<app slug>:<VERCEL_ENV or NODE_ENV>` (`project-rdc:production`, `project-rdc:preview`, or `project-rdc:development`). Set a value that differs per environment when one Upstash database is shared
 - `BETTER_AUTH_SECRET` - Secret used to sign and encrypt auth data
 - `BETTER_AUTH_URL` - Optional canonical auth origin
 - `TEST_AUTH_SECRET` - Shared secret for the local authenticated E2E login
@@ -152,11 +154,21 @@ pnpm update-neon-branch
 - Admin guard (`src/lib/auth/otp-admin-guard.ts`): email-code sign-in and send
   are refused for admins and for any user who already has a linked OAuth or
   password account, even if the address is listed. The user is found by email,
-  then accounts are loaded by `userId`. A failed lookup is retried once; if the
-  retry also fails, the guard logs `otp_guard_lookup_failed` (attempts and
-  error, never the email) and rejects the request, so it fails closed. On send,
-  a blocked address gets the same `{ success: true }` response as an unlisted
-  one. Listed addresses should still be bot inboxes that should never be admins.
+  then accounts are loaded by `userId`. A failed lookup is retried once. If the
+  retry also fails, the guard logs `otp_guard_lookup_failed` with the attempt
+  count, the hashed email, and the error name and message (the address is
+  replaced with `[redacted]`). It then answers like an unlisted address: sign-in
+  returns the same `400 INVALID_OTP` as a wrong code, and send returns
+  `{ success: true }` with no code stored or emailed. Blocked attempts are logged
+  as `otp_sign_in_failed` with `reason: otp_account_blocked`. On send, a blocked
+  address gets the same `{ success: true }` response as an unlisted one. Listed
+  addresses should still be bot inboxes that should never be admins.
+- OTP failure logs: each failure logs `otp_sign_in_failed` with a `reason`
+  (`otp_expired`, `otp_too_many_attempts`, `otp_invalid`, `otp_unlisted`,
+  `otp_account_blocked`) and `emailHash`, never the raw address. The hash is the
+  first 16 hex characters of HMAC-SHA256 over the normalized email, keyed with
+  `BETTER_AUTH_SECRET`, so logs can group attempts on one address without
+  storing it.
 - Delivery failures: if Resend rejects a code email, the error is logged as
   `[auth] sign-in code email failed` and is not shown to the user. The user sees
   the same success response as an unlisted address.
@@ -166,19 +178,26 @@ pnpm update-neon-branch
     routes. They are enforced only when `NODE_ENV=production` (Vercel production
     and preview, and `next start` in CI), and are off in dev and unit tests.
   - Per-email lockout on the email-code routes counts every address, listed or
-    not, so the response does not reveal the allowlist. Limits are 5 code sends
-    and 10 sign-in attempts per 15 minutes per email. Over the send limit, the
-    route returns the normal `{ success: true }` response and sends nothing. Over
-    the sign-in limit, it returns `429 TOO_MANY_REQUESTS`. Keys are SHA-256
-    digests, so no raw email or IP is stored.
-  - Storage is Upstash Redis when both `UPSTASH_REDIS_REST_URL` and
-    `UPSTASH_REDIS_REST_TOKEN` are set. Otherwise it is memory, per server
-    instance. If a Redis call errors or takes over 1 second, that call falls back
-    to memory and logs `auth_rate_limit_redis_unavailable` (at most once a
-    minute, with the reason and error name only).
-  - `AUTH_RATE_LIMIT_PREFIX` namespaces the keys so apps can share one Upstash
-    database. It defaults to the app name slug, which is `project-rdc` for this
-    app.
+    not, so the response does not reveal the allowlist. Two counters run for
+    every request, over 15 minutes: per email and client IP (5 code sends, 10
+    sign-in attempts) and per email from any IP (20 sends, 30 sign-in attempts).
+    Unresolvable IPs share one `unknown` bucket. Over the send limit, the route
+    returns the normal `{ success: true }` response and sends nothing. Over the
+    sign-in limit, it returns `429 TOO_MANY_REQUESTS` with a `Retry-After`
+    header in seconds, after the CSRF check. Storage keys are HMAC-SHA256 digests
+    keyed with `BETTER_AUTH_SECRET`, so no raw email or IP is stored.
+  - Storage is Upstash Redis when a complete pair is set, either
+    `UPSTASH_REDIS_REST_URL` with `UPSTASH_REDIS_REST_TOKEN`, or
+    `KV_REST_API_URL` with `KV_REST_API_TOKEN`. The two pairs are not mixed, and
+    `UPSTASH_*` wins when both are complete. Otherwise it is memory, per server
+    instance. Redis calls are not retried, so a timed-out call that falls back to
+    memory cannot count twice. If a Redis call errors or takes over 1 second, that
+    call falls back to memory and logs `auth_rate_limit_redis_unavailable` (at
+    most once a minute, with the reason and error name only).
+  - `AUTH_RATE_LIMIT_PREFIX` namespaces the keys. When unset, the prefix is
+    `<app slug>:<VERCEL_ENV or NODE_ENV>`, where the app slug is `project-rdc`.
+    Set it to a value that differs per environment when one Upstash database is
+    shared, so a preview or local run cannot lock out production.
 
 **OAuth Provider Links**:
 

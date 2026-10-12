@@ -5,7 +5,11 @@ import {
   formCsrfMiddleware,
 } from "better-auth/api";
 
-import { normalizeOtpEmail } from "./email-otp";
+import {
+  logOtpFailure,
+  normalizeOtpEmail,
+  otpEmailLogHash,
+} from "./email-otp";
 
 /**
  * Routes that consume an OTP and act on an existing account for a given
@@ -26,6 +30,16 @@ const LOOKUP_ATTEMPTS = 2;
 
 type GuardContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
+type OtpCandidate = {
+  userId: string;
+  role: unknown;
+  accounts: readonly unknown[];
+};
+
+type Lookup =
+  | { failed: false; candidate: OtpCandidate | null }
+  | { failed: true };
+
 export function isAdminAccount(
   user: { role?: unknown } | null | undefined,
 ): boolean {
@@ -33,94 +47,139 @@ export function isAdminAccount(
 }
 
 /**
- * Refuses OTP flows that would act on an existing admin account, or on any
- * account a person already signs into another way (OAuth or password), even
- * when that email lands on the allowlist by mistake. A user created by an
- * email-code sign-in has no linked accounts, so bots keep signing in. The refusal reuses the
- * generic INVALID_OTP error that every other failure returns, so the response
- * never reveals that an account exists. A failed user lookup is retried once,
- * then rejected (fail closed). A new allowlisted email has no account yet, so
- * it passes and gets a plain user with no admin role.
- *
- * On send, a blocked sign-in returns the endpoint's own `{ success: true }`
- * without storing a code or emailing one, so the response matches an unlisted
- * email's.
+ * A blocked account is an admin, or any account a person already signs into
+ * another way (OAuth or password), even when that email lands on the allowlist
+ * by mistake. A user created by an email-code sign-in has no linked accounts,
+ * so bots keep signing in.
  */
-export const otpAdminGuardPlugin = {
-  id: "email-otp-admin-guard",
-  hooks: {
-    before: [
-      {
-        matcher: (context) => ADMIN_GUARDED_OTP_PATHS.has(context.path ?? ""),
-        handler: createAuthMiddleware(async (ctx) => {
-          const email = (ctx.body as { email?: unknown } | undefined)?.email;
-          if (typeof email !== "string") return;
-
-          if (await isBlockedOtpAccount(ctx, normalizeOtpEmail(email))) {
-            throw APIError.from("BAD_REQUEST", {
-              code: "INVALID_OTP",
-              message: "Invalid OTP",
-            });
-          }
-        }),
-      },
-      {
-        matcher: (context) => context.path === SEND_OTP_PATH,
-        handler: createAuthMiddleware(async (ctx) => {
-          const body = ctx.body as
-            { email?: unknown; type?: unknown } | undefined;
-          // Only sign-in sends a code. Other types already send nothing, and
-          // change-email must keep its own error, so they pass through.
-          if (body?.type !== "sign-in" || typeof body.email !== "string") {
-            return;
-          }
-
-          if (await isBlockedOtpAccount(ctx, normalizeOtpEmail(body.email))) {
-            // Same CSRF check the endpoint runs first, then the same body and
-            // status it returns for an unlisted email. Skipping the endpoint
-            // also skips storing a code.
-            await formCsrfMiddleware(ctx);
-            return ctx.json({ success: true });
-          }
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
+function isBlockedCandidate(candidate: OtpCandidate): boolean {
+  return isAdminAccount({ role: candidate.role }) || candidate.accounts.length > 0;
+}
 
 /** Loads the user for a normalized email and that user's accounts by `userId`. */
-async function findOtpUser(ctx: GuardContext, email: string) {
+async function findOtpCandidate(
+  ctx: GuardContext,
+  email: string,
+): Promise<OtpCandidate | null> {
   const internal = ctx.context.internalAdapter;
   const found = await internal.findUserByEmail(email);
   if (!found) return null;
-  const accounts = await internal.findAccounts(found.user.id);
-  return { user: found.user as { role?: unknown }, accounts };
+  const user = found.user as { id: string; role?: unknown };
+  const accounts = await internal.findAccounts(user.id);
+  return { userId: user.id, role: user.role, accounts };
+}
+
+/** Error name and message, with the address removed in case a driver echoes it. */
+function describeLookupError(error: unknown, email: string) {
+  const name = error instanceof Error ? error.name : typeof error;
+  const message = error instanceof Error ? error.message : "";
+  return { name, message: message.split(email).join("[redacted]") };
 }
 
 /**
- * Retries the user and account lookup once. If every attempt fails, the error
- * is logged and rethrown, so the request fails and the sign-in or send is
- * denied. The email is not logged.
+ * Retries the user and account lookup once. If every attempt fails, the guard
+ * logs the failure by hash and returns `{ failed: true }`. The caller then
+ * answers as if the address were unlisted, so a lookup failure does not reveal
+ * whether the address is listed. The raw email is never logged.
  */
-async function isBlockedOtpAccount(
+async function lookupOtpCandidate(
   ctx: GuardContext,
   email: string,
-): Promise<boolean> {
+  logSecret: string | undefined,
+): Promise<Lookup> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= LOOKUP_ATTEMPTS; attempt += 1) {
     try {
-      const found = await findOtpUser(ctx, email);
-      return (
-        found !== null &&
-        (isAdminAccount(found.user) || found.accounts.length > 0)
-      );
+      return {
+        failed: false,
+        candidate: await findOtpCandidate(ctx, email),
+      };
     } catch (error) {
       lastError = error;
     }
   }
   console.error("otp_guard_lookup_failed", {
     attempts: LOOKUP_ATTEMPTS,
-    error: lastError,
+    emailHash: otpEmailLogHash(email, logSecret),
+    error: describeLookupError(lastError, email),
   });
-  throw lastError;
+  return { failed: true };
+}
+
+function invalidOtpError(): APIError {
+  return APIError.from("BAD_REQUEST", {
+    code: "INVALID_OTP",
+    message: "Invalid OTP",
+  });
+}
+
+/**
+ * Builds the admin guard. `logSecret` keys the email hash in logs, the same
+ * secret passed to `createEmailOtpPlugins`.
+ *
+ * Blocked and lookup-failed requests get the same answer as an unlisted
+ * address. Sign-in returns the INVALID_OTP error of a wrong code. Send returns
+ * the endpoint's own `{ success: true }` without storing or emailing a code.
+ * The send path keeps the CSRF check the endpoint would run first. The check
+ * runs before the code is consumed.
+ */
+export function createOtpAdminGuardPlugin(
+  options: { logSecret?: string } = {},
+): BetterAuthPlugin {
+  const { logSecret } = options;
+
+  return {
+    id: "email-otp-admin-guard",
+    hooks: {
+      before: [
+        {
+          matcher: (context) => ADMIN_GUARDED_OTP_PATHS.has(context.path ?? ""),
+          handler: createAuthMiddleware(async (ctx) => {
+            const raw = (ctx.body as { email?: unknown } | undefined)?.email;
+            if (typeof raw !== "string") return;
+            const email = normalizeOtpEmail(raw);
+            const lookup = await lookupOtpCandidate(ctx, email, logSecret);
+            if (lookup.failed) throw invalidOtpError();
+            if (lookup.candidate && isBlockedCandidate(lookup.candidate)) {
+              logOtpFailure("otp_account_blocked", {
+                email,
+                userId: lookup.candidate.userId,
+                logSecret,
+              });
+              throw invalidOtpError();
+            }
+          }),
+        },
+        {
+          matcher: (context) => context.path === SEND_OTP_PATH,
+          handler: createAuthMiddleware(async (ctx) => {
+            const body = ctx.body as
+              { email?: unknown; type?: unknown } | undefined;
+            // Only sign-in sends a code. Other types already send nothing, and
+            // change-email must keep its own error, so they pass through.
+            if (body?.type !== "sign-in" || typeof body.email !== "string") {
+              return;
+            }
+            const email = normalizeOtpEmail(body.email);
+            const lookup = await lookupOtpCandidate(ctx, email, logSecret);
+            if (!lookup.failed) {
+              if (!lookup.candidate || !isBlockedCandidate(lookup.candidate)) {
+                return;
+              }
+              logOtpFailure("otp_account_blocked", {
+                email,
+                userId: lookup.candidate.userId,
+                logSecret,
+              });
+            }
+            // Lookup failure and blocked account take the same path: no code
+            // is stored or emailed, and the response matches an unlisted
+            // address. Skipping the endpoint also skips storing a code.
+            await formCsrfMiddleware(ctx);
+            return ctx.json({ success: true });
+          }),
+        },
+      ],
+    },
+  } satisfies BetterAuthPlugin;
 }
