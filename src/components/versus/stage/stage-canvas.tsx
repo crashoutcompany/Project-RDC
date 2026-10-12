@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
@@ -74,7 +74,8 @@ function Fighters({
   const [poses, setPoses] = useState<Record<string, FighterPose>>({});
   const last = useRef("");
 
-  const update = () => {
+  // Only fires state when the measured layout actually changes (see `last`).
+  const update = useCallback(() => {
     if (!container) return;
     const next: Record<string, FighterPose> = {};
     for (const slot of slots) {
@@ -89,12 +90,17 @@ function Fighters({
     const feet = Object.values(next).map((p) => p.feetY);
     if (feet.length) onFloor(Math.min(...feet));
     invalidate();
-  };
+  }, [container, slots, camera, onFloor, invalidate]);
 
   // Layout can shift with fonts/images; re-measure cheaply each frame.
   useFrame(update);
-  useEffect(update);
-  useEffect(update, [size]);
+  // Also re-measure after every commit, and on resize.
+  useEffect(() => {
+    update();
+  });
+  useEffect(() => {
+    update();
+  }, [size, update]);
 
   return (
     <>

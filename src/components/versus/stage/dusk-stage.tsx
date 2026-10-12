@@ -147,8 +147,8 @@ function Skyline({ floorY }: { floorY: number }) {
 
   return (
     <group>
-      {buildings.map((b, i) => (
-        <mesh key={i} position={[b.x, floorY + b.h / 2, b.z]}>
+      {buildings.map((b) => (
+        <mesh key={b.x} position={[b.x, floorY + b.h / 2, b.z]}>
           <boxGeometry args={[b.w, b.h, 0.4]} />
           <meshBasicMaterial color="#160b22" />
         </mesh>
