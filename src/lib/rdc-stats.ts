@@ -71,6 +71,7 @@ export const formatDate = (date: Date) =>
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "America/New_York",
   });
 
 /**

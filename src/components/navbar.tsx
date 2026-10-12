@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getRscSession } from "@/lib/auth/server";
-import { NavLinks, SignOutButton } from "./nav-links";
+import { NavLinks, NavLinksFallback, SignOutButton } from "./nav-links";
+
+const navLinksClass =
+  "border-vs-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0";
 
 export const Navbar = () => {
   return (
@@ -17,8 +20,8 @@ export const Navbar = () => {
         >
           RDC <span className="text-vs-cream">Stats</span>
         </Link>
-        <Suspense fallback={null}>
-          <NavLinks className="border-vs-panel-2 order-last w-full justify-center overflow-x-auto border-t pt-2 md:order-none md:w-auto md:border-0 md:pt-0" />
+        <Suspense fallback={<NavLinksFallback className={navLinksClass} />}>
+          <NavLinks className={navLinksClass} />
         </Suspense>
         <div className="flex shrink-0 items-center gap-2">
           <Suspense fallback={<LoginLink />}>

@@ -13,12 +13,27 @@ const LINKS = [
 ];
 
 export function NavLinks({ className }: { className?: string }) {
-  const pathname = usePathname();
+  return <NavLinkList className={className} pathname={usePathname()} />;
+}
+
+/** Same links with no active state, for the Suspense fallback while prerendering. */
+export function NavLinksFallback({ className }: { className?: string }) {
+  return <NavLinkList className={className} pathname={null} />;
+}
+
+function NavLinkList({
+  className,
+  pathname,
+}: {
+  className?: string;
+  pathname: string | null;
+}) {
   return (
     <nav aria-label="Main" className={cn("flex items-center gap-1", className)}>
       {LINKS.map(({ href, label, testId }) => {
         const active =
-          href === "/" ? pathname === "/" : pathname.startsWith(href);
+          pathname !== null &&
+          (href === "/" ? pathname === "/" : pathname.startsWith(href));
         return (
           <Link
             key={href}
