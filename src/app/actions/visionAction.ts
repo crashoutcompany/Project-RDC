@@ -47,13 +47,13 @@ export const analyzeScreenShot = async (
           fallbacks: fallbacks.map((f) => `${f.from}: ${f.reason}`),
         }),
       );
-    } else logVisionError(new Error(result.message));
+    } else after(() => logVisionError(new Error(result.message)));
 
     return result;
   } catch (error) {
     console.error(error);
     const e = error instanceof Error ? error.message : "Unknown error";
-    logVisionError(error);
+    after(() => logVisionError(error));
     return { status: VisionResultCodes.Failed, message: e };
   }
 };

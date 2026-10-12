@@ -3,7 +3,8 @@ import OpenAI from "openai";
 import { classificationOf, withRetry } from "@/lib/vision/api-errors";
 import type { FrameRecord } from "../types";
 
-export const DECISIONS_MODEL = "gpt-6-luna";
+/** Override with HARVEST_DECISIONS_MODEL (read when the module loads, via --env-file). */
+export const DECISIONS_MODEL = process.env.HARVEST_DECISIONS_MODEL || "gpt-6-luna";
 /** Input tokens only; Decisions doesn't bill output. */
 export const DECISIONS_INPUT_PER_M = 0.1;
 /** Probability at which a frame counts as a scoreboard (13/13, 0 false positives in the benchmark). */

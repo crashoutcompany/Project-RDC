@@ -38,6 +38,7 @@ Create `.env.harvester.local` in the repo root (gitignored):
 DATABASE_URL=...                       # the DB drafts are saved to (production)
 GOOGLE_GENERATIVE_AI_API_KEY=...       # Gemini (reader); same as the app
 OPENAI_API_KEY=...                     # Decisions API (finder)
+# HARVEST_DECISIONS_MODEL=...          # optional: override the Decisions model (default gpt-6-luna)
 DOCUMENT_INTELLIGENCE_ENDPOINT=...     # Azure (reader fallback); same as the app
 DOCUMENT_INTELLIGENCE_API_KEY=...
 SHEET_ID=...                           # same values as the /api/sheets cron

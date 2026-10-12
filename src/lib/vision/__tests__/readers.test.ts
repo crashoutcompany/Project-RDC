@@ -4,7 +4,7 @@ import { VisionResultCodes } from "@/lib/constants";
 import type { AnalysisResults } from "@/lib/visionTypes";
 import { processScoreboard } from "../analyze-scoreboard";
 import { geminiOutputToFields, parseGeminiText } from "../gemini-reader";
-import { readWithFallback, type ReaderId, type ScoreboardReader } from "../readers";
+import { geminiReader, readWithFallback, type ReaderId, type ScoreboardReader } from "../readers";
 import { GAMES } from "../scoreboard-specs";
 
 const players = [
@@ -76,6 +76,24 @@ describe("readWithFallback", () => {
       status: VisionResultCodes.Failed,
       message: "gemini: not authorized (401); azure: no document",
     });
+  });
+});
+
+describe("missing Gemini key", () => {
+  it("falls back to Azure without calling Google", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const saved = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    try {
+      const azure = reader("azure", async () => ok);
+      const outcome = await readWithFallback([geminiReader({}), azure], input, noWait);
+      expect(outcome.readerId).toBe("azure");
+      expect(outcome.fallbacks).toEqual([
+        { from: "gemini", reason: expect.stringContaining("API key is missing") },
+      ]);
+    } finally {
+      if (saved !== undefined) process.env.GOOGLE_GENERATIVE_AI_API_KEY = saved;
+    }
   });
 });
 
