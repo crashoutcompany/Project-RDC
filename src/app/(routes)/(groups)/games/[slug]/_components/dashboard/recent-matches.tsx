@@ -7,7 +7,8 @@ type RecentMatchesProps = {
   gameName: string;
 };
 
-const placeholder = (gameName: string): RecentMatchData => ({
+const placeholder = (slot: number, gameName: string): RecentMatchData => ({
+  id: `placeholder-${slot}`,
   sessionName: "[Session title]",
   thumbnail: "",
   sessionUrl: "",
@@ -36,7 +37,9 @@ const PLACE_COLORS: Record<number, string> = {
  * @returns The recent matches JSX element.
  */
 export function RecentMatches({ matches, gameName }: RecentMatchesProps) {
-  const cards = matches.length ? matches : [placeholder(gameName), placeholder(gameName)];
+  const cards = matches.length
+    ? matches
+    : [placeholder(1, gameName), placeholder(2, gameName)];
 
   return (
     <div>
@@ -49,8 +52,8 @@ export function RecentMatches({ matches, gameName }: RecentMatchesProps) {
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {cards.map((match, i) => (
-          <RecentMatchCard key={`${match.sessionName}-${i}`} match={match} />
+        {cards.map((match) => (
+          <RecentMatchCard key={match.id} match={match} />
         ))}
       </div>
     </div>

@@ -15,7 +15,7 @@ const percent = (share: number | null) =>
  */
 export function VersusSelect({ fighters }: { fighters: Fighter[] }) {
   const [p1, setP1] = useState(0);
-  const [p2, setP2] = useState(Math.min(1, fighters.length - 1));
+  const [p2, setP2] = useState(() => Math.min(1, fighters.length - 1));
   const [selecting, setSelecting] = useState<1 | 2>(1);
 
   const one = fighters[p1];

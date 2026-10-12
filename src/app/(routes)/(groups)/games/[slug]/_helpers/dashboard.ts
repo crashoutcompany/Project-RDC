@@ -2,6 +2,7 @@ import { QueryResponseData } from "prisma/db";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";
 import { MvpOutput, mvpStatsSchema } from "@/app/ai/types";
+import { formatSessionDate } from "@/lib/utils";
 
 export type Sessions = QueryResponseData<
   Awaited<ReturnType<typeof getAllSessionsByGame>>
@@ -27,6 +28,8 @@ export type MvpProfile = {
 } | null;
 
 export type RecentMatchData = {
+  /** Stable React key: the session id, or a placeholder slot. */
+  id: string;
   sessionName: string;
   thumbnail: string;
   sessionUrl: string;
@@ -69,11 +72,7 @@ export function computeBannerStats(sessions: Sessions): DashboardBannerStats {
     totalMatches,
     totalSets,
     lastPlayed: lastPlayed
-      ? lastPlayed.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
+      ? formatSessionDate(lastPlayed)
       : null,
   };
 }
@@ -186,14 +185,11 @@ export function computeRecentMatches(
       }));
 
     return {
+      id: String(session.sessionId),
       sessionName: session.sessionName,
       thumbnail: session.thumbnail,
       sessionUrl: session.sessionUrl,
-      date: new Date(session.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
+      date: formatSessionDate(session.date),
       gameName: session.Game.gameName,
       placements,
     };

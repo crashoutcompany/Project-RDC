@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import MatchData from "../match-data";
 import type { Sessions } from "../../_helpers/dashboard";
+import { formatSessionDate } from "@/lib/utils";
 
 type ReplayViewerProps = {
   session: Sessions[0] | null;
@@ -97,11 +98,7 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
                 {session.sessionName}
               </h3>
               <p className="text-muted-foreground text-xs">
-                {new Date(session.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {formatSessionDate(session.date)}
               </p>
             </div>
           </Link>
