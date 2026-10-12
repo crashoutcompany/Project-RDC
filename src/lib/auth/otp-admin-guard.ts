@@ -1,5 +1,9 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  formCsrfMiddleware,
+} from "better-auth/api";
 
 /**
  * Routes that consume an OTP and act on an existing account for a given
@@ -48,7 +52,7 @@ export const otpAdminGuardPlugin = {
           if (
             await isBlockedOtpAccount(
               ctx.context.internalAdapter,
-              email,
+              email.trim().toLowerCase(),
             )
           ) {
             throw APIError.from("BAD_REQUEST", {
@@ -70,15 +74,19 @@ export const otpAdminGuardPlugin = {
             return;
           }
 
+          // No trim: an address with stray spaces must fail the endpoint's own
+          // validation exactly as it does for an unlisted address.
           if (
             await isBlockedOtpAccount(
               ctx.context.internalAdapter,
-              body.email,
+              body.email.toLowerCase(),
             )
           ) {
-            // Same body and status the endpoint returns for an unlisted email.
-            // Skipping the endpoint also skips storing a code.
-            return { success: true };
+            // Same CSRF check the endpoint runs first, then the same body and
+            // status it returns for an unlisted email. Skipping the endpoint
+            // also skips storing a code.
+            await formCsrfMiddleware(ctx);
+            return ctx.json({ success: true });
           }
         }),
       },
@@ -98,12 +106,12 @@ async function isBlockedOtpAccount(
   },
   email: string,
 ): Promise<boolean> {
-  const existing = await internalAdapter.findUserByEmail(
-    email.trim().toLowerCase(),
-    { includeAccounts: true },
-  );
+  const existing = await internalAdapter.findUserByEmail(email, {
+    includeAccounts: true,
+  });
   return (
     existing !== null &&
-    (isAdminAccount(existing.user as { role?: unknown }) || existing.accounts.length > 0)
+    (isAdminAccount(existing.user as { role?: unknown }) ||
+      existing.accounts.length > 0)
   );
 }
