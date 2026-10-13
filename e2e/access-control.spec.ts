@@ -16,7 +16,8 @@ test.describe("access control: guest", () => {
 
   test("navbar hides the admin link", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+    // Wait for the session-aware nav to resolve before asserting absence.
+    await expect(page.getByTestId("nav-login-link")).toBeVisible();
     await expect(page.getByTestId("nav-admin-link")).toHaveCount(0);
   });
 

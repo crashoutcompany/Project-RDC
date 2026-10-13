@@ -3,27 +3,97 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 import type { BoardEntry } from "./arcade-scene";
 import { useInView, useStageRoot, useStageSupport } from "./use-stage-support";
-import { startZoom } from "./zoom";
+import { resetWhenHidden, startZoom } from "./zoom";
 
 const ArcadeScene = dynamic(() => import("./arcade-scene"), { ssr: false });
 
+/** Give up on the 3D room (the poster stays) if it isn't drawing by then. */
+const LOAD_TIMEOUT_MS = 8000;
+
 /**
- * The 3D arcade room behind the home hero. Renders nothing until the client
- * confirms a capable GPU, so the server-rendered CSS hero is the fallback.
+ * Upgrades the static poster to the live 3D arcade room. three.js is only
+ * fetched after the page has fully loaded and the browser is idle, only on
+ * capable devices (see useStageSupport), and the scene fades in once it has
+ * drawn a frame. Slow or failed loads leave the poster in place.
  */
 export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   const { anchor, root } = useStageRoot();
   const inView = useInView(root);
-  const { webgl, reducedMotion } = useStageSupport();
+  const supported = useStageSupport();
+  const [armed, setArmed] = useState(false);
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
+  );
+
+  useEffect(() => {
+    if (!supported) return;
+    let cancelled = false;
+    const arm = () => {
+      const whenIdle =
+        window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200));
+      whenIdle(() => {
+        if (!cancelled) setArmed(true);
+      });
+    };
+    if (document.readyState === "complete") arm();
+    else window.addEventListener("load", arm, { once: true });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", arm);
+    };
+  }, [supported]);
+
+  useEffect(() => {
+    if (!armed || status !== "loading") return;
+    const timer = setTimeout(
+      () => setStatus((s) => (s === "loading" ? "failed" : s)),
+      LOAD_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [armed, status]);
+
+  // Leaving the page (Press start hides it) or scrolling away undoes the
+  // zoom fade, so Back always returns to the normal hero.
+  useEffect(() => {
+    if (!inView) root?.removeAttribute("data-zooming");
+  }, [inView, root]);
+
+  // Restored from the back/forward cache: same reset.
+  useEffect(() => {
+    if (!root) return;
+    const clear = () => root.removeAttribute("data-zooming");
+    clear();
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) clear();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [root]);
+
+  const onReady = useCallback(() => setStatus("ready"), []);
+  const mounted = supported && armed && status !== "failed";
 
   return (
     <>
       <span ref={anchor} hidden />
-      {webgl ? (
-        <div className="animate-rise-in absolute inset-0">
-          <ArcadeScene board={board} animate={!reducedMotion} active={inView} />
+      {mounted ? (
+        <div
+          className={cn(
+            "absolute inset-0 transition-opacity duration-700",
+            status === "ready" ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <ArcadeScene
+            board={board}
+            animate
+            active={inView}
+            onReady={onReady}
+            interactive={status === "ready"}
+          />
         </div>
       ) : null}
     </>
@@ -32,7 +102,7 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
 
 /**
  * Normal link to `href`; when the 3D room is showing it first flies the camera
- * into the cabinet screen, then navigates.
+ * into the cabinet screen (capped by a timeout), then navigates.
  */
 export function PressStartLink({
   href,
@@ -45,13 +115,38 @@ export function PressStartLink({
       {...props}
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-        if (!startZoom(() => router.push(href))) return;
+        const stage = e.currentTarget.closest<HTMLElement>("[data-stage-root]");
+        const zooming = startZoom(() => {
+          router.push(href);
+          resetWhenHidden(stage);
+        });
+        if (!zooming) return;
         e.preventDefault();
         // Fade the hero copy while the camera flies in (see page.tsx).
-        e.currentTarget
-          .closest("[data-stage-root]")
-          ?.setAttribute("data-zooming", "");
+        stage?.setAttribute("data-zooming", "");
       }}
     />
+  );
+}
+
+/**
+ * "Skip to stats": scrolls past the intro without adding a #hash history
+ * entry (Next's router can't restore those on Back). Plain anchor without JS.
+ */
+export function SkipToStats({ className }: { className?: string }) {
+  return (
+    <a
+      href="#stats"
+      className={className}
+      onClick={(e) => {
+        const target = document.getElementById("stats");
+        if (!target) return;
+        e.preventDefault();
+        target.scrollIntoView({ block: "start" });
+        target.focus({ preventScroll: true });
+      }}
+    >
+      Skip to stats ↓
+    </a>
   );
 }

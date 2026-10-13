@@ -2,63 +2,62 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
-let webglSupport: boolean | undefined;
+let stageSupport: boolean | undefined;
+
+type NetworkInfo = { saveData?: boolean; effectiveType?: string };
 
 /**
- * Only use the 3D arcade room on a real GPU. `failIfMajorPerformanceCaveat`
- * rejects software rendering, and low-memory or low-core devices (e.g. a
- * Raspberry Pi) keep the CSS hero so the page stays responsive. `?stage=off`
- * forces the fallback, `?stage=on` forces 3D.
+ * Only load the 3D arcade room where it's cheap. Skipped (the poster stays) on:
+ * reduced motion, Data Saver or a slow connection, low-memory or <=4-core
+ * devices (most low-end phones and boards like a Raspberry Pi), and software
+ * WebGL (`failIfMajorPerformanceCaveat`). `?stage=off` forces the poster,
+ * `?stage=on` forces 3D for testing.
  */
 function detectStage() {
-  if (webglSupport !== undefined) return webglSupport;
+  if (stageSupport !== undefined) return stageSupport;
   const param = new URLSearchParams(window.location.search).get("stage");
-  if (param === "off") return (webglSupport = false);
-  if (param === "on") return (webglSupport = true);
+  if (param === "off") return (stageSupport = false);
+  if (param === "on") return (stageSupport = true);
 
-  const memory = (navigator as Navigator & { deviceMemory?: number })
-    .deviceMemory;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    return (stageSupport = false);
+  const nav = navigator as Navigator & {
+    deviceMemory?: number;
+    connection?: NetworkInfo;
+  };
   if (
-    (memory !== undefined && memory < 4) ||
-    navigator.hardwareConcurrency <= 4
+    nav.connection?.saveData ||
+    /(^|-)2g$|^3g$/.test(nav.connection?.effectiveType ?? "")
   )
-    return (webglSupport = false);
+    return (stageSupport = false);
+  if (
+    (nav.deviceMemory !== undefined && nav.deviceMemory < 4) ||
+    nav.hardwareConcurrency <= 4
+  )
+    return (stageSupport = false);
   try {
     const canvas = document.createElement("canvas");
     const opts = { failIfMajorPerformanceCaveat: true };
-    webglSupport = Boolean(
+    stageSupport = Boolean(
       canvas.getContext("webgl2", opts) ?? canvas.getContext("webgl", opts),
     );
   } catch {
-    webglSupport = false;
+    stageSupport = false;
   }
-  return webglSupport;
+  return stageSupport;
 }
 
 const noopSubscribe = () => () => {};
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-const subscribeMotion = (cb: () => void) => {
-  const mql = window.matchMedia(REDUCED_MOTION);
-  mql.addEventListener("change", cb);
-  return () => mql.removeEventListener("change", cb);
-};
-
 /**
- * `webgl` is null on the server and during hydration, so both render the CSS
- * fallback first.
+ * True once the client confirms the 3D room should load. Null on the server
+ * and during hydration, so both render the poster first.
  */
 export function useStageSupport() {
-  const webgl = useSyncExternalStore<boolean | null>(
+  return useSyncExternalStore<boolean | null>(
     noopSubscribe,
     detectStage,
     () => null,
   );
-  const reducedMotion = useSyncExternalStore(
-    subscribeMotion,
-    () => window.matchMedia(REDUCED_MOTION).matches,
-    () => false,
-  );
-  return { webgl, reducedMotion };
 }
 
 /** True while `el` is on screen, so offscreen stages stop rendering. */

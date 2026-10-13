@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -8,6 +9,7 @@ import { RosterHero } from "@/components/arcade/roster-hero";
 import {
   ArcadeHeroScene,
   PressStartLink,
+  SkipToStats,
 } from "@/components/arcade/scene/arcade-hero";
 import {
   ChallengerBanner,
@@ -26,8 +28,17 @@ export default function Home() {
     <>
       <section
         data-stage-root
-        className="group ac-dusk relative isolate flex h-[calc(100svh-64px)] max-h-[880px] min-h-[600px] items-end overflow-hidden [--sun-x:68%] [--sun-y:48%] md:items-center"
+        className="group ac-dusk relative isolate flex h-[min(72svh,720px)] min-h-[480px] items-end overflow-hidden [--sun-x:68%] [--sun-y:48%] md:items-center"
       >
+        {/* Static first paint; the live 3D room fades in over it later. */}
+        <Image
+          src="/images/arcade-room-poster.webp"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[68%_50%]"
+        />
         <Suspense fallback={null}>
           <HomeScene />
         </Suspense>
@@ -69,9 +80,14 @@ export default function Home() {
             </div>
           </div>
         </div>
+        <SkipToStats className="ac-label text-ac-cream hover:text-ac-gold bg-ac-ink/70 absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-2" />
       </section>
 
-      <section className="ac-grid bg-ac-ink">
+      <section
+        id="stats"
+        tabIndex={-1}
+        className="ac-grid bg-ac-ink scroll-mt-16 outline-none"
+      >
         <div className="mx-auto max-w-6xl px-4 pt-12">
           <Heading lead="Fighters" className="text-ac-gold" />
         </div>

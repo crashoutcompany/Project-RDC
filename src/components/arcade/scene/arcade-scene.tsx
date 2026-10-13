@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { setZoomHandler } from "./zoom";
+import { setResetHandler, setZoomHandler } from "./zoom";
 
 export type BoardEntry = { player: string; wins: number };
 
@@ -11,7 +11,14 @@ type Props = {
   board: BoardEntry[];
   animate: boolean;
   active: boolean;
+  /** Called after the first frame is drawn, so the poster can fade out. */
+  onReady: () => void;
+  /** Only take over Press start once the scene is visible. */
+  interactive: boolean;
 };
+
+/** Longest the Press start fly-in may take before we navigate anyway. */
+const ZOOM_TIMEOUT_MS = 1600;
 
 /** Internal render scale; the canvas is upscaled with nearest-neighbour for chunky pixels. */
 const PIXEL_RATIO = 0.55;
@@ -303,18 +310,24 @@ function drawAttract(
 
   ctx.font = `7px ${family}`;
   ctx.fillStyle = "#a9a4d6";
-  ctx.fillText("MARIO KART 8 · TOP FIVE", w / 2, 20);
+  if (board.length) ctx.fillText("MARIO KART 8 · TOP FIVE", w / 2, 20);
   ctx.font = `20px ${family}`;
   ctx.fillStyle = "#ff2d55";
   ctx.fillText("RDC STATS", w / 2 + 2, 50);
   ctx.fillStyle = "#ffd400";
   ctx.fillText("RDC STATS", w / 2, 48);
 
-  const rows = board.length
-    ? board.slice(0, 5)
-    : Array.from({ length: 5 }, () => ({ player: "???", wins: NaN }));
   ctx.font = `10px ${family}`;
-  rows.forEach((row, i) => {
+  if (!board.length) {
+    // No stats yet: a plain attract screen rather than a table of ???.
+    ctx.fillStyle = "#39ff88";
+    ctx.fillText("WHO'S THE", w / 2, 120);
+    ctx.fillText("BEST GAMER?", w / 2, 142);
+    ctx.fillStyle = "#a9a4d6";
+    ctx.font = `8px ${family}`;
+    ctx.fillText("INSERT COIN", w / 2, 186);
+  }
+  board.slice(0, 5).forEach((row, i) => {
     const y = 88 + i * 30;
     ctx.textAlign = "left";
     ctx.fillStyle = "#ffd400";
@@ -322,7 +335,7 @@ function drawAttract(
     ctx.fillStyle = "#f2efff";
     ctx.fillText(row.player.toUpperCase().slice(0, 10), 60, y);
     ctx.textAlign = "right";
-    ctx.fillText(Number.isNaN(row.wins) ? "--" : String(row.wins), w - 34, y);
+    ctx.fillText(String(row.wins), w - 34, y);
     ctx.fillStyle = "#2a2766";
     for (let x = 34; x < w - 34; x += 6) ctx.fillRect(x, y + 11, 3, 1);
   });
@@ -529,10 +542,22 @@ const screenWorld = () => {
 };
 
 /** Frames the room, sways gently, and flies into the screen on Press start. */
-function CameraRig({ animate }: { animate: boolean }) {
+function CameraRig({
+  animate,
+  active,
+  interactive,
+}: {
+  animate: boolean;
+  active: boolean;
+  interactive: boolean;
+}) {
   const get = useThree((s) => s.get);
   const aspect = useThree((s) => s.size.width / s.size.height);
-  const zoom = useRef<{ done: () => void; fired: boolean } | null>(null);
+  const zoom = useRef<{
+    done: () => void;
+    fired: boolean;
+    start: number;
+  } | null>(null);
   const look = useRef(new THREE.Vector3());
   const { center, normal } = useMemo(() => screenWorld(), []);
 
@@ -549,21 +574,44 @@ function CameraRig({ animate }: { animate: boolean }) {
     };
   }, [aspect]);
 
+  const reset = useRef<() => void>(null);
+
+  // Reset to the room view on mount, when the page is restored from the
+  // back/forward cache, and whenever the room leaves view (Press start hides
+  // the page, so Back always lands on the normal view).
   useEffect(() => {
-    const { camera } = get();
-    camera.position.copy(home.pos);
-    look.current.copy(home.target);
-    camera.lookAt(look.current);
+    const resetView = () => {
+      const { camera, invalidate } = get();
+      zoom.current = null;
+      camera.position.copy(home.pos);
+      look.current.copy(home.target);
+      camera.lookAt(look.current);
+      invalidate();
+    };
+    reset.current = resetView;
+    resetView();
+    const unregister = setResetHandler(resetView);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) resetView();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      unregister();
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [get, home]);
 
-  useEffect(
-    () =>
-      setZoomHandler((done) => {
-        if (!animate) return done();
-        zoom.current = { done, fired: false };
-      }),
-    [animate],
-  );
+  useEffect(() => {
+    if (!active) reset.current?.();
+  }, [active]);
+
+  useEffect(() => {
+    if (!interactive) return;
+    return setZoomHandler((done) => {
+      if (!animate) return done();
+      zoom.current = { done, fired: false, start: performance.now() };
+    });
+  }, [animate, interactive]);
 
   useFrame(({ clock, camera }, delta) => {
     const dt = Math.min(delta, 0.1);
@@ -590,7 +638,12 @@ function CameraRig({ animate }: { animate: boolean }) {
       );
       look.current.lerp(center, 1 - Math.exp(-4 * dt));
       camera.lookAt(look.current);
-      if (!z.fired && camera.position.distanceTo(targetPos) < 0.05) {
+      // Never hold the visitor hostage: navigate on arrival or after the cap.
+      const timedOut = performance.now() - z.start > ZOOM_TIMEOUT_MS;
+      if (
+        !z.fired &&
+        (timedOut || camera.position.distanceTo(targetPos) < 0.05)
+      ) {
         z.fired = true;
         z.done();
       }
@@ -610,7 +663,13 @@ function CameraRig({ animate }: { animate: boolean }) {
 }
 
 /** react-three-fiber arcade room. Loaded client-only via next/dynamic. */
-export default function ArcadeScene({ board, animate, active }: Props) {
+export default function ArcadeScene({
+  board,
+  animate,
+  active,
+  onReady,
+  interactive,
+}: Props) {
   return (
     <Canvas
       className="!absolute inset-0 [&_canvas]:[image-rendering:pixelated]"
@@ -619,6 +678,7 @@ export default function ArcadeScene({ board, animate, active }: Props) {
       camera={{ fov: 42, near: 0.05, far: 40 }}
       gl={{ antialias: false, powerPreference: "low-power" }}
       aria-hidden
+      onCreated={() => requestAnimationFrame(() => onReady())}
     >
       <color attach="background" args={["#140b12"]} />
       <fog attach="fog" args={["#140b12", 6, 14]} />
@@ -632,7 +692,7 @@ export default function ArcadeScene({ board, animate, active }: Props) {
       <Fire animate={animate} />
       <Dust animate={animate} />
       <Cabinet board={board} animate={animate} />
-      <CameraRig animate={animate} />
+      <CameraRig animate={animate} active={active} interactive={interactive} />
     </Canvas>
   );
 }

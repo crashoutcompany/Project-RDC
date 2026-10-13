@@ -39,13 +39,15 @@ export const Navbar = () => {
   );
 };
 
-const LoginLink = () => (
+/** `resolved` marks the post-session render (not the Suspense fallback) for e2e. */
+const LoginLink = ({ resolved = false }: { resolved?: boolean }) => (
   <span className="flex items-center gap-4">
     <span className="ac-label text-ac-cream/60 hidden lg:inline">
       Credit 00
     </span>
     <Link
       href="/signin"
+      data-testid={resolved ? "nav-login-link" : undefined}
       className="ac-label bg-ac-gold text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
     >
       1P Login
@@ -59,7 +61,7 @@ const isAdmin = (session: Awaited<ReturnType<typeof getRscSession>>) =>
 
 async function SessionControls() {
   const session = await getRscSession();
-  if (!session) return <LoginLink />;
+  if (!session) return <LoginLink resolved />;
 
   return (
     <>
