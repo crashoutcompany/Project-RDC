@@ -33,28 +33,36 @@ export const Navbar = () => {
   );
 };
 
-const LoginLink = () => (
+/** `resolved` marks the post-session render (not the Suspense fallback) for e2e. */
+const LoginLink = ({ resolved = false }: { resolved?: boolean }) => (
   <Link
     href="/signin"
+    data-testid={resolved ? "nav-login-link" : undefined}
     className="vs-title vs-skew-sm bg-vs-gold text-vs-ink hover:bg-vs-cream px-5 py-1.5 text-lg transition-colors"
   >
     Log in
   </Link>
 );
 
+// UI only: the proxy and admin layout still enforce the role.
+const isAdmin = (session: Awaited<ReturnType<typeof getRscSession>>) =>
+  Boolean(session && "role" in session.user && session.user.role === "admin");
+
 async function SessionControls() {
   const session = await getRscSession();
-  if (!session) return <LoginLink />;
+  if (!session) return <LoginLink resolved />;
 
   return (
     <>
-      <Link
-        href="/admin"
-        data-testid="nav-admin-link"
-        className="vs-title vs-skew-sm bg-vs-red text-vs-cream hover:bg-vs-cream hover:text-vs-ink px-4 py-1.5 text-lg transition-colors"
-      >
-        Admin
-      </Link>
+      {isAdmin(session) && (
+        <Link
+          href="/admin"
+          data-testid="nav-admin-link"
+          className="vs-title vs-skew-sm bg-vs-red text-vs-cream hover:bg-vs-cream hover:text-vs-ink px-4 py-1.5 text-lg transition-colors"
+        >
+          Admin
+        </Link>
+      )}
       <Link
         href="/profile"
         className="vs-title text-vs-cream/70 hover:text-vs-cream hidden px-2 text-lg sm:block"
