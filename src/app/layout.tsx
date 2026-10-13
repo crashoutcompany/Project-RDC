@@ -6,6 +6,7 @@ import { Press_Start_2P, Sedgwick_Ave_Display, VT323 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
+import { ArcadeCabinet } from "@/components/arcade/cabinet";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/ui/sonner";
@@ -60,6 +61,7 @@ export default function RootLayout({
         >
           <CSPostHogProvider>
             <PostHogIdentify />
+            <ArcadeCabinet />
             {/* Comment this out to see ssg */}
             <Navbar />
             <main className="flex-1">{children}</main>
