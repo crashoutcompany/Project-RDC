@@ -6,16 +6,33 @@ import {
   resolvePreviewOrigins,
   type AuthBaseUrlEnv,
 } from "./base-url";
+import {
+  createEmailOtpPlugins,
+  EMAIL_OTP_DISABLED_PATHS,
+  normalizeOtpEmail,
+  resolveEmailOtpConfig,
+  type EmailOtpEnv,
+} from "./email-otp";
+import {
+  createAuthRateLimitStore,
+  createOtpEmailLockoutPlugin,
+  rateLimitPrefixFromAppName,
+  type RateLimitEnv,
+} from "./rate-limit";
+import { createOtpAdminGuardPlugin } from "./otp-admin-guard";
 
 export type SocialProviderId = "github" | "google";
 
-type AuthEnv = AuthBaseUrlEnv & {
-  BETTER_AUTH_SECRET?: string;
-  AUTH_GITHUB_ID?: string;
-  AUTH_GITHUB_SECRET?: string;
-  AUTH_GOOGLE_ID?: string;
-  AUTH_GOOGLE_SECRET?: string;
-};
+type AuthEnv = AuthBaseUrlEnv &
+  EmailOtpEnv &
+  RateLimitEnv & {
+    NODE_ENV?: string;
+    BETTER_AUTH_SECRET?: string;
+    AUTH_GITHUB_ID?: string;
+    AUTH_GITHUB_SECRET?: string;
+    AUTH_GOOGLE_ID?: string;
+    AUTH_GOOGLE_SECRET?: string;
+  };
 
 type ProviderCredentials = {
   clientId: string;
@@ -125,9 +142,24 @@ export function createAuth<const TFields extends UserAdditionalFields>({
   onError,
 }: CreateAuthOptions<TFields>) {
   const { secret, socialProviders } = resolveAuthEnvironment(env);
+  const emailOtp = resolveEmailOtpConfig(env, true);
+  // Per-IP limits (Better Auth) and the per-email lockout share one store, so
+  // both use Redis when it is configured and fall back to memory otherwise.
+  const rateLimitStore = createAuthRateLimitStore({
+    env,
+    appSlug: rateLimitPrefixFromAppName(appName),
+    secret,
+  });
 
   return betterAuth({
     appName,
+    // On when NODE_ENV=production (Vercel production and preview, and
+    // `next start` in CI), off in dev and unit tests, matching Better Auth's
+    // default. Read from `env` so it can be tested.
+    rateLimit: {
+      enabled: env.NODE_ENV === "production",
+      customStorage: rateLimitStore,
+    },
     baseURL: resolveAuthBaseUrl(productionUrl, env),
     trustedOrigins: [
       ...new Set([
@@ -163,6 +195,23 @@ export function createAuth<const TFields extends UserAdditionalFields>({
       additionalFields: userAdditionalFields,
     },
     ...(onError ? { onAPIError: { onError } } : {}),
-    plugins: [nextCookies()],
+    ...(emailOtp ? { disabledPaths: [...EMAIL_OTP_DISABLED_PATHS] } : {}),
+    plugins: [
+      ...(emailOtp
+        ? [
+            // Order matters: before hooks run in this order. The email lockout
+            // comes first so over-limit requests stop before the allowlist and
+            // admin guard do any lookup.
+            createOtpEmailLockoutPlugin({
+              store: rateLimitStore,
+              normalizeEmail: normalizeOtpEmail,
+            }),
+            // The auth secret keys the email hash in OTP failure logs.
+            ...createEmailOtpPlugins(emailOtp, appName, { logSecret: secret }),
+            createOtpAdminGuardPlugin({ logSecret: secret }),
+          ]
+        : []),
+      nextCookies(),
+    ],
   });
 }

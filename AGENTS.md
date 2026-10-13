@@ -105,11 +105,25 @@ This document provides essential context and guidelines for AI coding assistants
 - Tester login is **local / CI / Cloud Agent only**. It is unavailable on every
   Vercel deployment, Preview included: `src/lib/e2e-env.ts` requires
   `VERCEL !== "1"`, and Vercel sets `VERCEL=1` at runtime.
-- Build and start with `EXPOSE_TESTING_API=1`.
+- Build and start with `EXPOSE_TESTING_API=1`. `pnpm dev` works too:
+  `.env.local` already sets `EXPOSE_TESTING_API` and `TEST_AUTH_SECRET`.
 - Set `TEST_AUTH_SECRET` and `POST /api/test-auth/login` with header
   `x-test-auth-secret: <secret>`.
 - The route upserts the seeded admin tester and mints a real Better Auth session.
   Every Vercel deployment 404s.
+- Use the session from curl with a cookie jar:
+  ```bash
+  curl -c /tmp/cj -X POST -H "x-test-auth-secret: $TEST_AUTH_SECRET" \
+    http://localhost:3000/api/test-auth/login
+  curl -b /tmp/cj -i http://localhost:3000/admin
+  ```
+- Use it in a browser by setting the response's `cookie.name` / `cookie.value`
+  with `document.cookie = "<name>=<value>; path=/"` on the app origin, then navigate.
+- Non-admin checks: the login always resets the tester to `admin`. Log in first,
+  then set `role = 'user'` on the `project-rdc-e2e-tester` row (sessions read the
+  role from the DB, so no re-login). Restore `role = 'admin'` when done. Check
+  `DATABASE_URL` points at a dev/preview branch, never production. A signed-in
+  non-admin on `/admin/*` gets the `/forbidden` page with status 403.
 - Playwright `e2e/global-setup.ts` writes `e2e/.auth/tester.json`.
 - `x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET` only helps
   unauthenticated checks against a protected deployment; the login route still
@@ -183,7 +197,7 @@ When making changes:
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 

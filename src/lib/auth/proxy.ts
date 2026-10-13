@@ -38,6 +38,8 @@ type AuthProxyOptions = {
   rules?: readonly AuthPathRule[];
   signInPath: string;
   signedInPath?: string;
+  /** Rendered (URL unchanged) with status 403 when a role rule fails. */
+  forbiddenPath?: string;
 };
 
 function pathMatches(pathname: string, pattern: string): boolean {
@@ -126,6 +128,7 @@ export function createAuthProxy({
   rules = [],
   signInPath,
   signedInPath = "/",
+  forbiddenPath = "/forbidden",
 }: AuthProxyOptions) {
   return async function authProxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
@@ -170,8 +173,11 @@ export function createAuthProxy({
       const requiredRole = access.slice("role:".length);
       const role = "role" in session.user ? session.user.role : undefined;
       if (role !== requiredRole) {
+        // Render a real page: Safari downloads a bodiless 403 as a blank file.
         return applyAuthCookies(
-          new NextResponse(null, { status: 403 }),
+          NextResponse.rewrite(new URL(forbiddenPath, request.url), {
+            status: 403,
+          }),
           sessionHeaders,
         );
       }

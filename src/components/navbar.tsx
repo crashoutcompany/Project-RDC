@@ -188,11 +188,15 @@ const ListItem = React.forwardRef<
 });
 ListItem.displayName = "ListItem";
 
+// UI only: the proxy and admin layout still enforce the role.
+const isAdmin = (session: Awaited<ReturnType<typeof getRscSession>>) =>
+  Boolean(session && "role" in session.user && session.user.role === "admin");
+
 const AuthSection = async () => {
   const session = await getRscSession();
   return (
     <>
-      {session && <ListItem href="/admin">Admin</ListItem>}
+      {isAdmin(session) && <ListItem href="/admin">Admin</ListItem>}
       <AuthButton hideOnSmallScreens={false} hasSession={Boolean(session)} />
     </>
   );
@@ -225,6 +229,8 @@ const ProfileSection = async () => {
 };
 
 const AdminSection = async () => {
+  const session = await getRscSession();
+  if (!isAdmin(session)) return null;
   return (
     <NavigationMenuItem className="hidden md:block">
       <Link
