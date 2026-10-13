@@ -263,9 +263,19 @@ function readValue(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The first complete URL + token pair wins: UPSTASH_REDIS_REST_* first, then
- * the Vercel KV_REST_API_* names. A lone variable is not used.
+ * the Vercel KV_REST_API_* names. A lone variable is not used, and neither is
+ * a non-https URL (e.g. the "[SENSITIVE]" placeholder `vercel pull` writes),
+ * which the Redis client would reject at module load.
  */
 function resolveRedisCredentials(
   env: RateLimitEnv,
@@ -275,7 +285,7 @@ function resolveRedisCredentials(
     [readValue(env.KV_REST_API_URL), readValue(env.KV_REST_API_TOKEN)],
   ] as const;
   for (const [url, token] of pairs) {
-    if (url && token) return { url, token };
+    if (url && token && isHttpsUrl(url)) return { url, token };
   }
   const anySet = [
     env.UPSTASH_REDIS_REST_URL,
@@ -285,7 +295,7 @@ function resolveRedisCredentials(
   ].some((value) => readValue(value));
   if (anySet) {
     console.warn(
-      "[auth] rate limiting uses memory only: set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (or KV_REST_API_URL and KV_REST_API_TOKEN).",
+      "[auth] rate limiting uses memory only: set UPSTASH_REDIS_REST_URL (https) and UPSTASH_REDIS_REST_TOKEN (or KV_REST_API_URL and KV_REST_API_TOKEN).",
     );
   }
   return null;
