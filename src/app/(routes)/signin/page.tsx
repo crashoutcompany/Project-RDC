@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { enabledSocialProviders } from "@/lib/auth";
+import { emailOtpEnabled, enabledSocialProviders } from "@/lib/auth";
 import { getRscSession } from "@/lib/auth/server";
 import { SignInButtons } from "@/components/auth/sign-in-buttons";
 import { redirect } from "next/navigation";
@@ -46,5 +46,10 @@ async function SignInControls() {
   const session = await getRscSession();
   if (session) redirect("/");
 
-  return <SignInButtons providers={enabledSocialProviders} />;
+  return (
+    <SignInButtons
+      providers={enabledSocialProviders}
+      emailOtpEnabled={emailOtpEnabled}
+    />
+  );
 }

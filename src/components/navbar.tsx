@@ -53,19 +53,25 @@ const LoginLink = () => (
   </span>
 );
 
+// UI only: the proxy and admin layout still enforce the role.
+const isAdmin = (session: Awaited<ReturnType<typeof getRscSession>>) =>
+  Boolean(session && "role" in session.user && session.user.role === "admin");
+
 async function SessionControls() {
   const session = await getRscSession();
   if (!session) return <LoginLink />;
 
   return (
     <>
-      <Link
-        href="/admin"
-        data-testid="nav-admin-link"
-        className="ac-label bg-ac-red text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
-      >
-        Admin
-      </Link>
+      {isAdmin(session) && (
+        <Link
+          href="/admin"
+          data-testid="nav-admin-link"
+          className="ac-label bg-ac-red text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
+        >
+          Admin
+        </Link>
+      )}
       <Link
         href="/profile"
         className="ac-label text-ac-cream/70 hover:text-ac-cream hidden px-2 sm:block"
