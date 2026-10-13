@@ -6,45 +6,59 @@ import { ArenaCard } from "@/components/arcade/arena-card";
 import { Leaderboard } from "@/components/arcade/leaderboard";
 import { RosterHero } from "@/components/arcade/roster-hero";
 import {
+  ArcadeHeroScene,
+  PressStartLink,
+} from "@/components/arcade/scene/arcade-hero";
+import {
   ChallengerBanner,
   Eyebrow,
   HowToPlay,
   PixelPortrait,
   ArcadeButton,
+  arcadeButtonClass,
   Heading,
   Tag,
 } from "@/components/arcade/ui";
-import {
-  FEATURED_ARENA,
-  getArenas,
-  getRoster,
-  topFive,
-} from "@/lib/rdc-stats";
+import { FEATURED_ARENA, getArenas, getRoster, topFive } from "@/lib/rdc-stats";
 
 export default function Home() {
   return (
     <>
-      <section className="ac-dusk relative overflow-hidden [--sun-y:48%]">
-        <div className="relative mx-auto max-w-6xl px-4 pt-5">
-          <div className="mt-8 text-center">
+      <section
+        data-stage-root
+        className="group ac-dusk relative isolate flex h-[calc(100svh-64px)] max-h-[880px] min-h-[600px] items-end overflow-hidden [--sun-x:68%] [--sun-y:48%] md:items-center"
+      >
+        <Suspense fallback={null}>
+          <HomeScene />
+        </Suspense>
+        <div
+          aria-hidden
+          className="from-ac-ink/85 via-ac-ink/40 pointer-events-none absolute inset-0 bg-linear-to-t to-transparent transition-opacity duration-500 group-data-zooming:opacity-0 md:bg-linear-to-r md:via-transparent"
+        />
+        <div className="pointer-events-none relative mx-auto w-full max-w-6xl px-4 pb-14 transition-opacity duration-500 group-data-zooming:opacity-0 md:pb-0">
+          <div className="max-w-md">
             <Eyebrow>A fan-made stat tracker</Eyebrow>
             <h1
               data-testid="home-shell-marker"
-              className="ac-title text-ac-gold animate-slam-in mt-5 text-5xl drop-shadow-[5px_5px_0_#ff2d55] md:text-7xl"
+              className="ac-title text-ac-gold animate-slam-in mt-5 text-4xl drop-shadow-[4px_4px_0_#ff2d55] md:text-6xl"
             >
               RDC Stats
             </h1>
-            <Tag tone="green" className="mt-4 text-4xl md:text-5xl">
+            <Tag tone="green" className="mt-4 text-4xl">
               who&apos;s the best gamer?
             </Tag>
-            <p className="text-ac-cream/90 mx-auto mt-3 max-w-md">
+            <p className="text-ac-cream/90 mt-3">
               Every game, every session, every K.O. The group&apos;s scores,
               ranked.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-4">
-              <ArcadeButton href="/games" data-testid="home-games-link">
+            <div className="pointer-events-auto mt-6 flex flex-wrap gap-4">
+              <PressStartLink
+                href="/games"
+                data-testid="home-games-link"
+                className={arcadeButtonClass()}
+              >
                 ▶ Press start
-              </ArcadeButton>
+              </PressStartLink>
               <ArcadeButton
                 href="/members"
                 variant="dark"
@@ -55,13 +69,17 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="ac-grid bg-ac-ink">
+        <div className="mx-auto max-w-6xl px-4 pt-12">
+          <Heading lead="Fighters" className="text-ac-gold" />
+        </div>
         <Suspense fallback={<RosterSkeleton />}>
           <HomeRoster />
         </Suspense>
-        <p className="ac-label text-ac-cream/80 relative pb-4 text-center">
-          <span className="bg-ac-ink/70 px-3 py-1">
-            Win share · Mario Kart 8 · bar length vs. the leader
-          </span>
+        <p className="ac-label text-ac-cream/80 pb-8 text-center">
+          Win share · Mario Kart 8 · bar length vs. the leader
         </p>
       </section>
 
@@ -92,6 +110,16 @@ export default function Home() {
 
       <ChallengerBanner />
     </>
+  );
+}
+
+async function HomeScene() {
+  await connection();
+  const arenas = await getArenas();
+  return (
+    <ArcadeHeroScene
+      board={topFive(arenas.find((a) => a.slug === FEATURED_ARENA))}
+    />
   );
 }
 
@@ -126,7 +154,7 @@ async function ChampionAndTopFive() {
         <p className="ac-label text-ac-gold mb-2">Main event</p>
         <Heading lead="Latest" accent="champion" tone="red" className="mb-6" />
         {champ ? (
-          <div className="border-ac-gold ac-shadow flex gap-5 border-4 bg-ac-ink p-5">
+          <div className="border-ac-gold ac-shadow bg-ac-ink flex gap-5 border-4 p-5">
             <PixelPortrait
               src={champ.art.portrait}
               alt={champ.name}
@@ -135,11 +163,16 @@ async function ChampionAndTopFive() {
             />
             <div className="flex flex-col justify-center">
               <p className="ac-label text-ac-gold">MVP · {featured?.name}</p>
-              <p className="ac-title text-ac-cream mt-2 text-2xl">{champ.name}</p>
+              <p className="ac-title text-ac-cream mt-2 text-2xl">
+                {champ.name}
+              </p>
               <p className="text-ac-cream/70">
                 {champ.wins} wins and counting.
               </p>
-              <ArcadeButton href={`/members/${champ.slug}`} className="mt-4 self-start">
+              <ArcadeButton
+                href={`/members/${champ.slug}`}
+                className="mt-4 self-start"
+              >
                 View fighter
               </ArcadeButton>
             </div>

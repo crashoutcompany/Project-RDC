@@ -163,7 +163,6 @@ export function PixelPortrait({
         alt={alt}
         fill
         sizes={`${pixels}px`}
-        quality={60}
         priority={priority}
         className={cn("ac-pixel object-cover", imgClassName)}
       />
@@ -227,6 +226,14 @@ export function Breadcrumbs({
   );
 }
 
+export const arcadeButtonClass = (variant: "gold" | "dark" | "red" = "gold") =>
+  cn(
+    "ac-title inline-block border-2 px-5 py-3 text-xs transition-transform hover:-translate-y-0.5 active:translate-y-0.5",
+    variant === "gold" && "bg-ac-gold text-ac-ink border-ac-ink ac-shadow",
+    variant === "dark" && "bg-ac-ink text-ac-cream border-ac-cream",
+    variant === "red" && "bg-ac-red text-ac-ink border-ac-ink ac-shadow-gold",
+  );
+
 /** Chunky arcade button with a hard offset shadow. */
 export function ArcadeButton({
   href,
@@ -243,13 +250,7 @@ export function ArcadeButton({
   return (
     <Link
       href={href}
-      className={cn(
-        "ac-title inline-block border-2 px-5 py-3 text-xs transition-transform hover:-translate-y-0.5 active:translate-y-0.5",
-        variant === "gold" && "bg-ac-gold text-ac-ink border-ac-ink ac-shadow",
-        variant === "dark" && "bg-ac-ink text-ac-cream border-ac-cream",
-        variant === "red" && "bg-ac-red text-ac-ink border-ac-ink ac-shadow-gold",
-        className,
-      )}
+      className={cn(arcadeButtonClass(variant), className)}
       {...props}
     >
       {children}
@@ -294,7 +295,9 @@ export function HowToPlay() {
             TONE_BORDER[step.tone],
           )}
         >
-          <span className={cn("ac-title ac-glow text-2xl", TONE_TEXT[step.tone])}>
+          <span
+            className={cn("ac-title ac-glow text-2xl", TONE_TEXT[step.tone])}
+          >
             {i + 1}
           </span>
           <h3 className="ac-title text-ac-cream mt-3 text-xs">{step.title}</h3>

@@ -19,7 +19,7 @@ import { H1 } from "@/components/headings";
  */
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div data-no-cabinet>
+    <div>
       <H1 data-testid="admin-shell-marker" className="sr-only">
         Admin
       </H1>

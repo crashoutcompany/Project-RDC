@@ -41,7 +41,6 @@ export function ArenaCard({
         alt=""
         fill
         sizes="64px"
-        quality={60}
         className="ac-pixel object-cover opacity-15 transition-opacity duration-200 group-hover:opacity-40 motion-reduce:transition-none"
       />
       <div className="relative flex h-full flex-col justify-between gap-6">
