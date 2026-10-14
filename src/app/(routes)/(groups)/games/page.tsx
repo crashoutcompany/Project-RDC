@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ARENA_BAR, ArenaCard } from "@/components/arcade/arena-card";
+import { ArenaCard } from "@/components/arcade/arena-card";
+import { ARENA_BAR } from "@/components/arcade/arena-colors";
 import { Breadcrumbs, Heading, Tag } from "@/components/arcade/ui";
 import { WinsMatrix } from "@/components/arcade/wins-matrix";
 import { GamesEnum } from "@/lib/constants";
@@ -28,7 +29,9 @@ export default function Page() {
     <>
       <section className="ac-dusk relative overflow-hidden [--sun-x:80%]">
         <div className="mx-auto max-w-6xl px-4 pt-8 pb-12">
-          <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Games" }]} />
+          <Breadcrumbs
+            items={[{ label: "Home", href: "/" }, { label: "Games" }]}
+          />
           <Tag tone="green">pick ur battle</Tag>
           <h1
             data-testid="games-shell-marker"
@@ -37,8 +40,8 @@ export default function Page() {
             Stage select
           </h1>
           <p className="text-ac-cream/90 mt-4 max-w-md">
-            Game statistics, player rankings and session data for every game
-            the crew plays.
+            Game statistics, player rankings and session data for every game the
+            crew plays.
           </p>
         </div>
       </section>
@@ -103,7 +106,11 @@ async function Matrix() {
             const r = a.records[f.slug];
             return [
               a.slug,
-              { matches: r?.matches ?? 0, sets: r?.sets ?? 0, days: r?.days ?? 0 },
+              {
+                matches: r?.matches ?? 0,
+                sets: r?.sets ?? 0,
+                days: r?.days ?? 0,
+              },
             ];
           }),
         ),

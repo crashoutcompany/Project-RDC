@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { getMember } from "./data";
 import { getAllMembers } from "prisma/lib/members";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ARENA_BAR } from "@/components/arcade/arena-card";
+import { ARENA_BAR } from "@/components/arcade/arena-colors";
 import {
   Breadcrumbs,
   Eyebrow,
@@ -101,7 +101,9 @@ async function MemberDetailContent({
             className="border-ac-red animate-rise-in aspect-[4/5] w-56 border-4 md:w-full"
           />
           <div className="pb-10">
-            <Eyebrow>Fighter profile · No.{String(index + 1).padStart(2, "0")}</Eyebrow>
+            <Eyebrow>
+              Fighter profile · No.{String(index + 1).padStart(2, "0")}
+            </Eyebrow>
             <h1 className="ac-title text-ac-cream animate-slam-in mt-2 text-5xl md:text-6xl">
               {name}
             </h1>
@@ -118,7 +120,12 @@ async function MemberDetailContent({
                   {fighter.wins ? `${fighter.wins} MK8 wins` : "No wins yet"}
                 </span>
               </div>
-              <HpBar value={fighter.hp} variant="p1" className="h-4" label={`${name} health`} />
+              <HpBar
+                value={fighter.hp}
+                variant="p1"
+                className="h-4"
+                label={`${name} health`}
+              />
             </div>
           </div>
         </div>
@@ -128,12 +135,26 @@ async function MemberDetailContent({
         <div className="mx-auto max-w-6xl px-4 py-12">
           <Heading lead="Win summary" className="text-ac-gold mb-6" />
           <dl className="grid gap-5 sm:grid-cols-3">
-            <WinBox label="Matches won" value={wins.matches} tone="border-ac-gold text-ac-gold" />
-            <WinBox label="Sets won" value={wins.sets} tone="border-[#6b8cff] text-[#6b8cff]" />
-            <WinBox label="Days won" value={wins.days} tone="border-ac-red text-ac-red" />
+            <WinBox
+              label="Matches won"
+              value={wins.matches}
+              tone="border-ac-gold text-ac-gold"
+            />
+            <WinBox
+              label="Sets won"
+              value={wins.sets}
+              tone="border-[#6b8cff] text-[#6b8cff]"
+            />
+            <WinBox
+              label="Days won"
+              value={wins.days}
+              tone="border-ac-red text-ac-red"
+            />
           </dl>
           {wins.matches === 0 ? (
-            <p className="text-ac-cream/70 mt-3">The first one is always the hardest.</p>
+            <p className="text-ac-cream/70 mt-3">
+              The first one is always the hardest.
+            </p>
           ) : null}
         </div>
       </section>
@@ -142,7 +163,9 @@ async function MemberDetailContent({
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="mb-6 flex items-end justify-between">
             <Heading lead="Record by stage" />
-            <p className="text-ac-cream/70 text-sm">Lower avg. rank is better.</p>
+            <p className="text-ac-cream/70 text-sm">
+              Lower avg. rank is better.
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-separate border-spacing-y-2">
@@ -162,18 +185,28 @@ async function MemberDetailContent({
                   return (
                     <tr key={arena.slug} className="bg-ac-ink">
                       <td className="relative py-3 pr-4 pl-6">
-                        <span className={cn("absolute inset-y-0 left-0 w-1.5", ARENA_BAR[arena.slug])} />
+                        <span
+                          className={cn(
+                            "absolute inset-y-0 left-0 w-1.5",
+                            ARENA_BAR[arena.slug],
+                          )}
+                        />
                         <span className="ac-label text-ac-cream/60 mr-3">
                           {String(arena.index).padStart(2, "0")}
                         </span>
-                        <span className="ac-title text-ac-cream text-xs">{arena.name}</span>
+                        <span className="ac-title text-ac-cream text-xs">
+                          {arena.name}
+                        </span>
                       </td>
                       <Num>{r?.avgPos ? r.avgPos.toFixed(1) : "--.-"}</Num>
                       <Num>{r?.matches ?? 0}</Num>
                       <Num>{r?.sets ?? 0}</Num>
                       <Num>{r?.days ?? 0}</Num>
                       <td className="px-4 text-right">
-                        <Link href={`/games/${arena.slug}`} className="ac-label text-ac-gold hover:text-ac-cream">
+                        <Link
+                          href={`/games/${arena.slug}`}
+                          className="ac-label text-ac-gold hover:text-ac-cream"
+                        >
                           ▶ Stage
                         </Link>
                       </td>
@@ -189,8 +222,12 @@ async function MemberDetailContent({
       <section className="bg-ac-ink">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-12">
           <div>
-            <p className="ac-title text-ac-gold text-sm">Think you can take {name}?</p>
-            <p className="text-ac-cream/70">Put {name} up against anyone on the roster.</p>
+            <p className="ac-title text-ac-gold text-sm">
+              Think you can take {name}?
+            </p>
+            <p className="text-ac-cream/70">
+              Put {name} up against anyone on the roster.
+            </p>
           </div>
           <ArcadeButton href="/members" variant="red">
             Pick a challenger ▶
@@ -201,7 +238,15 @@ async function MemberDetailContent({
   );
 }
 
-function WinBox({ label, value, tone }: { label: string; value: number; tone: string }) {
+function WinBox({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+}) {
   return (
     <div className={cn("bg-ac-panel border-4 p-5", tone.split(" ")[0])}>
       <dt className="ac-label text-ac-cream/80">{label}</dt>

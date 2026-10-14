@@ -154,7 +154,9 @@ function Slot({ fighter, side }: { fighter: Fighter; side: 1 | 2 }) {
   const color = side === 1 ? "border-ac-red" : "border-ac-blue";
   return (
     <div className={cn("flex flex-col gap-3", side === 2 && "items-end")}>
-      <div className={cn("bg-ac-ink relative w-full max-w-64 border-4 p-1", color)}>
+      <div
+        className={cn("bg-ac-ink relative w-full max-w-64 border-4 p-1", color)}
+      >
         <span
           className={cn(
             "ac-label text-ac-ink absolute top-2 z-10 px-1.5 py-0.5",

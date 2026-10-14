@@ -21,7 +21,7 @@ export function Leaderboard({
       {rows.map((entry, i) => (
         <li
           key={entry?.player ?? i}
-          className="bg-black border-l-ac-panel-2 flex items-center gap-4 border-l-4 px-4 py-2"
+          className="border-l-ac-panel-2 flex items-center gap-4 border-l-4 bg-black px-4 py-2"
           style={i < 3 ? { borderLeftColor: RANK_COLORS[i] } : undefined}
         >
           <span

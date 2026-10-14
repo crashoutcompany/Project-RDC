@@ -1,16 +1,11 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { POWER_EVENT } from "./crt-power";
 
-const POWER_EVENT = "crt:power";
 /** Reveal anyway if the next route never commits. */
 const POWER_TIMEOUT_MS = 4000;
-
-/** Blank the screen until the next route commits, then play the power-on. */
-export function powerCycleScreen() {
-  window.dispatchEvent(new Event(POWER_EVENT));
-}
 
 /**
  * The app's "monitor": a fixed CRT bezel, glass glare and vignette over every
@@ -19,6 +14,20 @@ export function powerCycleScreen() {
  * flying into the cabinet hands off to a page that looks like that screen.
  */
 export function CrtScreen() {
+  return (
+    <>
+      <div aria-hidden className="crt-bezel">
+        <span className="crt-led" />
+      </div>
+      {/* usePathname needs a Suspense boundary on prerendered dynamic routes. */}
+      <Suspense fallback={null}>
+        <CrtPower />
+      </Suspense>
+    </>
+  );
+}
+
+function CrtPower() {
   const pathname = usePathname();
   const [power, setPower] = useState<"idle" | "off" | "on">("idle");
   const from = useRef(pathname);
@@ -39,22 +48,16 @@ export function CrtScreen() {
     return () => clearTimeout(timer);
   }, [pathname, power]);
 
+  if (power === "idle") return null;
   return (
-    <>
-      <div aria-hidden className="crt-bezel">
-        <span className="crt-led" />
-      </div>
-      {power !== "idle" ? (
-        <div
-          aria-hidden
-          className="crt-power"
-          data-state={power}
-          onAnimationEnd={(e) => {
-            if (e.animationName === "crt-power-on" && power === "on")
-              setPower("idle");
-          }}
-        />
-      ) : null}
-    </>
+    <div
+      aria-hidden
+      className="crt-power"
+      data-state={power}
+      onAnimationEnd={(e) => {
+        if (e.animationName === "crt-power-on" && power === "on")
+          setPower("idle");
+      }}
+    />
   );
 }

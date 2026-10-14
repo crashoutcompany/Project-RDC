@@ -36,7 +36,11 @@ export function WinsMatrix({ arenas, rows }: WinsMatrixProps) {
 
   return (
     <div>
-      <div className="mb-4 flex justify-end gap-2" role="group" aria-label="Win type">
+      <div
+        className="mb-4 flex justify-end gap-2"
+        role="group"
+        aria-label="Win type"
+      >
         {METRICS.map((m) => (
           <button
             key={m.key}
@@ -79,14 +83,13 @@ export function WinsMatrix({ arenas, rows }: WinsMatrixProps) {
                       height={28}
                       className="ac-pixel size-7 object-cover"
                     />
-                    <span className="ac-label text-ac-cream">
-                      {row.name}
-                    </span>
+                    <span className="ac-label text-ac-cream">{row.name}</span>
                   </span>
                 </th>
                 {arenas.map((a) => {
                   const value = row.cells[a.slug]?.[metric];
-                  const strength = value && max[a.slug] ? value / max[a.slug] : 0;
+                  const strength =
+                    value && max[a.slug] ? value / max[a.slug] : 0;
                   return (
                     <td
                       key={a.slug}

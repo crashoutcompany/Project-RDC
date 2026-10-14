@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { powerCycleScreen } from "../crt-screen";
+import { powerCycleScreen } from "../crt-power";
 import type { BoardEntry } from "./arcade-scene";
 import { useInView, useStageRoot, useStageSupport } from "./use-stage-support";
 import { resetWhenHidden, startZoom } from "./zoom";

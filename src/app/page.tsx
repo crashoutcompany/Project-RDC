@@ -5,12 +5,8 @@ import {
   ArcadeHeroScene,
   PressStartLink,
 } from "@/components/arcade/scene/arcade-hero";
-import {
-  Eyebrow,
-  ArcadeButton,
-  arcadeButtonClass,
-  Tag,
-} from "@/components/arcade/ui";
+import { arcadeButtonClass } from "@/components/arcade/button-class";
+import { Eyebrow, ArcadeButton, Tag } from "@/components/arcade/ui";
 import { FEATURED_ARENA, getArenas, topFive } from "@/lib/rdc-stats";
 
 export default function Home() {

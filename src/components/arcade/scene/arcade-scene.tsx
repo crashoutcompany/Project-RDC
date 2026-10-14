@@ -252,7 +252,7 @@ function Fire({ animate }: { animate: boolean }) {
             [0.04, 0.16, 0.08, "#ffd400"],
           ] as const
         ).map(([x, h, w, color], i) => (
-          <mesh key={i} position={[x, h / 2, 0.01 * i]}>
+          <mesh key={x} position={[x, h / 2, 0.01 * i]}>
             <planeGeometry args={[w, h]} />
             <meshBasicMaterial color={color} toneMapped={false} />
           </mesh>
@@ -357,7 +357,7 @@ function useMarqueeTexture() {
       invalidate();
     };
     const img = new window.Image();
-    img.src = "/models/marquee.png";
+    img.src = "/models/marquee.webp";
     img.onload = () => {
       bgImg = img;
       redraw();
@@ -632,7 +632,10 @@ function Cabinet({
 
   return (
     <group position={CABINET_POS} rotation={[0, CABINET_YAW, 0]}>
-      <mesh geometry={parts.cabinet.geometry} material={parts.cabinet.material} />
+      <mesh
+        geometry={parts.cabinet.geometry}
+        material={parts.cabinet.material}
+      />
       <mesh geometry={parts.marquee.geometry}>
         <meshBasicMaterial map={marqueeTexture} toneMapped={false} />
       </mesh>
@@ -699,7 +702,7 @@ function CameraRig({
     fired: boolean;
     start: number;
   } | null>(null);
-  const look = useRef(new THREE.Vector3());
+  const [look] = useState(() => new THREE.Vector3());
   const { center, normal } = useMemo(() => screenWorld(), []);
 
   const home = useMemo(() => {
@@ -725,8 +728,8 @@ function CameraRig({
       const { camera, invalidate } = get();
       zoom.current = null;
       camera.position.copy(home.pos);
-      look.current.copy(home.target);
-      camera.lookAt(look.current);
+      look.copy(home.target);
+      camera.lookAt(look);
       invalidate();
     };
     reset.current = resetView;
@@ -740,7 +743,7 @@ function CameraRig({
       unregister();
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, [get, home]);
+  }, [get, home, look]);
 
   useEffect(() => {
     if (!active) reset.current?.();
@@ -777,8 +780,8 @@ function CameraRig({
         3.2,
         dt,
       );
-      look.current.lerp(center, 1 - Math.exp(-4 * dt));
-      camera.lookAt(look.current);
+      look.lerp(center, 1 - Math.exp(-4 * dt));
+      camera.lookAt(look);
       // Never hold the visitor hostage: navigate on arrival or after the cap.
       const timedOut = performance.now() - z.start > ZOOM_TIMEOUT_MS;
       if (
@@ -797,7 +800,7 @@ function CameraRig({
       home.pos.y + Math.sin(t * 0.33) * 0.03,
       home.pos.z,
     );
-    camera.lookAt(look.current);
+    camera.lookAt(look);
   });
 
   return null;

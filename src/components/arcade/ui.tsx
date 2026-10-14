@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { arcadeButtonClass } from "./button-class";
 
 type Tone = "red" | "blue" | "gold" | "green" | "pink";
 
-export const TONE_TEXT: Record<Tone, string> = {
+const TONE_TEXT: Record<Tone, string> = {
   red: "text-ac-red",
   blue: "text-ac-blue",
   gold: "text-ac-gold",
@@ -226,14 +227,6 @@ export function Breadcrumbs({
   );
 }
 
-export const arcadeButtonClass = (variant: "gold" | "dark" | "red" = "gold") =>
-  cn(
-    "ac-title inline-block border-2 px-5 py-3 text-xs transition-transform hover:-translate-y-0.5 active:translate-y-0.5",
-    variant === "gold" && "bg-ac-gold text-ac-ink border-ac-ink ac-shadow",
-    variant === "dark" && "bg-ac-ink text-ac-cream border-ac-cream",
-    variant === "red" && "bg-ac-red text-ac-ink border-ac-ink ac-shadow-gold",
-  );
-
 /** Chunky arcade button with a hard offset shadow. */
 export function ArcadeButton({
   href,
@@ -258,7 +251,7 @@ export function ArcadeButton({
   );
 }
 
-export const HOW_TO_PLAY = [
+const HOW_TO_PLAY = [
   {
     title: "Pick a stage",
     body: "Session timelines, MVPs and stats for every game.",
