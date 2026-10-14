@@ -40,10 +40,7 @@ export async function extractWithGemini(args: {
   apiKey?: string;
 }): Promise<ScoreboardFields> {
   const spec = requireSpec(args.gameId);
-  const google = createGoogleGenerativeAI({
-    apiKey: args.apiKey,
-    baseURL: process.env.GOOGLE_GENERATIVE_AI_BASE_URL,
-  });
+  const google = createGoogleGenerativeAI({ apiKey: args.apiKey });
   const result = await generateText({
     model: google(args.model ?? GEMINI_MODEL),
     abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),

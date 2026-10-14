@@ -1,18 +1,10 @@
-import { createHash } from "crypto";
 import { z } from "zod";
 import {
-  findPlayer,
   PLAYER_MAPPINGS,
 } from "@/app/(routes)/admin/_utils/player-mappings";
 import { screenStatConfigs, type GameSpec } from "./scoreboard-specs";
 
-export const MEMBER_NAMES = Object.keys(PLAYER_MAPPINGS) as [string, ...string[]];
-
-/** Member name or gamertag → playerId, using the same lookup as the processors. */
-export function resolvePlayerId(nameOrTag: string | null | undefined): number | null {
-  if (!nameOrTag) return null;
-  return findPlayer(nameOrTag.trim())?.playerId ?? null;
-}
+const MEMBER_NAMES = Object.keys(PLAYER_MAPPINGS) as [string, ...string[]];
 
 /** The JSON every LLM must return, generated from the game's on-screen stats. */
 export function buildSchema(spec: GameSpec) {
@@ -74,15 +66,4 @@ export function buildPrompt(spec: GameSpec): string {
       ? "- Set `team` to the team label shown above the row and `winning_team` to the team marked WINNER."
       : "- Set `team` and `winning_team` to null.",
   ].join("\n");
-}
-
-/** Fingerprint of everything a model sees besides the image, for the write-up. */
-export function promptFingerprint(spec: GameSpec): string {
-  const schema = JSON.stringify(z.toJSONSchema(buildSchema(spec)));
-  return createHash("sha256")
-    .update(SYSTEM_PROMPT)
-    .update(buildPrompt(spec))
-    .update(schema)
-    .digest("hex")
-    .slice(0, 12);
 }

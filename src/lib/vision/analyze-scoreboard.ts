@@ -4,7 +4,7 @@ import DocumentIntelligence, {
   isUnexpected,
 } from "@azure-rest/ai-document-intelligence";
 import { Player } from "@/generated/prisma/client";
-import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
+import { GAME_CONFIGS } from "@/lib/constants";
 import { GameProcessor } from "@/lib/game-processors/game-processor-utils";
 import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
 import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcessor";
@@ -130,29 +130,4 @@ export function processScoreboard(args: {
     winners,
     processedPlayers.reqCheckFlag || statsRequireCheck,
   );
-}
-
-/**
- * Runs a scoreboard screenshot through the game's custom Azure Document
- * Intelligence model and the matching game processor.
- *
- * Free of Next.js runtime helpers (`after`, PostHog, `server-only`) so the
- * admin server action and the offline harvester script share one code path.
- * Throws on Azure/processor errors; callers decide how to log and report.
- */
-export async function analyzeScoreboard(args: {
-  client: DocumentIntelligenceClient;
-  base64Source: string;
-  sessionPlayers: Player[];
-  gameId: number;
-}): Promise<AnalysisResults> {
-  const { sessionPlayers, gameId } = args;
-  getGameProcessor(gameId); // fail on an unknown game before paying for Azure
-  const fields = await extractWithAzure(args);
-  if (!fields)
-    return {
-      status: VisionResultCodes.Failed,
-      message: "Analyze result or documents are undefined",
-    };
-  return processScoreboard({ fields, gameId, sessionPlayers, ocrCorrections: true });
 }

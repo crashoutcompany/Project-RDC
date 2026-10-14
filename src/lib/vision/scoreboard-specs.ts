@@ -64,13 +64,6 @@ export function specForGameId(gameId: number): GameSpec | undefined {
   return Object.values(GAMES).find((spec) => spec.gameId === gameId);
 }
 
-export function resolveGame(id: string): GameSpec {
-  const spec = GAMES[id];
-  if (!spec)
-    throw new Error(`Unknown game "${id}". Known: ${Object.keys(GAMES).join(", ")}`);
-  return spec;
-}
-
 /** Stat configs for the stats visible on this game's screen, in column order. */
 export function screenStatConfigs(spec: GameSpec): StatConfig[] {
   return spec.screenStats.map((key) => {
