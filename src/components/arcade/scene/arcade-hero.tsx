@@ -14,24 +14,28 @@ const ArcadeScene = dynamic(() => import("./arcade-scene"), { ssr: false });
 
 /** Give up on the 3D room (the poster stays) if it isn't drawing by then. */
 const LOAD_TIMEOUT_MS = 8000;
+/** After an explicit tap, allow longer: these are often slower devices. */
+const TAP_LOAD_TIMEOUT_MS = 20000;
 
 /**
- * Upgrades the static poster to the live 3D arcade room. three.js is only
- * fetched after the page has fully loaded and the browser is idle, only on
- * capable devices (see useStageSupport), and the scene fades in once it has
- * drawn a frame. Slow or failed loads leave the poster in place.
+ * Upgrades the static poster to the live 3D arcade room. On capable devices
+ * three.js is fetched after the page has fully loaded and the browser is idle;
+ * on phones and other skipped devices (see useStageSupport) nothing 3D is
+ * fetched until the visitor taps "Tap to start". The scene fades in once it
+ * has drawn a frame; slow or failed loads leave the poster in place.
  */
 export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   const { anchor, root } = useStageRoot();
   const inView = useInView(root);
-  const supported = useStageSupport();
+  const support = useStageSupport();
+  const mode = support?.mode ?? null;
   const [armed, setArmed] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">(
     "loading",
   );
 
   useEffect(() => {
-    if (!supported) return;
+    if (mode !== "auto") return;
     let cancelled = false;
     const arm = () => {
       const whenIdle =
@@ -46,16 +50,16 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
       cancelled = true;
       window.removeEventListener("load", arm);
     };
-  }, [supported]);
+  }, [mode]);
 
   useEffect(() => {
     if (!armed || status !== "loading") return;
     const timer = setTimeout(
       () => setStatus((s) => (s === "loading" ? "failed" : s)),
-      LOAD_TIMEOUT_MS,
+      mode === "tap" ? TAP_LOAD_TIMEOUT_MS : LOAD_TIMEOUT_MS,
     );
     return () => clearTimeout(timer);
-  }, [armed, status]);
+  }, [armed, status, mode]);
 
   // Leaving the page (Press start hides it) or scrolling away undoes the
   // zoom fade, so Back always returns to the normal hero.
@@ -82,11 +86,30 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   useEffect(() => {
     if (status === "failed") root?.removeAttribute("data-zooming");
   }, [status, root]);
-  const mounted = supported && armed && status !== "failed";
+  const mounted =
+    support !== null && support.mode !== "none" && armed && status !== "failed";
+  const showTap = mode === "tap" && status !== "failed" && status !== "ready";
 
   return (
     <>
       <span ref={anchor} hidden />
+      {showTap ? (
+        <button
+          type="button"
+          data-testid="home-tap-to-start"
+          disabled={armed}
+          onClick={() => setArmed(true)}
+          className="ac-label bg-ac-ink/85 text-ac-gold border-ac-gold hover:bg-ac-gold hover:text-ac-ink absolute top-4 right-4 z-10 cursor-pointer border-2 px-3 py-2 transition-colors disabled:cursor-wait disabled:opacity-80"
+        >
+          {armed ? (
+            "Loading…"
+          ) : (
+            <>
+              <span aria-hidden>▶ </span>Tap to start
+            </>
+          )}
+        </button>
+      ) : null}
       {mounted ? (
         <div
           className={cn(
@@ -96,7 +119,8 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
         >
           <ArcadeScene
             board={board}
-            animate
+            animate={!support.reducedMotion}
+            powerPreference={support.desktop ? "high-performance" : "low-power"}
             active={inView}
             onReady={onReady}
             interactive={status === "ready"}

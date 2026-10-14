@@ -19,6 +19,8 @@ type Props = {
   interactive: boolean;
   /** The cabinet failed to load or WebGL was lost: show the poster instead. */
   onError: () => void;
+  /** "high-performance" on desktop only; phones and others use "low-power". */
+  powerPreference: WebGLPowerPreference;
 };
 
 /** Longest the Press start fly-in may take before we navigate anyway. */
@@ -823,6 +825,7 @@ export default function ArcadeScene({
   onReady,
   interactive,
   onError,
+  powerPreference,
 }: Props) {
   return (
     <Canvas
@@ -830,7 +833,7 @@ export default function ArcadeScene({
       dpr={PIXEL_RATIO}
       frameloop={!active ? "never" : animate ? "always" : "demand"}
       camera={{ fov: 42, near: 0.05, far: 40 }}
-      gl={{ antialias: false, powerPreference: "high-performance" }}
+      gl={{ antialias: false, powerPreference }}
       aria-hidden
       onCreated={({ gl }) => {
         gl.domElement.addEventListener(
