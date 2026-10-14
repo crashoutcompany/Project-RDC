@@ -6,7 +6,7 @@ import type { DepCheckResult } from "../pipeline/deps";
 import { fetchVideoMeta } from "../pipeline/metadata";
 import { harvestVideo } from "../harvest";
 import { buildDraft } from "../draft/build-draft";
-import { writeDraftSession } from "../draft/write-draft";
+import { writeDraftSession, type VideoMeta } from "../draft/write-draft";
 import type { GameProfile } from "../games/types";
 import type { Manifest, ResolvedConfig } from "../types";
 import { analyzeJobs } from "../pipeline/analyze";
@@ -55,6 +55,11 @@ export interface WeeklyOptions {
   limit: number;
   /** Explicit work list instead of the Google Sheet. */
   videos?: { videoId: string; profile: GameProfile }[];
+  /**
+   * Folder of already-downloaded `<videoId>.<ext>` files. When set, only videos
+   * with a file here are processed, and they're read from disk, not YouTube.
+   */
+  videoDir?: string;
   /** Retry videos that previously failed or found no scoreboards. */
   retry: boolean;
 }
@@ -88,9 +93,13 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
   const report: ReportLine[] = [];
 
   try {
-    const candidates: CandidateVideo[] = opts.videos
+    const listed: CandidateVideo[] = opts.videos
       ? opts.videos.map((v) => ({ ...v, title: v.videoId, date: "" }))
       : candidatesFromSheet(await readTruthSheet(), opts.profiles);
+    const local = opts.videoDir && localVideos(opts.videoDir);
+    const candidates = local
+      ? listed.flatMap((c) => (local.has(c.videoId) ? [{ ...c, videoPath: local.get(c.videoId) }] : []))
+      : listed;
     console.log(`[weekly] ${candidates.length} candidate video(s)`);
 
     const existing = await prisma.session.findMany({
@@ -252,7 +261,9 @@ async function harvestCandidate(
     profile: candidate.profile,
     config: opts.configFor(candidate.profile),
     deps: opts.deps,
-    url: `https://www.youtube.com/watch?v=${candidate.videoId}`,
+    ...(candidate.videoPath
+      ? { video: candidate.videoPath }
+      : { url: `https://www.youtube.com/watch?v=${candidate.videoId}` }),
     players,
     deferAnalysis,
   });
@@ -284,11 +295,14 @@ async function draftCandidate(
   if (matchCount === 0) return { outcome: "no-scoreboards", detail };
   if (!opts.write) return { outcome: "dry-run", detail };
 
-  const video = await fetchVideoMeta({
-    ytDlpPath: opts.deps.ytDlpPath,
-    ytDlpArgs: opts.deps.ytDlpArgs,
-    videoId,
-  });
+  // With local files YouTube may be unreachable, so the sheet row supplies the title and date.
+  const video = candidate.videoPath
+    ? sheetVideoMeta(candidate)
+    : await fetchVideoMeta({
+        ytDlpPath: opts.deps.ytDlpPath,
+        ytDlpArgs: opts.deps.ytDlpArgs,
+        videoId,
+      });
   const result = await writeDraftSession({
     prisma,
     gameId: profile.gameId,
@@ -300,6 +314,22 @@ async function draftCandidate(
   if (result.status === "exists")
     return { outcome: "exists", detail: "session appeared mid-run", sessionId: result.sessionId };
   return { outcome: "no-scoreboards", detail };
+}
+
+/** `<videoId>.<ext>` files in `dir`, by video ID. yt-dlp leftovers (`id.f251.webm`) don't match. */
+function localVideos(dir: string): Map<string, string> {
+  return new Map(fs.readdirSync(dir).map((f) => [path.parse(f).name, path.join(dir, f)]));
+}
+
+function sheetVideoMeta(candidate: CandidateVideo): VideoMeta {
+  const when = Date.parse(candidate.date);
+  return {
+    videoId: candidate.videoId,
+    title: candidate.title,
+    url: `https://www.youtube.com/watch?v=${candidate.videoId}`,
+    thumbnail: `https://i.ytimg.com/vi/${candidate.videoId}/hqdefault.jpg`,
+    date: Number.isNaN(when) ? new Date() : new Date(when),
+  };
 }
 
 function renderReport(args: {

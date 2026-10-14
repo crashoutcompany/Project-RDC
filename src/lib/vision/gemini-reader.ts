@@ -63,6 +63,9 @@ export async function extractWithGemini(args: {
     },
     maxRetries: 0,
   });
+  // The SDK can finish without a parsed object (empty or blocked answer); say so
+  // here rather than letting the field mapping throw a TypeError.
+  if (!result.output) throw new UnusableOutputError("Gemini returned no structured output");
   return geminiOutputToFields(spec, result.output);
 }
 

@@ -50,6 +50,7 @@ const OPTIONS = {
   url: { type: "string" },
   video: { type: "string" },
   videos: { type: "string" },
+  "video-dir": { type: "string" },
   out: { type: "string", default: "./out" },
   fps: { type: "string" },
   sampling: { type: "string" },
@@ -269,6 +270,8 @@ Weekly:
   --limit <n>             Max videos per run (default: ${DEFAULT_WEEKLY_LIMIT})
   --videos <id,id>        Process these YouTube IDs instead of the sheet
                           (uses --game)
+  --video-dir <dir>       Read already-downloaded <videoId>.<ext> files from this
+                          folder instead of YouTube; only those videos are processed
   --retry                 Retry videos that failed 3x or had no scoreboards
   --keep-video            Don't delete downloaded videos after success
 
@@ -356,6 +359,7 @@ async function main(): Promise<void> {
       write: Boolean(values.write),
       limit,
       videos,
+      videoDir: values["video-dir"] ? path.resolve(values["video-dir"]) : undefined,
       retry: Boolean(values.retry),
     });
     return;

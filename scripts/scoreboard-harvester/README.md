@@ -163,6 +163,11 @@ pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index
 # Draft specific videos instead of reading the sheet
 pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts \
   weekly --videos <id>,<id> --game rocket-league --write
+# When YouTube blocks downloads ("confirm you're not a bot"), download the
+# videos elsewhere as <videoId>.<ext> and harvest the sheet rows found there.
+# Titles and dates come from the sheet; the files are never deleted.
+pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts \
+  weekly --video-dir ~/rdc-videos --limit 50 --write
 ```
 
 Output goes to `out/<game-id>/<video-id>/`: `match-NN_*.png`, `match-NN.analysis.json`, `manifest.json`, and `draft.json` for weekly runs. Run `pnpm harvest -- --help` for every flag.

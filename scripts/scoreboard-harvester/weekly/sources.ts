@@ -8,6 +8,8 @@ export interface CandidateVideo {
   /** Sheet date string, used only for ordering and the report. */
   date: string;
   profile: GameProfile;
+  /** Already-downloaded copy to read instead of YouTube (--video-dir). */
+  videoPath?: string;
 }
 
 export interface SheetRow {
