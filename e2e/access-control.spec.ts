@@ -14,6 +14,12 @@ test.describe("access control: guest", () => {
     });
   }
 
+  test("navbar hides the admin link", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+    await expect(page.getByTestId("nav-admin-link")).toHaveCount(0);
+  });
+
   test("/profile sends guests home", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForURL((url) => url.pathname === "/", { timeout: 20000 });
