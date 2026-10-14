@@ -10,6 +10,8 @@ import { useInView, useStageRoot, useStageSupport } from "./use-stage-support";
 import { resetWhenHidden, startZoom } from "./zoom";
 
 type SceneComponent = typeof import("./arcade-scene").default;
+/** Kept outside components: React Compiler can't compile `import()`. */
+const loadScene = () => import("./arcade-scene").then((m) => m.default);
 
 /** Give up on the 3D room (the poster stays) if it isn't drawing by then. */
 const LOAD_TIMEOUT_MS = 8000;
@@ -86,9 +88,9 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   useEffect(() => {
     if (!armed) return;
     let live = true;
-    import("./arcade-scene").then(
-      (m) => {
-        if (live) setScene(() => m.default);
+    loadScene().then(
+      (scene) => {
+        if (live) setScene(() => scene);
       },
       () => {
         if (live) setStatus("failed");
