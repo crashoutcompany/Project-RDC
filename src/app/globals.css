@@ -330,7 +330,8 @@ body {
 .crt-bezel {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /* Above the sticky navbar (z-40), below dialogs, sheets and popovers (z-50). */
+  z-index: 45;
   pointer-events: none;
   /* Glass: rounded hole cut by a huge spread shadow (the plastic). */
   &::before {
@@ -368,15 +369,22 @@ body {
   }
 }
 
-/* Home is just the arcade room: it fills the monitor and nothing scrolls. */
-body:has([data-fullscreen-stage]) {
-  height: 100svh;
-  overflow: hidden;
+/*
+  Home is just the arcade room: it fills the monitor and nothing scrolls.
+  FullscreenStageLock sets <html data-stage-released> once Home is hidden after
+  a client-side navigation (Next keeps it mounted). Short screens (landscape
+  phones) keep normal scrolling so the call-to-action buttons stay reachable.
+*/
+html:not([data-stage-released]) body:has([data-fullscreen-stage]) {
   & > footer {
     display: none;
   }
   & main {
     min-height: 0;
+  }
+  @media (min-height: 540px) {
+    height: 100svh;
+    overflow: hidden;
   }
 }
 

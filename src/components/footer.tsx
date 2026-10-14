@@ -2,7 +2,10 @@ import Link from "next/link";
 
 export const Footer = () => {
   return (
-    <footer className="border-ac-panel-2 bg-ac-panel border-t-2">
+    <footer
+      data-testid="site-footer"
+      className="border-ac-panel-2 bg-ac-panel border-t-2"
+    >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8">
         <Link href="/" className="ac-title text-ac-gold text-xs">
           RDC Stats
@@ -19,7 +22,9 @@ export const Footer = () => {
           </Link>
           .
         </p>
-        <span className="ac-label text-ac-cream animate-blink">Insert coin</span>
+        <span className="ac-label text-ac-cream animate-blink">
+          Insert coin
+        </span>
       </div>
     </footer>
   );

@@ -112,13 +112,15 @@ test.describe("instant nav: public soft navigations", () => {
       async () => {
         await page.goto("/");
         await expect(page.getByTestId("home-shell-marker")).toBeVisible();
-        await expect(page.getByTestId("home-scene")).toHaveCount(0);
       },
       { baseURL: BASE_URL },
     );
-    // Initial-load: reload unlocked document to assert streamed content
+    // Initial-load: reload the unlocked document and check what a visitor
+    // sees: the room poster and both calls to action.
     await page.reload();
-    await expect(page.getByTestId("home-scene")).toBeAttached();
+    await expect(page.locator('img[src*="arcade-room-poster"]')).toBeVisible();
+    await expect(page.getByTestId("home-games-link")).toBeVisible();
+    await expect(page.getByTestId("home-members-link")).toBeVisible();
   });
 
   test("Game detail shell commits under instant()", async ({ page }) => {

@@ -37,10 +37,12 @@ function detectStage() {
     return (stageSupport = false);
   try {
     const canvas = document.createElement("canvas");
-    const opts = { failIfMajorPerformanceCaveat: true };
-    stageSupport = Boolean(
-      canvas.getContext("webgl2", opts) ?? canvas.getContext("webgl", opts),
-    );
+    const opts: WebGLContextAttributes = { failIfMajorPerformanceCaveat: true };
+    const gl =
+      canvas.getContext("webgl2", opts) ?? canvas.getContext("webgl", opts);
+    stageSupport = Boolean(gl);
+    // Free the probe context now; browsers cap how many can be alive at once.
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
   } catch {
     stageSupport = false;
   }

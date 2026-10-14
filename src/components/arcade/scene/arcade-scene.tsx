@@ -17,6 +17,8 @@ type Props = {
   onReady: () => void;
   /** Only take over Press start once the scene is visible. */
   interactive: boolean;
+  /** The cabinet failed to load or WebGL was lost: show the poster instead. */
+  onError: () => void;
 };
 
 /** Longest the Press start fly-in may take before we navigate anyway. */
@@ -74,9 +76,8 @@ function loadCabinet() {
   if (cabinetPromise) return cabinetPromise;
   cabinetPromise = new Promise((resolve, reject) => {
     const draco = new DRACOLoader();
-    draco.setDecoderPath(
-      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/",
-    );
+    // Self-hosted copy of three's bundled decoder (three/examples/jsm/libs/draco/gltf).
+    draco.setDecoderPath("/draco/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
     loader.load(
@@ -604,9 +605,11 @@ function FallbackCabinet({
 function Cabinet({
   board,
   animate,
+  onError,
 }: {
   board: BoardEntry[];
   animate: boolean;
+  onError: () => void;
 }) {
   const [parts, setParts] = useState<CabinetParts | null>(null);
   const screenTexture = useScreenTexture(board, animate);
@@ -614,13 +617,18 @@ function Cabinet({
 
   useEffect(() => {
     let live = true;
-    void loadCabinet().then((next) => {
-      if (live) setParts(next);
-    });
+    loadCabinet().then(
+      (next) => {
+        if (live) setParts(next);
+      },
+      () => {
+        if (live) onError();
+      },
+    );
     return () => {
       live = false;
     };
-  }, []);
+  }, [onError]);
 
   if (!parts)
     return (
@@ -752,6 +760,7 @@ function CameraRig({
   useEffect(() => {
     if (!interactive) return;
     return setZoomHandler((done) => {
+      if (zoom.current) return; // already flying in: ignore repeat clicks
       if (!animate) return done();
       zoom.current = { done, fired: false, start: performance.now() };
     });
@@ -813,6 +822,7 @@ export default function ArcadeScene({
   active,
   onReady,
   interactive,
+  onError,
 }: Props) {
   return (
     <Canvas
@@ -822,7 +832,17 @@ export default function ArcadeScene({
       camera={{ fov: 42, near: 0.05, far: 40 }}
       gl={{ antialias: false, powerPreference: "high-performance" }}
       aria-hidden
-      onCreated={() => requestAnimationFrame(() => onReady())}
+      onCreated={({ gl }) => {
+        gl.domElement.addEventListener(
+          "webglcontextlost",
+          (e) => {
+            e.preventDefault();
+            onError();
+          },
+          { once: true },
+        );
+        requestAnimationFrame(() => onReady());
+      }}
     >
       <color attach="background" args={["#140b12"]} />
       <fog attach="fog" args={["#140b12", 6, 14]} />
@@ -840,7 +860,7 @@ export default function ArcadeScene({
       <Room />
       <Fire animate={animate} />
       <Dust animate={animate} />
-      <Cabinet board={board} animate={animate} />
+      <Cabinet board={board} animate={animate} onError={onError} />
       <CameraRig animate={animate} active={active} interactive={interactive} />
     </Canvas>
   );

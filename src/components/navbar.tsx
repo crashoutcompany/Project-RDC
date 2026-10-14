@@ -48,6 +48,9 @@ const LoginLink = ({ resolved = false }: { resolved?: boolean }) => (
     <Link
       href="/signin"
       data-testid={resolved ? "nav-login-link" : undefined}
+      // Starts with "Sign in" for screen readers and keeps the visible label
+      // so voice control ("click 1P Login") still works.
+      aria-label="Sign in (1P Login)"
       className="ac-label bg-ac-gold text-ac-ink hover:bg-ac-cream border-ac-ink border-2 px-3 py-2 transition-colors"
     >
       1P Login

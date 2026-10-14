@@ -5,6 +5,7 @@ import {
   ArcadeHeroScene,
   PressStartLink,
 } from "@/components/arcade/scene/arcade-hero";
+import { FullscreenStageLock } from "@/components/arcade/fullscreen-stage";
 import { arcadeButtonClass } from "@/components/arcade/button-class";
 import { Eyebrow, ArcadeButton, Tag } from "@/components/arcade/ui";
 import { FEATURED_ARENA, getArenas, topFive } from "@/lib/rdc-stats";
@@ -25,6 +26,9 @@ export default function Home() {
         sizes="100vw"
         className="object-cover object-[68%_50%]"
       />
+      <Suspense fallback={null}>
+        <FullscreenStageLock />
+      </Suspense>
       <Suspense fallback={null}>
         <HomeScene />
       </Suspense>

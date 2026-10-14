@@ -76,11 +76,17 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   }, [root]);
 
   const onReady = useCallback(() => setStatus("ready"), []);
+  // Unmounting the scene leaves the poster underneath.
+  const onError = useCallback(() => setStatus("failed"), []);
+  // If the scene dies mid-zoom, bring the hero copy back with the poster.
+  useEffect(() => {
+    if (status === "failed") root?.removeAttribute("data-zooming");
+  }, [status, root]);
   const mounted = supported && armed && status !== "failed";
 
   return (
     <>
-      <span ref={anchor} hidden data-testid="home-scene" />
+      <span ref={anchor} hidden />
       {mounted ? (
         <div
           className={cn(
@@ -94,6 +100,7 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
             active={inView}
             onReady={onReady}
             interactive={status === "ready"}
+            onError={onError}
           />
         </div>
       ) : null}
@@ -117,6 +124,8 @@ export function PressStartLink({
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         const stage = e.currentTarget.closest<HTMLElement>("[data-stage-root]");
+        // Already flying in: swallow repeat clicks so we navigate only once.
+        if (stage?.hasAttribute("data-zooming")) return e.preventDefault();
         const zooming = startZoom(() => {
           powerCycleScreen();
           router.push(href);

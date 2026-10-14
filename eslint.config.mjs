@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "scripts/.venv/**",
     "scripts/cache/**",
     ".cursor/dev/**",
+    // Vendored Draco decoder (copied from three/examples/jsm/libs/draco/gltf).
+    "public/draco/**",
   ]),
 ]);
 

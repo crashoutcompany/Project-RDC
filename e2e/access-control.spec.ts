@@ -18,6 +18,7 @@ test.describe("access control: guest", () => {
     await page.goto("/");
     // Wait for the session-aware nav to resolve before asserting absence.
     await expect(page.getByTestId("nav-login-link")).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Sign in/ })).toBeVisible();
     await expect(page.getByTestId("nav-admin-link")).toHaveCount(0);
   });
 
