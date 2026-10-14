@@ -112,13 +112,13 @@ test.describe("instant nav: public soft navigations", () => {
       async () => {
         await page.goto("/");
         await expect(page.getByTestId("home-shell-marker")).toBeVisible();
-        await expect(page.getByTestId("home-games-content")).toHaveCount(0);
+        await expect(page.getByTestId("home-scene")).toHaveCount(0);
       },
       { baseURL: BASE_URL },
     );
     // Initial-load: reload unlocked document to assert streamed content
     await page.reload();
-    await expect(page.getByTestId("home-games-content")).toBeVisible();
+    await expect(page.getByTestId("home-scene")).toBeAttached();
   });
 
   test("Game detail shell commits under instant()", async ({ page }) => {

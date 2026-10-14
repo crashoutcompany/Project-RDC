@@ -707,7 +707,7 @@ function CameraRig({
     if (aspect < 1)
       return {
         pos: new THREE.Vector3(0.7, 1.55, 4.4),
-        target: new THREE.Vector3(1.0, 1.05, -0.3),
+        target: new THREE.Vector3(1.0, 0.7, -0.3),
       };
     return {
       pos: new THREE.Vector3(-0.3, 1.45, 2.45),

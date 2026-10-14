@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { powerCycleScreen } from "../crt-screen";
 import type { BoardEntry } from "./arcade-scene";
 import { useInView, useStageRoot, useStageSupport } from "./use-stage-support";
 import { resetWhenHidden, startZoom } from "./zoom";
@@ -79,7 +80,7 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
 
   return (
     <>
-      <span ref={anchor} hidden />
+      <span ref={anchor} hidden data-testid="home-scene" />
       {mounted ? (
         <div
           className={cn(
@@ -117,6 +118,7 @@ export function PressStartLink({
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         const stage = e.currentTarget.closest<HTMLElement>("[data-stage-root]");
         const zooming = startZoom(() => {
+          powerCycleScreen();
           router.push(href);
           resetWhenHidden(stage);
         });
@@ -126,27 +128,5 @@ export function PressStartLink({
         stage?.setAttribute("data-zooming", "");
       }}
     />
-  );
-}
-
-/**
- * "Skip to stats": scrolls past the intro without adding a #hash history
- * entry (Next's router can't restore those on Back). Plain anchor without JS.
- */
-export function SkipToStats({ className }: { className?: string }) {
-  return (
-    <a
-      href="#stats"
-      className={className}
-      onClick={(e) => {
-        const target = document.getElementById("stats");
-        if (!target) return;
-        e.preventDefault();
-        target.scrollIntoView({ block: "start" });
-        target.focus({ preventScroll: true });
-      }}
-    >
-      Skip to stats ↓
-    </a>
   );
 }

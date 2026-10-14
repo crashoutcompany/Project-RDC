@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+import { CrtScreen } from "@/components/arcade/crt-screen";
 import { Toaster } from "@/components/ui/sonner";
 import { DbSwitchNotifier } from "@/components/DbSwitchNotifier";
 import { CSPostHogProvider } from "@/posthog/client-init";
@@ -66,6 +67,7 @@ export default function RootLayout({
             <Toaster />
             {process.env.NODE_ENV === "development" && <DbSwitchNotifier />}
             <Footer />
+            <CrtScreen />
           </CSPostHogProvider>
         </ThemeProvider>
       </body>
