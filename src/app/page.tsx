@@ -17,12 +17,14 @@ export default function Home() {
       data-fullscreen-stage
       className="group ac-dusk relative isolate flex h-full min-h-[420px] items-end overflow-hidden [--sun-x:68%] [--sun-y:48%] md:items-center"
     >
-      {/* Static first paint; the live 3D room fades in over it later. */}
+      {/* Static first paint and the LCP element; the 3D room fades in later. */}
       <Image
         src="/images/arcade-room-poster.webp"
         alt=""
         fill
-        priority
+        preload
+        loading="eager"
+        fetchPriority="high"
         sizes="100vw"
         className="object-cover object-[68%_50%]"
       />

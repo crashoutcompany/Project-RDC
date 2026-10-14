@@ -4,7 +4,14 @@ vi.mock("server-only", () => ({}));
 
 import { GamesEnum } from "@/lib/constants";
 import { getFighterArt } from "@/lib/fighters";
-import { sorryScale, summarizeArena, topFive, type Fighter } from "../rdc-stats";
+import {
+  sorryRanks,
+  sorryScale,
+  summarizeArena,
+  topFive,
+  type Fighter,
+  type SorryEntry,
+} from "../rdc-stats";
 import type { Sessions } from "@/app/(routes)/(groups)/games/[slug]/_helpers/dashboard";
 
 const player = (playerName: string) => ({ playerName });
@@ -119,5 +126,38 @@ describe("sorryScale", () => {
     expect(dylan.avgRank).toBe(2);
     expect(dylan.fill).toBeLessThan(ben.fill);
     expect(mark).toMatchObject({ avgRank: null, fill: 0 });
+  });
+});
+
+describe("sorryRanks", () => {
+  const entry = (name: string, avgRank: number | null): SorryEntry => ({
+    fighter: {
+      playerId: 0,
+      name,
+      slug: name.toLowerCase(),
+      art: getFighterArt(name),
+      wins: null,
+      winShare: null,
+      hp: 0,
+    },
+    avgRank,
+    fill: 0,
+  });
+
+  it("gives #1 to the sorriest player (worst average rank), not the strongest", () => {
+    const ranks = sorryRanks([
+      entry("Ben", 1),
+      entry("Dylan", 3.5),
+      entry("Mark", 2),
+    ]);
+    expect(ranks.get("dylan")).toBe(1);
+    expect(ranks.get("mark")).toBe(2);
+    expect(ranks.get("ben")).toBe(3);
+  });
+
+  it("leaves members without any wins unranked", () => {
+    const ranks = sorryRanks([entry("Ben", 1), entry("Des", null)]);
+    expect(ranks.get("ben")).toBe(1);
+    expect(ranks.has("des")).toBe(false);
   });
 });
