@@ -22,9 +22,11 @@ Errors are handled the same way everywhere (`src/lib/vision/api-errors.ts`). Rat
 
 It runs on a Raspberry Pi 5, Linux, or macOS. The weekly job is a single command you put on a timer.
 
-## Run it every week (Raspberry Pi / Linux)
+## Run it weekly
 
-One-time setup:
+The harvester has no built-in scheduler. Run the `weekly` command below on whatever machine has the keys and yt-dlp, from a Claude automation or by hand.
+
+Setup (Raspberry Pi / Linux):
 
 ```bash
 sudo apt install ffmpeg                       # usually already present
@@ -53,24 +55,15 @@ Try a dry run first. Without `--write` it only writes `draft.json` files, no dat
 pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts weekly --limit 1
 ```
 
-`pnpm harvest:weekly` is what the timer runs. It is the same command with `--write`.
-
-Install the systemd user timer (Mondays 03:00; catches up after downtime):
-
-From the repo root, this writes the unit files with this checkout's path and enables the timer:
+The real run is the same command with `--write`:
 
 ```bash
-scripts/scoreboard-harvester/schedule/install.sh
-sudo loginctl enable-linger "$USER"    # run even when nobody is logged in
-
-systemctl --user list-timers rdc-harvester.timer   # next run
-systemctl --user start rdc-harvester.service       # run now
-journalctl --user -u rdc-harvester -f              # watch it
+pnpm exec tsx --env-file=.env.harvester.local scripts/scoreboard-harvester/index.ts weekly --limit 4 --write
 ```
 
-Runs write logs to `~/.cache/rdc-harvester/logs/` and a Markdown report to `~/.cache/rdc-harvester/reports/<date>.md`.
+Reports are written to `out/reports/<date>.md`.
 
-On macOS, point a launchd agent (`StartCalendarInterval`) at `schedule/run-weekly.sh` instead. It picks Apple Vision OCR automatically once `pnpm harvest:build-ocr` has been run.
+On macOS the OCR finder picks Apple Vision automatically once `pnpm harvest:build-ocr` has been run.
 
 ### What the weekly job does
 
