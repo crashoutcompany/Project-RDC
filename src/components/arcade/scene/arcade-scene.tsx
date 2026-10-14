@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { setResetHandler, setZoomHandler } from "./zoom";
 
 export type BoardEntry = { player: string; wins: number };
@@ -20,8 +22,8 @@ type Props = {
 /** Longest the Press start fly-in may take before we navigate anyway. */
 const ZOOM_TIMEOUT_MS = 1600;
 
-/** Internal render scale; the canvas is upscaled with nearest-neighbour for chunky pixels. */
-const PIXEL_RATIO = 0.55;
+/** Internal render scale; high enough to keep the cabinet art and CRT text crisp. */
+const PIXEL_RATIO = 0.85;
 
 /** Cabinet side profile in (depth, height), front at +depth. */
 const PROFILE: [number, number][] = [
@@ -46,6 +48,64 @@ const SCREEN = {
 };
 const CABINET_POS = new THREE.Vector3(1.05, 0, -0.35);
 const CABINET_YAW = 0.22;
+const MODEL_URL = "/models/arcade-cabinet.glb";
+
+type CabinetParts = {
+  cabinet: THREE.Mesh;
+  screen: THREE.Mesh;
+  marquee: THREE.Mesh;
+  coin: THREE.Mesh;
+};
+
+function flipMeshV(mesh: THREE.Mesh) {
+  const source = mesh.geometry.getAttribute("uv");
+  if (!source) return mesh;
+  const geometry = mesh.geometry.clone();
+  const uv = geometry.getAttribute("uv");
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  uv.needsUpdate = true;
+  mesh.geometry = geometry;
+  return mesh;
+}
+
+let cabinetPromise: Promise<CabinetParts> | null = null;
+
+function loadCabinet() {
+  if (cabinetPromise) return cabinetPromise;
+  cabinetPromise = new Promise((resolve, reject) => {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath(
+      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/",
+    );
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(draco);
+    loader.load(
+      MODEL_URL,
+      (gltf) => {
+        draco.dispose();
+        const find = (name: string) => {
+          const mesh = gltf.scene.getObjectByName(name);
+          if (!(mesh instanceof THREE.Mesh))
+            throw new Error(`Arcade cabinet is missing ${name}`);
+          return mesh;
+        };
+        resolve({
+          cabinet: find("Cabinet"),
+          screen: flipMeshV(find("Screen")),
+          marquee: flipMeshV(find("Marquee")),
+          coin: find("CoinLight"),
+        });
+      },
+      undefined,
+      (error) => {
+        draco.dispose();
+        cabinetPromise = null;
+        reject(error);
+      },
+    );
+  });
+  return cabinetPromise;
+}
 
 function canvasTexture(
   w: number,
@@ -245,49 +305,70 @@ function Dust({ animate }: { animate: boolean }) {
   );
 }
 
-function drawMarquee(ctx: CanvasRenderingContext2D) {
+const MARQUEE_PX = [512, 128] as const;
+
+function drawMarquee(
+  ctx: CanvasRenderingContext2D,
+  bgImage?: HTMLImageElement | null,
+) {
+  const [w, h] = MARQUEE_PX;
   // next/font registers a generated family name; read it from the CSS var.
   const family =
     getComputedStyle(document.documentElement)
       .getPropertyValue("--font-press-start")
       .trim() || "monospace";
-  ctx.fillStyle = "#16081f";
-  ctx.fillRect(0, 0, 256, 64);
-  ctx.strokeStyle = "#ff4fd8";
-  ctx.lineWidth = 4;
-  ctx.strokeRect(6, 6, 244, 52);
-  ctx.font = `20px ${family}`;
+  if (bgImage && bgImage.complete && bgImage.naturalWidth > 0)
+    ctx.drawImage(bgImage, 0, 0, w, h);
+  else {
+    ctx.fillStyle = "#16081f";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#ff4fd8";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(10, 10, w - 20, h - 20);
+  }
+  ctx.font = `36px ${family}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ff2d55";
-  ctx.fillText("RDC STATS", 130, 35);
+  ctx.fillText("RDC STATS", w / 2 + 4, h / 2 + 4);
   ctx.fillStyle = "#ffd400";
-  ctx.fillText("RDC STATS", 128, 33);
+  ctx.fillText("RDC STATS", w / 2, h / 2);
 }
 
-function Marquee() {
-  const texture = useDisposable(() => canvasTexture(256, 64, drawMarquee));
+function useMarqueeTexture() {
+  const texture = useDisposable(() => {
+    const next = canvasTexture(MARQUEE_PX[0], MARQUEE_PX[1], (ctx) =>
+      drawMarquee(ctx, null),
+    );
+    next.magFilter = THREE.LinearFilter;
+    next.minFilter = THREE.LinearFilter;
+    return next;
+  });
   const invalidate = useThree((s) => s.invalidate);
-  // Redraw once the pixel font has loaded.
+
   useEffect(() => {
     let live = true;
-    void document.fonts.ready.then(() => {
+    let bgImg: HTMLImageElement | null = null;
+    const redraw = () => {
       if (!live) return;
       const canvas = texture.image as HTMLCanvasElement;
-      drawMarquee(canvas.getContext("2d")!);
+      drawMarquee(canvas.getContext("2d")!, bgImg);
       texture.needsUpdate = true;
       invalidate();
-    });
+    };
+    const img = new window.Image();
+    img.src = "/models/marquee.png";
+    img.onload = () => {
+      bgImg = img;
+      redraw();
+    };
+    void document.fonts.ready.then(redraw);
     return () => {
       live = false;
     };
   }, [texture, invalidate]);
-  return (
-    <mesh position={[0, 1.77, 0.151]}>
-      <planeGeometry args={[WIDTH - 0.08, 0.2]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
-    </mesh>
-  );
+
+  return texture;
 }
 
 const SCREEN_PX = [330, 296] as const;
@@ -355,13 +436,7 @@ function drawAttract(
   for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
 }
 
-function CrtScreen({
-  board,
-  animate,
-}: {
-  board: BoardEntry[];
-  animate: boolean;
-}) {
+function useScreenTexture(board: BoardEntry[], animate: boolean) {
   const texture = useDisposable(() =>
     canvasTexture(SCREEN_PX[0], SCREEN_PX[1], (ctx) =>
       drawAttract(ctx, board, true),
@@ -386,20 +461,15 @@ function CrtScreen({
     return () => clearInterval(timer);
   }, [texture, board, animate, invalidate]);
 
-  return (
-    <mesh position={[0, 0, 0.004]}>
-      <planeGeometry args={[SCREEN.width, SCREEN.height - 0.01]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
-    </mesh>
-  );
+  return texture;
 }
 
-function Cabinet({
-  board,
-  animate,
+function FallbackCabinet({
+  screenTexture,
+  marqueeTexture,
 }: {
-  board: BoardEntry[];
-  animate: boolean;
+  screenTexture: THREE.CanvasTexture;
+  marqueeTexture: THREE.CanvasTexture;
 }) {
   const body = useDisposable(() => {
     const shape = new THREE.Shape(
@@ -448,14 +518,20 @@ function Cabinet({
           />
         </mesh>
       ))}
-      <Marquee />
+      <mesh position={[0, 1.77, 0.151]}>
+        <planeGeometry args={[WIDTH - 0.08, 0.2]} />
+        <meshBasicMaterial map={marqueeTexture} toneMapped={false} />
+      </mesh>
       {/* screen bezel + glass */}
       <group position={SCREEN.center} rotation={[SCREEN.tilt, 0, 0]}>
         <mesh position={[0, 0, 0.002]}>
           <planeGeometry args={[WIDTH - 0.04, SCREEN.height + 0.04]} />
           <meshStandardMaterial color="#0b0610" roughness={0.4} />
         </mesh>
-        <CrtScreen board={board} animate={animate} />
+        <mesh position={[0, 0, 0.004]}>
+          <planeGeometry args={[SCREEN.width, SCREEN.height - 0.01]} />
+          <meshBasicMaterial map={screenTexture} toneMapped={false} />
+        </mesh>
         <pointLight
           position={[0, 0, 0.35]}
           color="#6a7cff"
@@ -521,6 +597,71 @@ function Cabinet({
           </mesh>
         ))}
       </group>
+    </group>
+  );
+}
+
+function Cabinet({
+  board,
+  animate,
+}: {
+  board: BoardEntry[];
+  animate: boolean;
+}) {
+  const [parts, setParts] = useState<CabinetParts | null>(null);
+  const screenTexture = useScreenTexture(board, animate);
+  const marqueeTexture = useMarqueeTexture();
+
+  useEffect(() => {
+    let live = true;
+    void loadCabinet().then((next) => {
+      if (live) setParts(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (!parts)
+    return (
+      <FallbackCabinet
+        screenTexture={screenTexture}
+        marqueeTexture={marqueeTexture}
+      />
+    );
+
+  return (
+    <group position={CABINET_POS} rotation={[0, CABINET_YAW, 0]}>
+      <mesh geometry={parts.cabinet.geometry} material={parts.cabinet.material} />
+      <mesh geometry={parts.marquee.geometry}>
+        <meshBasicMaterial map={marqueeTexture} toneMapped={false} />
+      </mesh>
+      <mesh geometry={parts.screen.geometry}>
+        <meshBasicMaterial map={screenTexture} toneMapped={false} />
+      </mesh>
+      <mesh geometry={parts.coin.geometry}>
+        <meshBasicMaterial color="#ff2d55" toneMapped={false} />
+      </mesh>
+      <pointLight
+        position={[0, 1.77, 0.35]}
+        color="#ff4fd8"
+        intensity={1.4}
+        distance={2.2}
+      />
+      <group position={SCREEN.center} rotation={[SCREEN.tilt, 0, 0]}>
+        <pointLight
+          position={[0, 0, 0.35]}
+          color="#6a7cff"
+          intensity={1.8}
+          distance={2.2}
+        />
+      </group>
+      <pointLight
+        position={[-0.75, 1.15, 0.25]}
+        color="#ff6ac1"
+        intensity={2.2}
+        distance={2.6}
+      />
     </group>
   );
 }
@@ -676,13 +817,18 @@ export default function ArcadeScene({
       dpr={PIXEL_RATIO}
       frameloop={!active ? "never" : animate ? "always" : "demand"}
       camera={{ fov: 42, near: 0.05, far: 40 }}
-      gl={{ antialias: false, powerPreference: "low-power" }}
+      gl={{ antialias: false, powerPreference: "high-performance" }}
       aria-hidden
       onCreated={() => requestAnimationFrame(() => onReady())}
     >
       <color attach="background" args={["#140b12"]} />
       <fog attach="fog" args={["#140b12", 6, 14]} />
-      <ambientLight intensity={0.85} color="#a07ab8" />
+      <ambientLight intensity={1.1} color="#b894d4" />
+      <directionalLight
+        position={[-1.4, 2.8, 2.2]}
+        intensity={1.6}
+        color="#ffd6ff"
+      />
       <directionalLight
         position={[0.3, 2.6, -2]}
         intensity={1.8}
