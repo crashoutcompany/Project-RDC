@@ -6,8 +6,8 @@ vi.mock("next/server", () => ({ after }));
 const readWithFallback = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/vision/readers", () => ({
   readWithFallback,
-  geminiReader: () => ({}),
-  azureReader: () => ({}),
+  createReaders: () => ({}),
+  readerChain: () => [],
 }));
 
 const logVisionError = vi.hoisted(() => vi.fn(async () => {}));

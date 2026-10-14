@@ -1,4 +1,4 @@
-import { runCapture } from "../utils";
+import { runCapture, youtubeThumbnail, youtubeUrl } from "../utils";
 import type { VideoMeta } from "../draft/write-draft";
 
 interface YtDlpInfo {
@@ -22,7 +22,7 @@ export async function fetchVideoMeta(args: {
   videoId: string;
 }): Promise<VideoMeta> {
   const { ytDlpPath, ytDlpArgs = [], videoId } = args;
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const url = youtubeUrl(videoId);
   const raw = await runCapture(ytDlpPath, [
     ...ytDlpArgs,
     "-J",
@@ -46,7 +46,7 @@ export async function fetchVideoMeta(args: {
     title: info.title ?? videoId,
     url: info.webpage_url ?? url,
     thumbnail:
-      info.thumbnail ?? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+      info.thumbnail ?? youtubeThumbnail(videoId),
     date,
   };
 }

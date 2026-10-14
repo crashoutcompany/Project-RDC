@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import prisma from "prisma/db";
+import type { Player } from "@/generated/prisma/client";
 import { Resend } from "resend";
 import type { DepCheckResult } from "../pipeline/deps";
 import { fetchVideoMeta } from "../pipeline/metadata";
@@ -10,7 +11,7 @@ import { writeDraftSession, type VideoMeta } from "../draft/write-draft";
 import type { GameProfile } from "../games/types";
 import type { Manifest, ResolvedConfig } from "../types";
 import { analyzeJobs } from "../pipeline/analyze";
-import { fmtTime } from "../utils";
+import { fmtTime, youtubeThumbnail, youtubeUrl } from "../utils";
 import { acquireLock } from "./lock";
 import {
   CandidateVideo,
@@ -175,6 +176,13 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
       console.error(`[weekly] ✖ ${candidate.videoId}: ${message}`);
       record(candidate, { outcome: "failed", detail: message });
     };
+    const draftAndRecord = async (h: Harvested) => {
+      try {
+        record(h.candidate, await draftCandidate(h, opts));
+      } catch (err) {
+        recordFailure(h.candidate, err);
+      }
+    };
 
     // In batch mode every video is harvested first, then all their
     // scoreboards are read in one Gemini batch, then drafts are written.
@@ -184,13 +192,15 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
       console.log(
         `\n[weekly] ▶ ${candidate.profile.displayName}: ${candidate.title} (${candidate.videoId})`,
       );
+      let h: Harvested;
       try {
-        const h = await harvestCandidate(candidate, opts, players, batch);
-        if (batch) harvested.push(h);
-        else record(candidate, await draftCandidate(h, opts));
+        h = await harvestCandidate(candidate, opts, players, batch);
       } catch (err) {
         recordFailure(candidate, err);
+        continue;
       }
+      if (batch) harvested.push(h);
+      else await draftAndRecord(h);
     }
 
     if (harvested.length > 0) {
@@ -210,13 +220,7 @@ export async function runWeekly(opts: WeeklyOptions): Promise<number> {
           h.manifest.matches = analyzed[i];
           fs.writeFileSync(path.join(h.workDir, "manifest.json"), JSON.stringify(h.manifest, null, 2));
         });
-        for (const h of harvested) {
-          try {
-            record(h.candidate, await draftCandidate(h, opts));
-          } catch (err) {
-            recordFailure(h.candidate, err);
-          }
-        }
+        for (const h of harvested) await draftAndRecord(h);
       } catch (err) {
         for (const h of harvested) recordFailure(h.candidate, err);
       }
@@ -254,7 +258,7 @@ interface Harvested {
 async function harvestCandidate(
   candidate: CandidateVideo,
   opts: WeeklyOptions,
-  players: Awaited<ReturnType<typeof prisma.player.findMany>>,
+  players: Player[],
   deferAnalysis: boolean,
 ): Promise<Harvested> {
   const { manifest, workDir } = await harvestVideo({
@@ -263,7 +267,7 @@ async function harvestCandidate(
     deps: opts.deps,
     ...(candidate.videoPath
       ? { video: candidate.videoPath }
-      : { url: `https://www.youtube.com/watch?v=${candidate.videoId}` }),
+      : { url: youtubeUrl(candidate.videoId) }),
     players,
     deferAnalysis,
   });
@@ -326,8 +330,8 @@ function sheetVideoMeta(candidate: CandidateVideo): VideoMeta {
   return {
     videoId: candidate.videoId,
     title: candidate.title,
-    url: `https://www.youtube.com/watch?v=${candidate.videoId}`,
-    thumbnail: `https://i.ytimg.com/vi/${candidate.videoId}/hqdefault.jpg`,
+    url: youtubeUrl(candidate.videoId),
+    thumbnail: youtubeThumbnail(candidate.videoId),
     date: Number.isNaN(when) ? new Date() : new Date(when),
   };
 }
@@ -351,7 +355,7 @@ function renderReport(args: {
   for (const { candidate, outcome, detail } of report)
     lines.push(
       `- **${outcome}** · ${candidate.profile.displayName} · ${candidate.title} ` +
-        `(https://youtu.be/${candidate.videoId})`,
+        `(${youtubeUrl(candidate.videoId)})`,
       ...detail.split("\n").map((d) => `  ${d}`),
     );
   if (pending > 0) lines.push("", `${pending} more video(s) queued for the next run.`);

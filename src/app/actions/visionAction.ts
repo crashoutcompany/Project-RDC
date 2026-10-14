@@ -4,7 +4,7 @@ import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { AnalysisResults } from "@/lib/visionTypes";
 import config from "@/lib/config";
-import { azureReader, geminiReader, readWithFallback } from "@/lib/vision/readers";
+import { createReaders, readerChain, readWithFallback } from "@/lib/vision/readers";
 
 export { getGameProcessor } from "@/lib/vision/analyze-scoreboard";
 export type {
@@ -15,13 +15,14 @@ export type {
 
 // Gemini reads first; Azure's trained models answer only when Gemini fails
 // (after retrying 429s/5xx) or doesn't support the game yet.
-const readers = [
-  geminiReader({ apiKey: config.GOOGLE_GENERATIVE_AI_API_KEY }),
-  azureReader({
-    endpoint: config.DOCUMENT_INTELLIGENCE_ENDPOINT,
-    key: config.DOCUMENT_INTELLIGENCE_API_KEY,
+const readers = readerChain(
+  "gemini",
+  createReaders({
+    geminiApiKey: config.GOOGLE_GENERATIVE_AI_API_KEY,
+    azureEndpoint: config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+    azureKey: config.DOCUMENT_INTELLIGENCE_API_KEY,
   }),
-];
+);
 
 /**
  * Schedules a log write to run after the response. If after() can't be used

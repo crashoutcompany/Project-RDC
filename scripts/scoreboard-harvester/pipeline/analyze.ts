@@ -5,8 +5,7 @@ import { VisionResultCodes } from "@/lib/constants";
 import { processScoreboard } from "@/lib/vision/analyze-scoreboard";
 import { readWithGeminiBatch } from "@/lib/vision/gemini-batch";
 import {
-  azureReader,
-  geminiReader,
+  createReaders,
   readerChain,
   readWithFallback,
   type ReaderId,
@@ -41,13 +40,14 @@ export async function analyzeJobs(args: {
   batch: boolean;
 }): Promise<MatchManifest[][]> {
   const { jobs, players } = args;
-  const readers = readerChain(args.reader, {
-    gemini: geminiReader(),
-    azure: azureReader({
-      endpoint: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT,
-      key: process.env.DOCUMENT_INTELLIGENCE_API_KEY,
+  const readers = readerChain(
+    args.reader,
+    createReaders({
+      geminiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+      azureEndpoint: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT,
+      azureKey: process.env.DOCUMENT_INTELLIGENCE_API_KEY,
     }),
-  });
+  );
 
   const cachePathOf = (job: AnalyzeJob, match: MatchManifest) =>
     path.join(job.workDir, match.imagePath.replace(/\.png$/, ".analysis.json"));

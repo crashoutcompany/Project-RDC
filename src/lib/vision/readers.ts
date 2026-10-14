@@ -116,6 +116,18 @@ export async function readWithFallback(
   };
 }
 
+/** Both readers, configured from whatever keys the caller has (the app's config, or env in the harvester). */
+export function createReaders(keys: {
+  geminiApiKey?: string;
+  azureEndpoint?: string;
+  azureKey?: string;
+}): Record<ReaderId, ScoreboardReader> {
+  return {
+    gemini: geminiReader({ apiKey: keys.geminiApiKey }),
+    azure: azureReader({ endpoint: keys.azureEndpoint, key: keys.azureKey }),
+  };
+}
+
 /** `--reader gemini` → Gemini then Azure; `--reader azure` → Azure only. */
 export function readerChain(primary: ReaderId, all: Record<ReaderId, ScoreboardReader>): ScoreboardReader[] {
   return primary === "gemini" ? [all.gemini, all.azure] : [all.azure];
