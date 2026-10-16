@@ -54,8 +54,9 @@ export const GAMES: Record<string, GameSpec> = {
       "Each row has the finishing place (1, 2, 3, ...), a character icon, the racer's name, a flag, the points just gained (+N), and their total. " +
       "Read the place number at the left of each row. Stream overlays (sub goal counters, chat, webcam) may cover part of the panel; ignore them.",
     finderQuestion:
-      "Is this frame Mario Kart 8's race results panel: racers listed by finishing place with names, flags and points? " +
-      "Answer no for racing, menus, course selection, and the cup podium.",
+      "Is Mario Kart 8's race results list on screen: a column of rows numbered 1, 2, 3 and so on, each with a character icon, a racer name and a flag? " +
+      "It is often drawn over the race track or kart and may be partly covered by chat or a webcam. " +
+      "Answer no for the pre-race loading screen (racers listed beside a track-name banner), menus, and frames with no such list.",
   },
 };
 

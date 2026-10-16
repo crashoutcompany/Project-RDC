@@ -4,6 +4,46 @@ import { classificationOf, withRetry } from "@/lib/vision/api-errors";
 import type { FrameRecord } from "../types";
 
 export const DECISIONS_MODEL = "gpt-6-luna";
+
+export interface PredicateQuestion {
+  name: string;
+  instructions: string;
+}
+
+/**
+ * One Decisions call, one or more yes/no questions about the same image.
+ * A single-question response with no `name` still answers that question, so
+ * older cached clients and tests keep working.
+ */
+export async function askPredicates(
+  client: OpenAI,
+  imageBase64: string,
+  questions: PredicateQuestion[],
+): Promise<{ probabilities: Record<string, number | null>; inputTokens: number; outputTokens: number }> {
+  const decision = await withRetry(() =>
+    client.decisions.create({
+      model: DECISIONS_MODEL,
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_image", image_url: `data:image/jpeg;base64,${imageBase64}` }],
+        },
+      ],
+      questions: questions.map((q) => ({ type: "predicate" as const, name: q.name, instructions: q.instructions })),
+    }),
+  );
+  const probabilities: Record<string, number | null> = {};
+  for (const q of questions) {
+    const named = decision.answers.find((a) => a.name === q.name);
+    const answer = named ?? (questions.length === 1 ? decision.answers[0] : undefined);
+    probabilities[q.name] = answer?.type === "predicate" ? answer.probability : null;
+  }
+  return {
+    probabilities,
+    inputTokens: decision.usage.input_tokens,
+    outputTokens: decision.usage.output_tokens,
+  };
+}
 /** Input tokens only; Decisions doesn't bill output. */
 export const DECISIONS_INPUT_PER_M = 0.1;
 
@@ -68,28 +108,19 @@ export async function decideFrames(
       const t0 = performance.now();
       let verdict: FrameVerdict;
       try {
-        const decision = await withRetry(() =>
-          client.decisions.create({
-            model: DECISIONS_MODEL,
-            input: [
-              {
-                role: "user",
-                content: [{ type: "input_image", image_url: `data:image/jpeg;base64,${image}` }],
-              },
-            ],
-            questions: [{ type: "predicate", name: "is_scoreboard", instructions: question }],
-          }),
-        );
-        const answer = decision.answers[0];
+        const decision = await askPredicates(client, image, [
+          { name: "is_scoreboard", instructions: question },
+        ]);
+        const probability = decision.probabilities.is_scoreboard;
         verdict = {
           frameId: frame.frameId,
           startedAt,
           timestampSec: frame.timestampSec,
-          probability: answer?.type === "predicate" ? answer.probability : null,
+          probability,
           latencyMs: Math.round(performance.now() - t0),
-          inputTokens: decision.usage.input_tokens,
-          outputTokens: decision.usage.output_tokens,
-          error: answer?.type === "predicate" ? null : "refusal",
+          inputTokens: decision.inputTokens,
+          outputTokens: decision.outputTokens,
+          error: probability === null ? "refusal" : null,
         };
         consecutiveFailures = 0;
       } catch (err) {

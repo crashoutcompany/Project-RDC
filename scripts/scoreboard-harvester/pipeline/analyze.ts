@@ -11,6 +11,7 @@ import {
   type ReaderId,
 } from "@/lib/vision/readers";
 import type { MatchManifest } from "../types";
+import { withQuietLogs } from "./quiet";
 
 /** One video's saved scoreboards, waiting to be read. */
 export interface AnalyzeJob {
@@ -40,14 +41,6 @@ export async function analyzeJobs(args: {
   batch: boolean;
 }): Promise<MatchManifest[][]> {
   const { jobs, players } = args;
-  const readers = readerChain(
-    args.reader,
-    createReaders({
-      geminiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      azureEndpoint: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT,
-      azureKey: process.env.DOCUMENT_INTELLIGENCE_API_KEY,
-    }),
-  );
 
   const cachePathOf = (job: AnalyzeJob, match: MatchManifest) =>
     path.join(job.workDir, match.imagePath.replace(/\.png$/, ".analysis.json"));
@@ -123,6 +116,16 @@ export async function analyzeJobs(args: {
     }
   }
 
+  if (todo.every((t) => results[t.j][t.m].analysis)) return results;
+
+  const readers = readerChain(
+    args.reader,
+    createReaders({
+      geminiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+      azureEndpoint: process.env.DOCUMENT_INTELLIGENCE_ENDPOINT,
+      azureKey: process.env.DOCUMENT_INTELLIGENCE_API_KEY,
+    }),
+  );
   for (const t of todo) {
     if (results[t.j][t.m].analysis) continue;
     const job = jobs[t.j];
@@ -146,21 +149,4 @@ export async function analyzeJobs(args: {
     });
   }
   return results;
-}
-
-/**
- * The game processors log every field they touch and console.error every
- * gamertag they can't map (expected for randoms in public lobbies). That
- * buries the harvester's progress output, so mute the console while one
- * screenshot is processed. Set HARVEST_VERBOSE=1 to see it all.
- */
-async function withQuietLogs<T>(fn: () => Promise<T>): Promise<T> {
-  if (process.env.HARVEST_VERBOSE) return fn();
-  const { log, warn, error } = console;
-  console.log = console.warn = console.error = () => {};
-  try {
-    return await fn();
-  } finally {
-    Object.assign(console, { log, warn, error });
-  }
 }

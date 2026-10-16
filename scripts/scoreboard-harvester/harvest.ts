@@ -7,6 +7,7 @@ import { sampleFrames } from "./pipeline/sample";
 import { dedupAndSave } from "./pipeline/dedup";
 import { analyzeJobs } from "./pipeline/analyze";
 import { findScoreboards } from "./pipeline/finders";
+import { locatorFor } from "./pipeline/locators";
 import { urlToSlug } from "./utils";
 import { Manifest, ResolvedConfig } from "./types";
 import type { GameProfile } from "./games/types";
@@ -93,34 +94,56 @@ export async function harvestVideo(args: {
     await acquireVideo({ url, video, config, deps });
 
   const framesDir = path.join(workDir, "frames");
-  const frames = await sampleFrames({
-    ffmpegPath: deps.ffmpegPath,
-    videoPath: filePath,
-    framesDir,
-    fps: config.fps,
-    mode: config.sampling,
-    sampleWidth: config.sampleWidth,
-    jpegQuality: config.jpegQuality,
-    start: config.start,
-    end: config.end,
-    durationSec,
-  });
-  console.log(`[sample] ${frames.length} frames ready`);
+  const locator = locatorFor(profile.id);
+  let confirmed;
+  let finderId: string;
+  let finderFallback: string | null;
+  if (locator) {
+    if (!args.players)
+      throw new Error(`${profile.displayName} needs the player roster to read results`);
+    confirmed = await locator.locate({
+      videoPath: filePath,
+      workDir,
+      ffmpegPath: deps.ffmpegPath,
+      durationSec,
+      players: args.players,
+      gameId: profile.gameId,
+      concurrency: config.decisionsConcurrency,
+    });
+    finderId = profile.id;
+    finderFallback = null;
+  } else {
+    const frames = await sampleFrames({
+      ffmpegPath: deps.ffmpegPath,
+      videoPath: filePath,
+      framesDir,
+      fps: config.fps,
+      mode: config.sampling,
+      sampleWidth: config.sampleWidth,
+      jpegQuality: config.jpegQuality,
+      start: config.start,
+      end: config.end,
+      durationSec,
+    });
+    console.log(`[sample] ${frames.length} frames ready`);
 
-  const found = await findScoreboards({
-    finder: config.finder,
-    frames,
-    profile,
-    config,
-    deps,
-    workDir,
-    skipAheadSec: config.skipAheadSec,
-  });
-  const confirmed = found.confirmed;
-  console.log(
-    `[find] ${confirmed.length} scoreboard frames via ${found.finder}` +
-      (config.requireEndScreen && found.finder !== "decisions" ? " (require-end-screen=on)" : ""),
-  );
+    const found = await findScoreboards({
+      finder: config.finder,
+      frames,
+      profile,
+      config,
+      deps,
+      workDir,
+      skipAheadSec: config.skipAheadSec,
+    });
+    confirmed = found.confirmed;
+    finderId = found.finder;
+    finderFallback = found.fallback;
+    console.log(
+      `[find] ${confirmed.length} scoreboard frames via ${found.finder}` +
+        (config.requireEndScreen && found.finder !== "decisions" ? " (require-end-screen=on)" : ""),
+    );
+  }
 
   let matches = await dedupAndSave({
     confirmed,
@@ -129,7 +152,8 @@ export async function harvestVideo(args: {
   });
   console.log(`[dedup] saved ${matches.length} match screenshot(s)`);
 
-  if (config.analyze && !args.deferAnalysis && matches.length > 0) {
+  // A locator already read these frames. Only unread matches go to the readers.
+  if (config.analyze && !args.deferAnalysis && matches.some((match) => match.analysis === null)) {
     [matches] = await analyzeJobs({
       jobs: [{ matches, workDir, gameId: profile.gameId }],
       players: args.players ?? [],
@@ -137,6 +161,7 @@ export async function harvestVideo(args: {
       batch: config.batch,
     });
   }
+  if (locator) matches = locator.refine(matches, args.players ?? []);
 
   const manifest: Manifest = {
     game: profile.id,
@@ -147,7 +172,7 @@ export async function harvestVideo(args: {
       fps: config.fps,
     },
     config: { ...config },
-    finder: { id: found.finder, fallback: found.fallback },
+    finder: { id: finderId, fallback: finderFallback },
     runtimeMs: Date.now() - startTime,
     matches,
   };

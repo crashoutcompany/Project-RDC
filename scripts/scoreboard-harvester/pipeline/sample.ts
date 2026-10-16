@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { runSpawn } from "../utils";
+import { runCapture, runSpawn } from "../utils";
 import { FrameRecord } from "../types";
 
 const KEYFRAME_INDEX = "keyframes.json";
@@ -128,9 +128,65 @@ export async function sampleFrames(args: {
 }
 
 /**
- * Keyframe-only extraction. The whole video is always decoded (it's cheap in
- * this mode) and --start/--end are applied to the resulting timestamps, so a
- * reused frames dir stays valid across slice changes.
+ * VP8 and VP9 ignore `-skip_frame nokey` and emit every frame. Those codecs
+ * select I-frames in the filter graph instead, which does decode the video.
+ */
+export function keyframeVf(codec: string, sampleWidth: number): { skipNonKey: boolean; vf: string } {
+  const selectI = codec === "vp8" || codec === "vp9";
+  const scale = `scale=${sampleWidth}:-2`;
+  if (selectI) return { skipNonKey: false, vf: `select='eq(pict_type,I)',showinfo,${scale}` };
+  return { skipNonKey: true, vf: `showinfo,${scale}` };
+}
+
+/** ffmpeg args for one keyframe pass. `codec` chooses the skip strategy. */
+export function keyframeExtractArgs(args: {
+  videoPath: string;
+  framesDir: string;
+  sampleWidth: number;
+  jpegQuality: number;
+  codec: string;
+}): string[] {
+  const { skipNonKey, vf } = keyframeVf(args.codec, args.sampleWidth);
+  const ffArgs = ["-hide_banner"];
+  if (skipNonKey) ffArgs.push("-skip_frame", "nokey");
+  ffArgs.push(
+    "-i",
+    args.videoPath,
+    "-map",
+    "0:v:0",
+    "-an",
+    "-sn",
+    "-dn",
+    "-fps_mode",
+    "passthrough",
+    "-vf",
+    vf,
+    "-q:v",
+    String(args.jpegQuality),
+    path.join(args.framesDir, "%06d.jpg"),
+  );
+  return ffArgs;
+}
+
+async function videoCodec(videoPath: string): Promise<string> {
+  const out = await runCapture("ffprobe", [
+    "-v",
+    "error",
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=codec_name",
+    "-of",
+    "csv=p=0",
+    videoPath,
+  ]);
+  return out.trim().split("\n")[0] ?? "";
+}
+
+/**
+ * Keyframe-only extraction. `--start`/`--end` apply to the saved timestamps,
+ * so a reused frames dir stays valid across slice changes. AV1 and H.264 skip
+ * non-keyframes in the decoder. VP8/VP9 cannot, so they select I-frames.
  */
 async function sampleKeyframes(args: {
   ffmpegPath: string;
@@ -152,30 +208,13 @@ async function sampleKeyframes(args: {
     // A frames dir without an index is a half-finished extraction.
     fs.rmSync(framesDir, { recursive: true, force: true });
     fs.mkdirSync(framesDir, { recursive: true });
+    const codec = await videoCodec(videoPath);
     console.log(
-      `[sample] extracting keyframes only, width=${sampleWidth}, q=${jpegQuality}`,
+      `[sample] extracting keyframes only, codec=${codec || "unknown"}, width=${sampleWidth}, q=${jpegQuality}`,
     );
     timestamps = await extractKeyframes({
       ffmpegPath,
-      ffArgs: [
-        "-hide_banner",
-        "-skip_frame",
-        "nokey",
-        "-i",
-        videoPath,
-        "-map",
-        "0:v:0",
-        "-an",
-        "-sn",
-        "-dn",
-        "-fps_mode",
-        "passthrough",
-        "-vf",
-        `showinfo,scale=${sampleWidth}:-2`,
-        "-q:v",
-        String(jpegQuality),
-        path.join(framesDir, "%06d.jpg"),
-      ],
+      ffArgs: keyframeExtractArgs({ videoPath, framesDir, sampleWidth, jpegQuality, codec }),
     });
     const written = fs
       .readdirSync(framesDir)
@@ -184,6 +223,16 @@ async function sampleKeyframes(args: {
       throw new Error(
         `[sample] ffmpeg wrote ${written} keyframes but reported ${timestamps.length} timestamps`,
       );
+    if (timestamps.length >= 2) {
+      const span = timestamps[timestamps.length - 1] - timestamps[0];
+      const rate = timestamps.length / Math.max(span, 1);
+      if (rate > 4) {
+        fs.rmSync(framesDir, { recursive: true, force: true });
+        throw new Error(
+          `[sample] keyframe extract wrote ${timestamps.length} frames over ${span.toFixed(0)}s (${rate.toFixed(1)}/s). That is every frame, not I-frames.`,
+        );
+      }
+    }
     fs.writeFileSync(indexPath, JSON.stringify(timestamps));
     console.log(`[sample] ${timestamps.length} keyframes extracted`);
   }

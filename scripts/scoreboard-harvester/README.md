@@ -67,7 +67,7 @@ On macOS the OCR finder picks Apple Vision automatically once `pnpm harvest:buil
 
 ### What the weekly job does
 
-1. Reads the **Truth** sheet and queues rows where `added_to_db` is not TRUE and the `games` cell names a game with a harvester profile (`Rocket League`, `RL`, …). Newest first.
+1. Reads the **Truth** sheet and queues rows where `added_to_db` is not TRUE and the `games` cell names a game with a harvester profile (`Rocket League`, `RL`, `Mario Kart 8`, `MK8`, …). Newest first.
 2. Skips any (game, video) that already has a session, draft or approved. It also skips anything `weekly-state.json` says is done. Failures retry on the next run, up to 3 times (use `--retry` to force).
 3. Processes at most `--limit` videos (default 4). Each takes about 20–40 minutes on a Pi 5.
 4. For each video: downloads it, finds the scoreboards, reads them, and builds the draft. With `--write` it saves an unapproved session (`createdBy: scoreboard-harvester`), then deletes the ~2 GB video. With `--batch`, every video is harvested first, then all their scoreboards are read in one Gemini batch, then the drafts are written.

@@ -1,15 +1,8 @@
+import { marioKart8 } from "../games/mario-kart-8";
 import { rocketLeague } from "../games/rocket-league";
-import type { GameProfile } from "../games/types";
 import { candidatesFromSheet, profilesForGamesCell } from "./sources";
 
-const marioKart: GameProfile = {
-  ...rocketLeague,
-  id: "mario-kart-8",
-  displayName: "Mario Kart 8",
-  sheetAliases: ["mario kart", "mk8"],
-  gameId: 1,
-};
-const profiles = [rocketLeague, marioKart];
+const profiles = [rocketLeague, marioKart8];
 
 test("matches free-text game cells by name or alias", () => {
   expect(profilesForGamesCell("Rocket League, MK8", profiles).map((p) => p.id)).toEqual([

@@ -53,7 +53,10 @@ export async function dedupAndSave(args: {
       runLengthFrames: run.length,
       imagePath: fileName,
       ocrKeywords: allKeywords,
-      analysis: null,
+      analysis: best.preread?.analysis ?? null,
+      ...(best.preread
+        ? { reader: { id: best.preread.readerId, fallbacks: best.preread.fallbacks } }
+        : {}),
     });
   }
 

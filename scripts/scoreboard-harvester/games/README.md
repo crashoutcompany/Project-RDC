@@ -11,7 +11,7 @@ yt-dlp -f 'bv*[height<=720]' -o sample.mp4 'https://youtu.be/<id>'
 mkdir kf && ffmpeg -skip_frame nokey -i sample.mp4 -fps_mode passthrough -vf scale=1280:-2 kf/%06d.jpg
 ```
 
-If the scoreboard is visible across several keyframes (Rocket League's stays up for the whole "NEXT MATCH IN 60" countdown), use `sampling: "keyframes"`. If it flashes by in a few seconds (Mario Kart race results), use `fps`.
+If the scoreboard is visible across several keyframes (Rocket League's stays up for the whole "NEXT MATCH IN 60" countdown), use `sampling: "keyframes"`. Mario Kart's results list is often up for only a few seconds and a stream overlay covers rows, so it does not use this generic pass. Its finder is `pipeline/mario-kart.ts`: keyframes, then a short 1 fps window where a race ends with no list in sight.
 
 ## 2. Create the profile
 

@@ -70,6 +70,16 @@ export interface OcrRecord extends FrameRecord {
   text: string[];
   /** Subset of the active game's keywords that matched on this frame */
   matchedKeywords: string[];
+  /**
+   * Set when the finder already read this frame (Mario Kart walks back across
+   * a few results frames and keeps the clean one). Dedup copies it onto the
+   * match so analyze does not read the screenshot again.
+   */
+  preread?: {
+    analysis: AnalysisResults;
+    readerId: string;
+    fallbacks: string[];
+  };
 }
 
 export interface MatchManifest {
