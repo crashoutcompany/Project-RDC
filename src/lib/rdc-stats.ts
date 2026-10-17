@@ -336,7 +336,8 @@ export type SorryBoards = {
 /**
  * Every game x range sorry scale, computed from one read of the approved
  * sessions so the filter tabs can switch on the client without a round trip.
- * Cached for hours rather than `max` because the 30-day window moves.
+ * Cached for hours rather than `max` because the 30-day window moves. Throws
+ * when a query fails, so a transient DB error isn't cached as an empty board.
  */
 export async function getSorryBoards(): Promise<SorryBoards> {
   "use cache";
@@ -348,18 +349,19 @@ export async function getSorryBoards(): Promise<SorryBoards> {
     getAllGames(),
   ]);
   const ordered = arenas.map(({ slug, name }) => ({ slug, name }));
-  if (!games.success || !games.data) return { games: ordered, boards: {} };
+  if (!games.success || !games.data)
+    throw new Error("Sorry boards: failed to load games");
 
   const bySlug = new Map(games.data.map((g) => [toSlug(g.gameName), g]));
   const feeds = await Promise.all(
     ordered.flatMap(({ slug, name }) => {
       const game = bySlug.get(slug);
       if (!game) return [];
-      return getAllSessionsByGame(game.gameId).then((sessions) => ({
-        slug,
-        name,
-        sessions: sessions.success && sessions.data ? sessions.data : [],
-      }));
+      return getAllSessionsByGame(game.gameId).then((sessions) => {
+        if (!sessions.success || !sessions.data)
+          throw new Error(`Sorry boards: failed to load ${name} sessions`);
+        return { slug, name, sessions: sessions.data };
+      });
     }),
   );
 
