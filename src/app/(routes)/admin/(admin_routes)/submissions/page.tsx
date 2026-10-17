@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { SubmissionTable } from "../../_components/SubmissionTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { H1 } from "@/components/headings";
+import { BackfillMvpButton } from "./_components/BackfillMvpButton";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -18,6 +19,7 @@ export default function Page({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div>
       <H1 data-testid="admin-submissions-shell-marker">Submissions</H1>
+      <BackfillMvpButton />
       <Suspense fallback={<Skeleton className="h-72 w-full" />}>
         <SubmissionsTable searchParams={searchParams} />
       </Suspense>
