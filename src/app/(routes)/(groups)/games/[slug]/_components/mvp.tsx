@@ -11,7 +11,7 @@ import type { getAllSessionsByGame } from "prisma/lib/admin";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { analyzeMvp } from "@/app/ai/actions";
-import { getSetsData, ProcessedSet } from "./match-data";
+import { getSetsData, type ProcessedSet } from "@/lib/mvp/process-sets";
 import { capitalizeFirst } from "@/lib/utils";
 import type { MvpOutput } from "@/app/ai/types";
 import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";

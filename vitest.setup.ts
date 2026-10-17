@@ -56,8 +56,12 @@ vi.mock("@/lib/config", () => ({
   },
 }));
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/posthog/server-analytics", () => ({
   logAdminAction: vi.fn(),
+  logMvpUpdateFailure: vi.fn(),
+  logMvpUpdateSuccess: vi.fn(),
   logFormError: vi.fn(),
   logFormSuccess: vi.fn(),
   logVisionAction: vi.fn(),
