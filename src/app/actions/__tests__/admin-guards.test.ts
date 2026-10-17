@@ -13,6 +13,7 @@ import {
   addGameStat,
   addPlayer,
   approveSession,
+  backfillMissingMvps,
   getGameStats,
   insertNewSessionFromAdmin,
 } from "../adminAction";
@@ -34,6 +35,7 @@ const formData = (entries: Record<string, string>) => {
 /** Every admin-only server action, invoked with otherwise-valid input. */
 const adminActions: [string, () => Promise<unknown>][] = [
   ["approveSession", () => approveSession(1)],
+  ["backfillMissingMvps", () => backfillMissingMvps({ limit: 1 })],
   ["getGameStats", () => getGameStats("Call of Duty")],
   ["insertNewSessionFromAdmin", () => insertNewSessionFromAdmin(codSessionForm())],
   ["addGame", () => addGame(formData({ gameName: "Halo" }))],

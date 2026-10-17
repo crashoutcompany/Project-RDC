@@ -262,3 +262,7 @@ export function sorryScale(roster: Fighter[], arenas: Arena[]): SorryEntry[] {
     return { fighter, avgRank, fill };
   });
 }
+
+/** Kill/death ratio. Deaths are floored at 1 so a player with no deaths still gets a finite value. */
+export const killDeathRatio = (kills: number, deaths: number) =>
+  kills / Math.max(deaths, 1);

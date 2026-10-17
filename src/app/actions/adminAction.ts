@@ -10,10 +10,13 @@ import {
   logAdminAction,
   logFormError,
   logFormSuccess,
+  logMvpUpdateFailure,
 } from "@/posthog/server-analytics";
 import { after } from "next/server";
 import { revalidateSessionData } from "@/lib/revalidate";
 import { PostHogEvents } from "@/posthog/events";
+import { generateMvpForSession } from "@/lib/mvp/generate";
+import { MVP_GAMES } from "@/lib/mvp/process-sets";
 
 type AdminUser = NonNullable<
   Awaited<ReturnType<typeof getAuthoritativeSession>>
@@ -41,12 +44,79 @@ export async function approveSession(sessionId: number) {
     after(() =>
       logAdminAction(PostHogEvents.SESSION_APPROVED, { sessionId }, authUser),
     );
+    if (process.env.AUTO_MVP !== "0")
+      after(async () => {
+        try {
+          await generateMvpForSession(sessionId, { userSession: authUser });
+        } catch (error) {
+          await logMvpUpdateFailure(sessionId, error, authUser);
+        }
+      });
     revalidateSessionData();
     return { error: null };
   } catch (error) {
     console.error("Error approving session:", error);
     return { error: "Failed to approve session" };
   }
+}
+
+/**
+ * Admin-only: generates MVPs for approved sessions missing one, newest first.
+ * Runs sequentially to respect the Gemini free-tier quota; `remaining` counts
+ * sessions still without an MVP after this run.
+ */
+export async function backfillMissingMvps({
+  limit = 5,
+}: { limit?: number } = {}) {
+  const authUser = await getAuthoritativeSession();
+  const user = authUser?.user as AdminUser | undefined;
+  if (!authUser || user?.role !== "admin")
+    return { error: errorCodes.NotAuthenticated };
+
+  const missing = {
+    isApproved: true,
+    mvpId: null,
+    Game: { gameName: { in: [...MVP_GAMES] } },
+  };
+  const query = await handlePrismaOperation((prisma) =>
+    prisma.session.findMany({
+      where: missing,
+      orderBy: { date: "desc" },
+      take: Math.max(1, Math.floor(limit)),
+      select: { sessionId: true },
+    }),
+  );
+  if (!query.success)
+    return { error: query.error || "Failed to load sessions" };
+
+  let processed = 0;
+  const failed: { sessionId: number; error: string }[] = [];
+  // Sequential on purpose: each session makes an AI call, so this stays well
+  // under the provider's rate limits.
+  for (const { sessionId } of query.data) {
+    try {
+      const mvp = await generateMvpForSession(sessionId, {
+        userSession: authUser,
+      });
+      if (mvp) processed++;
+      else failed.push({ sessionId, error: "No sets to analyze" });
+    } catch (error) {
+      failed.push({
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await logMvpUpdateFailure(sessionId, error, authUser);
+    }
+  }
+
+  const remaining = await handlePrismaOperation((prisma) =>
+    prisma.session.count({ where: missing }),
+  );
+  return {
+    processed,
+    failed,
+    remaining: remaining.success ? remaining.data : null,
+  };
 }
 
 export async function getGameStats(
