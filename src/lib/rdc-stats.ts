@@ -291,8 +291,10 @@ export function filterSessions<T extends { date: Date | string }>(
 }
 
 /**
- * Pure core of `getSorryScale`: summarizes each game's filtered sessions as
- * an arena, then scores the roster with the usual sorry scale.
+ * Pure core of `getSorryBoards`: windows the sessions, summarizes each game's
+ * remainder as an arena, then scores the roster with the usual sorry scale.
+ * `last10` takes the 10 most recent sessions across every feed, so in the
+ * all-games view a game nobody has played lately drops out.
  */
 export function sorryScaleFor(
   roster: Fighter[],
@@ -300,50 +302,80 @@ export function sorryScaleFor(
   range: SorryRange,
   now = new Date(),
 ): SorryEntry[] {
+  const kept = new Set(
+    filterSessions(
+      feeds.flatMap((f) => f.sessions),
+      range,
+      now,
+    ),
+  );
   const arenas = feeds.map((feed, i) => ({
     ...summarizeArena(
       feed.slug,
       feed.name,
-      filterSessions(feed.sessions, range, now),
+      feed.sessions.filter((s) => kept.has(s)),
     ),
     index: i + 1,
   }));
   return sorryScale(roster, arenas);
 }
 
-/**
- * Sorry scale for one game (or all games) and time range. All-time views
- * reuse the cached `getArenas()` aggregate; other ranges re-summarize the
- * approved sessions per request, since the window depends on `now`.
- */
-export async function getSorryScale({
-  game = "all",
-  range = "all",
-}: {
-  game?: GamesEnum | "all";
-  range?: SorryRange;
-} = {}): Promise<SorryEntry[]> {
-  const [roster, arenas] = await Promise.all([getRoster(), getArenas()]);
-  if (range === "all")
-    return sorryScale(
-      roster,
-      arenas.filter((a) => game === "all" || a.slug === game),
-    );
+const SORRY_RANGES: SorryRange[] = ["all", "30d", "last10"];
 
+/** One sorry-scale row without the fighter, keyed by roster slug. */
+export type SorryScore = Pick<SorryEntry, "avgRank" | "fill"> & {
+  slug: string;
+};
+
+export type SorryBoards = {
+  games: { slug: GamesEnum; name: string }[];
+  /** `boards[game][range]`, where `game` is a slug or `"all"`. */
+  boards: Record<string, Record<SorryRange, SorryScore[]>>;
+};
+
+/**
+ * Every game x range sorry scale, computed from one read of the approved
+ * sessions so the filter tabs can switch on the client without a round trip.
+ * Cached for hours rather than `max` because the 30-day window moves.
+ */
+export async function getSorryBoards(): Promise<SorryBoards> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ARENAS_TAG, "getAllSessions", "getAllGames");
+  const [roster, arenas] = await Promise.all([getRoster(), getArenas()]);
   const games = await getAllGames();
-  if (!games.success || !games.data) return sorryScale(roster, []);
-  const targets = games.data.filter(
-    (g) => game === "all" || toSlug(g.gameName) === game,
-  );
+  const ordered = arenas.map(({ slug, name }) => ({ slug, name }));
+  if (!games.success || !games.data) return { games: ordered, boards: {} };
+
+  const bySlug = new Map(games.data.map((g) => [toSlug(g.gameName), g]));
   const feeds = await Promise.all(
-    targets.map(async (g) => {
-      const sessions = await getAllSessionsByGame(g.gameId);
-      return {
-        slug: toSlug(g.gameName) as GamesEnum,
-        name: g.gameName,
+    ordered.flatMap(({ slug, name }) => {
+      const game = bySlug.get(slug);
+      if (!game) return [];
+      return getAllSessionsByGame(game.gameId).then((sessions) => ({
+        slug,
+        name,
         sessions: sessions.success && sessions.data ? sessions.data : [],
-      };
+      }));
     }),
   );
-  return sorryScaleFor(roster, feeds, range);
+
+  const now = new Date();
+  const boards: SorryBoards["boards"] = {};
+  for (const game of ["all", ...ordered.map((g) => g.slug)]) {
+    const scope = feeds.filter((f) => game === "all" || f.slug === game);
+    boards[game] = Object.fromEntries(
+      SORRY_RANGES.map((range) => [
+        range,
+        sorryScaleFor(roster, scope, range, now).map(
+          ({ fighter, avgRank, fill }) => ({
+            slug: fighter.slug,
+            avgRank,
+            fill,
+          }),
+        ),
+      ]),
+    ) as Record<SorryRange, SorryScore[]>;
+  }
+  return { games: ordered, boards };
 }
