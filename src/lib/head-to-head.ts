@@ -1,5 +1,10 @@
 import type { Sessions } from "@/app/(routes)/(groups)/games/[slug]/_helpers/dashboard";
-import { STAT_CONFIGS, type StatConfig } from "./stat-configs";
+import {
+  isLowerBetter,
+  STAT_CONFIGS,
+  statRollup,
+  type StatConfig,
+} from "./stat-configs";
 
 type Session = Sessions[number];
 
@@ -11,7 +16,7 @@ export type BattleStat = {
   /** Average per match, or null when that side has no value. */
   a: number | null;
   b: number | null;
-  /** Position stats are lower-is-better; everything else is higher-is-better. */
+  /** Lower-is-better stats (position, deaths) favour the smaller value. */
   better: "a" | "b" | null;
 };
 
@@ -20,8 +25,11 @@ export type BattleGame = {
   name: string;
   /** Sessions in this game where both players took part. */
   shared: number;
+  /** Wins each player took alone; a unit both won counts in `together`. */
   a: BattleSide;
   b: BattleSide;
+  /** Matches, sets and days both players won together (counted for neither side). */
+  together: BattleSide;
   stats: BattleStat[];
 };
 
@@ -37,6 +45,7 @@ export type HeadToHead = {
   shared: number;
   a: BattleSide;
   b: BattleSide;
+  together: BattleSide;
   games: BattleGame[];
   /** Latest five shared sessions across all games, newest first. */
   recent: BattleSession[];
@@ -66,7 +75,12 @@ export function headToHead(
 ): HeadToHead {
   const games: BattleGame[] = [];
   const recent: BattleSession[] = [];
-  const totals = { shared: 0, a: emptySide(), b: emptySide() };
+  const totals = {
+    shared: 0,
+    a: emptySide(),
+    b: emptySide(),
+    together: emptySide(),
+  };
 
   for (const feed of feeds) {
     const shared = feed.sessions.filter((session) => {
@@ -81,14 +95,14 @@ export function headToHead(
       shared: shared.length,
       a: emptySide(),
       b: emptySide(),
+      together: emptySide(),
       stats: [],
     };
     const aStats = new Map<string, Average>();
     const bStats = new Map<string, Average>();
 
     for (const session of shared) {
-      addWins(game.a, session, aId);
-      addWins(game.b, session, bId);
+      tallyWins(game, session, aId, bId);
       collectStats(aStats, session, aId);
       collectStats(bStats, session, bId);
       recent.push({
@@ -101,6 +115,7 @@ export function headToHead(
     }
 
     for (const config of Object.values(STAT_CONFIGS)) {
+      if (statRollup(config) === "skip") continue;
       const a = average(aStats.get(config.name));
       const b = average(bStats.get(config.name));
       if (a === null && b === null) continue;
@@ -109,7 +124,7 @@ export function headToHead(
         displayName: config.displayName,
         a,
         b,
-        better: pickBetter(a, b, config.dataType === "position"),
+        better: pickBetter(a, b, isLowerBetter(config)),
       });
     }
 
@@ -117,6 +132,7 @@ export function headToHead(
     totals.shared += game.shared;
     addSide(totals.a, game.a);
     addSide(totals.b, game.b);
+    addSide(totals.together, game.together);
   }
 
   recent.sort((x, y) => y.date.getTime() - x.date.getTime());
@@ -138,14 +154,27 @@ function playerIdsIn(session: Session): Set<number> {
   return ids;
 }
 
-function addWins(side: BattleSide, session: Session, id: number) {
-  side.days += session.dayWinners.filter((w) => w.playerId === id).length;
+/**
+ * Credits each match, set and day to A or B only when exactly one of them
+ * won it. A unit both won together goes to `together` and counts for neither.
+ */
+function tallyWins(
+  game: Pick<BattleGame, "a" | "b" | "together">,
+  session: Session,
+  aId: number,
+  bId: number,
+) {
+  const tally = (winners: { playerId: number }[], key: keyof BattleSide) => {
+    const aWon = winners.some((w) => w.playerId === aId);
+    const bWon = winners.some((w) => w.playerId === bId);
+    if (aWon && bWon) game.together[key]++;
+    else if (aWon) game.a[key]++;
+    else if (bWon) game.b[key]++;
+  };
+  tally(session.dayWinners, "days");
   for (const set of session.sets) {
-    side.sets += set.setWinners.filter((w) => w.playerId === id).length;
-    for (const match of set.matches)
-      side.matches += match.matchWinners.filter(
-        (w) => w.playerId === id,
-      ).length;
+    tally(set.setWinners, "sets");
+    for (const match of set.matches) tally(match.matchWinners, "matches");
   }
 }
 
@@ -183,13 +212,12 @@ function average(avg: Average | undefined): number | null {
   return avg.sum / avg.count;
 }
 
+/** No marker unless both sides have a value, so a lone value is not "better". */
 function pickBetter(
   a: number | null,
   b: number | null,
   lowerIsBetter: boolean,
 ): "a" | "b" | null {
-  if (a === null) return b === null ? null : "b";
-  if (b === null) return "a";
-  if (a === b) return null;
+  if (a === null || b === null || a === b) return null;
   return a < b === lowerIsBetter ? "a" : "b";
 }

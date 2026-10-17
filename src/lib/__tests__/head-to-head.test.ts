@@ -175,12 +175,94 @@ describe("headToHead", () => {
     });
   });
 
+  it("marks the lower death count as better", () => {
+    const lc = feed("lethalcompany", "Lethal Company", [
+      session(50, "2025-10-01T12:00:00Z", {
+        matches: [
+          match([], [stat(ANA, "LC_DEATHS", "5"), stat(BEN, "LC_DEATHS", "2")]),
+        ],
+      }),
+    ]);
+    const [game] = headToHead(ANA, BEN, [lc]).games;
+    expect(game.stats.find((s) => s.statName === "LC_DEATHS")).toMatchObject({
+      a: 5,
+      b: 2,
+      better: "b",
+    });
+  });
+
+  it("skips Days Played stats", () => {
+    const days = feed("mariokart8", "Mario Kart 8", [
+      session(51, "2025-10-08T12:00:00Z", {
+        matches: [
+          match(
+            [ANA],
+            [
+              stat(ANA, "MK8_DAY", "3"),
+              stat(BEN, "MK8_DAY", "3"),
+              stat(ANA, "MK8_POS", "1"),
+              stat(BEN, "MK8_POS", "2"),
+            ],
+          ),
+        ],
+      }),
+    ]);
+    const [game] = headToHead(ANA, BEN, [days]).games;
+    expect(game.stats.map((s) => s.statName)).toEqual(["MK8_POS"]);
+  });
+
+  it("gives no marker when only one side has a value", () => {
+    const solo = feed("rocketleague", "Rocket League", [
+      session(52, "2025-10-15T12:00:00Z", {
+        matches: [
+          // Ben appears in the session but his score is not numeric.
+          match(
+            [ANA],
+            [stat(ANA, "RL_SCORE", "3"), stat(BEN, "RL_SCORE", "n/a")],
+          ),
+        ],
+      }),
+    ]);
+    const [game] = headToHead(ANA, BEN, [solo]).games;
+    expect(game.stats).toEqual([
+      {
+        statName: "RL_SCORE",
+        displayName: expect.any(String),
+        a: 3,
+        b: null,
+        better: null,
+      },
+    ]);
+  });
+
+  it("credits teammates' shared wins to neither side and counts them as together", () => {
+    const team = feed("mariokart8", "Mario Kart 8", [
+      session(60, "2025-11-01T12:00:00Z", {
+        dayWinners: [ANA, BEN],
+        setWinners: [ANA, BEN],
+        matches: [
+          match(
+            [ANA, BEN],
+            [stat(ANA, "MK8_POS", "1"), stat(BEN, "MK8_POS", "2")],
+          ),
+          match([ANA], [stat(ANA, "MK8_POS", "1"), stat(BEN, "MK8_POS", "3")]),
+        ],
+      }),
+    ]);
+    const result = headToHead(ANA, BEN, [team]);
+    expect(result.a).toEqual({ matches: 1, sets: 0, days: 0 });
+    expect(result.b).toEqual({ matches: 0, sets: 0, days: 0 });
+    expect(result.together).toEqual({ matches: 1, sets: 1, days: 1 });
+    expect(result.games[0].together).toEqual(result.together);
+  });
+
   it("returns an empty result when the players never met", () => {
     const result = headToHead(ANA, CAL, [mk8, rl]);
     expect(result).toEqual({
       shared: 0,
       a: { matches: 0, sets: 0, days: 0 },
       b: { matches: 0, sets: 0, days: 0 },
+      together: { matches: 0, sets: 0, days: 0 },
       games: [],
       recent: [],
     });

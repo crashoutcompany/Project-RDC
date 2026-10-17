@@ -262,6 +262,11 @@ function GameCard({
         <p className="ac-label text-ac-cream/60">{game.shared} shared</p>
       </div>
       <WinLine side={game.a} b={game.b} />
+      {togetherLabel(game.together) ? (
+        <p className="ac-label text-ac-gold mt-2">
+          Won together: {togetherLabel(game.together)}
+        </p>
+      ) : null}
       {game.stats.length > 0 ? (
         <ul className="mt-4 space-y-2">
           {game.stats.map((stat) => (
@@ -296,11 +301,23 @@ function GameCard({
 function WinLine({ side, b }: { side: BattleSide; b: BattleSide }) {
   return (
     <p className="ac-label text-ac-cream/80 mt-3 flex items-center justify-between">
-      <span className="text-ac-red tabular-nums">{side.matches} wins</span>
+      <span className="text-ac-red tabular-nums">{side.matches} won</span>
       <span className="text-ac-cream/50">matches</span>
-      <span className="text-ac-blue tabular-nums">{b.matches} wins</span>
+      <span className="text-ac-blue tabular-nums">{b.matches} won</span>
     </p>
   );
+}
+
+/** "2 matches, 1 day" for the non-zero shared wins, or null when there are none. */
+function togetherLabel(together: BattleSide) {
+  const parts = [
+    { n: together.matches, unit: "match" },
+    { n: together.sets, unit: "set" },
+    { n: together.days, unit: "day" },
+  ]
+    .filter((p) => p.n > 0)
+    .map((p) => `${p.n} ${p.unit}${p.n === 1 ? "" : "s"}`);
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function StatValue({
