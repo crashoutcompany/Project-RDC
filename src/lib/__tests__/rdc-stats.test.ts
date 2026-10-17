@@ -5,8 +5,10 @@ vi.mock("server-only", () => ({}));
 import { GamesEnum } from "@/lib/constants";
 import { getFighterArt } from "@/lib/fighters";
 import {
+  filterSessions,
   sorryRanks,
   sorryScale,
+  sorryScaleFor,
   summarizeArena,
   killDeathRatio,
   topFive,
@@ -170,5 +172,127 @@ describe("killDeathRatio", () => {
 
   it("floors deaths at 1", () => {
     expect(killDeathRatio(5, 0)).toBe(5);
+  });
+});
+
+/** A session whose matches are won by `winners`, one match per entry. */
+const winsSession = (date: string, winners: string[]) =>
+  ({
+    date: new Date(date),
+    dayWinners: [],
+    sets: [
+      {
+        setWinners: [],
+        matches: winners.map((w) => ({
+          matchWinners: [player(w)],
+          playerSessions: [],
+        })),
+      },
+    ],
+  }) as unknown as Sessions[number];
+
+describe("filterSessions", () => {
+  const dated = [
+    { date: new Date("2025-01-01T12:00:00Z"), id: "old" },
+    { date: new Date("2025-06-25T12:00:00Z"), id: "recent" },
+    { date: new Date("2025-06-30T12:00:00Z"), id: "newest" },
+  ];
+  const now = new Date("2025-07-01T12:00:00Z");
+
+  it("returns every session for all-time", () => {
+    expect(filterSessions(dated, "all", now)).toHaveLength(3);
+  });
+
+  it("keeps sessions from the last 30 days relative to now", () => {
+    expect(filterSessions(dated, "30d", now).map((s) => s.id)).toEqual([
+      "recent",
+      "newest",
+    ]);
+  });
+
+  it("keeps the 10 most recent sessions regardless of input order", () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      date: new Date(Date.UTC(2024, 0, i + 1)),
+    }));
+    const shuffled = [...many].reverse();
+    const last = filterSessions(shuffled, "last10");
+    expect(last).toHaveLength(10);
+    expect(last[0].date).toEqual(many[11].date);
+    expect(last[9].date).toEqual(many[2].date);
+    expect(shuffled[0]).toBe(many[11]);
+  });
+});
+
+describe("sorryScaleFor", () => {
+  const fighter = (name: string): Fighter => ({
+    playerId: 0,
+    name,
+    slug: name.toLowerCase(),
+    art: getFighterArt(name),
+    wins: null,
+    winShare: null,
+    hp: 0,
+  });
+  const roster = [fighter("Ben"), fighter("Dylan")];
+  const now = new Date("2025-07-01T12:00:00Z");
+  const mk8 = [
+    winsSession("2024-01-01T12:00:00Z", ["Dylan", "Dylan", "Dylan"]),
+    winsSession("2025-06-25T12:00:00Z", ["Ben", "Ben"]),
+  ];
+
+  it("ranks by all-time wins when the range is all", () => {
+    const [ben, dylan] = sorryScaleFor(
+      roster,
+      [{ slug: GamesEnum.MarioKart8, name: "Mario Kart 8", sessions: mk8 }],
+      "all",
+      now,
+    );
+    expect(dylan.avgRank).toBe(1);
+    expect(ben.avgRank).toBe(2);
+  });
+
+  it("only scores sessions inside the time range", () => {
+    const [ben, dylan] = sorryScaleFor(
+      roster,
+      [{ slug: GamesEnum.MarioKart8, name: "Mario Kart 8", sessions: mk8 }],
+      "30d",
+      now,
+    );
+    expect(ben).toMatchObject({ avgRank: 1, fill: 1 });
+    expect(dylan).toMatchObject({ avgRank: null, fill: 0 });
+  });
+
+  it("averages a member's rank across games", () => {
+    const [ben, dylan] = sorryScaleFor(
+      roster,
+      [
+        {
+          slug: GamesEnum.MarioKart8,
+          name: "Mario Kart 8",
+          sessions: [winsSession("2025-06-25T12:00:00Z", ["Ben", "Dylan"])],
+        },
+        {
+          slug: GamesEnum.RocketLeague,
+          name: "Rocket League",
+          sessions: [
+            winsSession("2025-06-25T12:00:00Z", ["Dylan", "Dylan", "Ben"]),
+          ],
+        },
+      ],
+      "all",
+      now,
+    );
+    expect(ben.avgRank).toBe(1.5);
+    expect(dylan.avgRank).toBe(1.5);
+  });
+
+  it("returns no ranks when no game has matches in the range", () => {
+    const scale = sorryScaleFor(
+      roster,
+      [{ slug: GamesEnum.MarioKart8, name: "Mario Kart 8", sessions: [] }],
+      "last10",
+      now,
+    );
+    expect(scale.every((e) => e.avgRank === null)).toBe(true);
   });
 });
