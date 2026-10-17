@@ -27,3 +27,7 @@ export const formatSessionDate = (date: Date | string) =>
     year: "numeric",
     timeZone: "America/New_York",
   });
+
+/** A 0..1 share as a whole percentage, or "--" when there is no data. */
+export const percent = (share: number | null) =>
+  share === null ? "--" : `${Math.round(share * 100)}%`;

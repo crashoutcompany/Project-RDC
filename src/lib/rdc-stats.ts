@@ -238,6 +238,3 @@ export function sorryScale(roster: Fighter[], arenas: Arena[]): SorryEntry[] {
     return { fighter, avgRank, fill };
   });
 }
-
-export const percent = (share: number | null) =>
-  share === null ? "--" : `${Math.round(share * 100)}%`;

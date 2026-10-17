@@ -6,8 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Leaderboard } from "@/components/arcade/leaderboard";
 import { VersusSelect } from "@/components/arcade/versus-select";
 import { ArenaCard } from "@/components/arcade/arena-card";
-import { StageTitle } from "@/components/arcade/stage-title";
+import { STAGE_GRID, StageTitle } from "@/components/arcade/stage-title";
 import { ChallengerBanner, Heading } from "@/components/arcade/ui";
+import { cn } from "@/lib/utils";
 import {
   FEATURED_ARENA,
   getArenas,
@@ -130,7 +131,7 @@ function MembersSkeleton() {
       <section className="ac-grid bg-ac-ink">
         <div className="mx-auto max-w-6xl px-4 pt-8 pb-10">
           <StageTitle />
-          <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] lg:gap-6">
+          <div className={cn(STAGE_GRID, "mt-8 gap-4 lg:gap-6")}>
             <Skeleton className="aspect-[3/4]" />
             <div className="order-last col-span-2 grid grid-cols-4 gap-2 lg:order-none lg:col-span-1">
               {Array.from({ length: 8 }, (_, i) => (

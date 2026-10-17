@@ -5,13 +5,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Fighter } from "@/lib/rdc-stats";
-import { cn } from "@/lib/utils";
+import { cn, percent } from "@/lib/utils";
 import { IdleSprite } from "./idle-sprite";
-import { StageTitle } from "./stage-title";
+import { STAGE_GRID, StageTitle } from "./stage-title";
 import { FightBar, HpBar, PixelPortrait } from "./ui";
-
-const percent = (share: number | null) =>
-  share === null ? "--" : `${Math.round(share * 100)}%`;
 
 /**
  * Fighter select: the fight bar on top, then 1P and 2P portrait cards either
@@ -68,7 +65,7 @@ export function VersusSelect({ fighters }: { fighters: Fighter[] }) {
             Now selecting {selecting}P
           </p>
 
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] lg:gap-x-6">
+          <div className={cn(STAGE_GRID, "mt-8 gap-x-4 gap-y-6 lg:gap-x-6")}>
             <Corner
               fighter={one}
               side={1}
@@ -126,6 +123,7 @@ function Tile({
   selecting: 1 | 2;
   onPick: () => void;
 }) {
+  const dim = tag === null && "opacity-70 group-hover:opacity-100";
   return (
     <li className="relative">
       <button
@@ -151,7 +149,7 @@ function Tile({
             sizes="120px"
             className={cn(
               "origin-top scale-[1.6] object-cover object-top transition-opacity",
-              tag === null && "opacity-70 group-hover:opacity-100",
+              dim,
             )}
           />
         ) : (
@@ -159,10 +157,7 @@ function Tile({
             src={fighter.art.portrait}
             alt=""
             pixels={28}
-            className={cn(
-              "absolute inset-0 transition-opacity",
-              tag === null && "opacity-70 group-hover:opacity-100",
-            )}
+            className={cn("absolute inset-0 transition-opacity", dim)}
           />
         )}
         <span className="ac-label text-ac-cream absolute inset-x-0 bottom-0 bg-black/80 px-1 py-1 text-center">
