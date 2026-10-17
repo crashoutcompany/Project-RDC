@@ -266,3 +266,84 @@ export function sorryScale(roster: Fighter[], arenas: Arena[]): SorryEntry[] {
 /** Kill/death ratio. Deaths are floored at 1 so a player with no deaths still gets a finite value. */
 export const killDeathRatio = (kills: number, deaths: number) =>
   kills / Math.max(deaths, 1);
+
+export type SorryRange = "all" | "30d" | "last10";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keeps sessions inside a time window. `last10` is the 10 most recent by
+ * date; `30d` is relative to `now`. Never mutates the input.
+ */
+export function filterSessions<T extends { date: Date | string }>(
+  sessions: T[],
+  range: SorryRange,
+  now = new Date(),
+): T[] {
+  const time = (s: T) => new Date(s.date).getTime();
+  if (range === "last10")
+    return [...sessions].sort((a, b) => time(b) - time(a)).slice(0, 10);
+  if (range === "30d") {
+    const cutoff = now.getTime() - 30 * DAY_MS;
+    return sessions.filter((s) => time(s) >= cutoff);
+  }
+  return sessions;
+}
+
+/**
+ * Pure core of `getSorryScale`: summarizes each game's filtered sessions as
+ * an arena, then scores the roster with the usual sorry scale.
+ */
+export function sorryScaleFor(
+  roster: Fighter[],
+  feeds: { slug: GamesEnum; name: string; sessions: Sessions }[],
+  range: SorryRange,
+  now = new Date(),
+): SorryEntry[] {
+  const arenas = feeds.map((feed, i) => ({
+    ...summarizeArena(
+      feed.slug,
+      feed.name,
+      filterSessions(feed.sessions, range, now),
+    ),
+    index: i + 1,
+  }));
+  return sorryScale(roster, arenas);
+}
+
+/**
+ * Sorry scale for one game (or all games) and time range. All-time views
+ * reuse the cached `getArenas()` aggregate; other ranges re-summarize the
+ * approved sessions per request, since the window depends on `now`.
+ */
+export async function getSorryScale({
+  game = "all",
+  range = "all",
+}: {
+  game?: GamesEnum | "all";
+  range?: SorryRange;
+} = {}): Promise<SorryEntry[]> {
+  const [roster, arenas] = await Promise.all([getRoster(), getArenas()]);
+  if (range === "all")
+    return sorryScale(
+      roster,
+      arenas.filter((a) => game === "all" || a.slug === game),
+    );
+
+  const games = await getAllGames();
+  if (!games.success || !games.data) return sorryScale(roster, []);
+  const targets = games.data.filter(
+    (g) => game === "all" || toSlug(g.gameName) === game,
+  );
+  const feeds = await Promise.all(
+    targets.map(async (g) => {
+      const sessions = await getAllSessionsByGame(g.gameId);
+      return {
+        slug: toSlug(g.gameName) as GamesEnum,
+        name: g.gameName,
+        sessions: sessions.success && sessions.data ? sessions.data : [],
+      };
+    }),
+  );
+  return sorryScaleFor(roster, feeds, range);
+}
