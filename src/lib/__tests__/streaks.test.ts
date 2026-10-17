@@ -177,12 +177,57 @@ describe("gameRecords", () => {
     expect(records).toEqual([]);
   });
 
-  it("keeps the earliest session on ties", () => {
+  it("records accuracy as a session average, never above 100", () => {
     const records = gameRecords([
-      recordSession(2, "2026-01-02", [{ winners: ["A"], stats: [] }]),
-      recordSession(1, "2026-01-01", [{ winners: ["B"], stats: [] }]),
+      recordSession(1, "2026-01-01", [
+        { winners: [], stats: [[stat("A", "MR_ACCURACY", "90")]] },
+        { winners: [], stats: [[stat("A", "MR_ACCURACY", "80")]] },
+      ]),
     ]);
-    expect(records[0]).toMatchObject({ player: "B", sessionId: 1 });
+    expect(records.find((r) => r.statName === "MR_ACCURACY")).toMatchObject({
+      kind: "average",
+      player: "A",
+      value: 85,
+    });
+  });
+
+  it("excludes Days Played from records", () => {
+    const records = gameRecords([
+      recordSession(1, "2026-01-01", [
+        { winners: [], stats: [[stat("A", "RL_DAY", "7")]] },
+      ]),
+    ]);
+    expect(records.some((r) => r.statName === "RL_DAY")).toBe(false);
+  });
+
+  it("breaks ties by earlier session, then player name, regardless of input order", () => {
+    const early = recordSession(1, "2026-01-01", [
+      { winners: [], stats: [[stat("C", "RL_GOALS", "3")]] },
+      { winners: [], stats: [[stat("B", "RL_GOALS", "3")]] },
+    ]);
+    const late = recordSession(2, "2026-01-02", [
+      { winners: [], stats: [[stat("A", "RL_GOALS", "3")]] },
+    ]);
+    const forward = gameRecords([early, late]);
+    const backward = gameRecords([late, early]);
+    expect(forward).toEqual(backward);
+    expect(forward.find((r) => r.statName === "RL_GOALS")).toMatchObject({
+      player: "B",
+      sessionId: 1,
+    });
+  });
+
+  it("breaks same-session ties by player name ascending", () => {
+    const session = recordSession(1, "2026-01-01", [
+      { winners: [], stats: [[stat("Zed", "RL_GOALS", "2")]] },
+      { winners: [], stats: [[stat("Ann", "RL_GOALS", "2")]] },
+    ]);
+    const other = { ...session, sessionId: 9, sessionName: "Other" };
+    for (const input of [[session], [other, session]]) {
+      expect(
+        gameRecords(input).find((r) => r.statName === "RL_GOALS"),
+      ).toMatchObject({ player: "Ann" });
+    }
   });
 });
 

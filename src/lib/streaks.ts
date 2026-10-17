@@ -1,4 +1,9 @@
-import { STAT_CONFIGS, type StatConfig } from "./stat-configs";
+import {
+  isLowerBetter,
+  STAT_CONFIGS,
+  statRollup,
+  type StatConfig,
+} from "./stat-configs";
 import type { MatchRow } from "./member-profile";
 
 /** Minimal session shape: `getAllSessionsByGame` rows satisfy it. */
@@ -35,7 +40,7 @@ export type GameRecord = {
   /** `MATCH_WINS` for match wins in a session, otherwise the StatName. */
   statName: string;
   label: string;
-  /** "average" for position stats (lower is better), otherwise a session total. */
+  /** "average" for stats rolled up as an average, otherwise a session total. */
   kind: "total" | "average";
   player: string;
   value: number;
@@ -63,9 +68,6 @@ export type Prime = {
 };
 
 export const MATCH_WINS = "MATCH_WINS";
-
-/** Days played and deaths are not "best in a session" records. */
-const UNRANKED = /(_DAY|_DEATHS)$/;
 
 const CONFIG_BY_NAME = new Map<string, StatConfig>(
   Object.values(STAT_CONFIGS).map((c) => [c.name, c]),
@@ -135,33 +137,61 @@ export function dayWinStreaks(sessions: StreakSession[]): DayWinStreak[] {
 
 type Holder = { player: string; value: number };
 
+/** Whether a candidate record should replace the current holder. */
+const beats = (
+  holder: Holder,
+  session: StreakSession,
+  current: GameRecord,
+  lowerIsBetter: boolean,
+) => {
+  if (holder.value !== current.value)
+    return lowerIsBetter
+      ? holder.value < current.value
+      : holder.value > current.value;
+  return (
+    (session.date.getTime() - current.date.getTime() ||
+      session.sessionId - current.sessionId ||
+      holder.player.localeCompare(current.player)) < 0
+  );
+};
+
 /**
- * Best single-session record per stat and for match wins. Number stats use
- * the player's total in the session, position stats their average (lower is
- * better). Ties go to the earliest session. Stats without a STAT_CONFIGS entry
- * and blank or non-numeric values are ignored.
+ * Stats that can be a "best in a session" record: anything with a rollup other
+ * than "skip" (Days Played), and not lower-is-better counts such as deaths.
+ * Position stats are lower-is-better but still ranked.
+ */
+const rankedConfig = (statName: string): StatConfig | undefined => {
+  const config = CONFIG_BY_NAME.get(statName);
+  if (!config || statRollup(config) === "skip") return undefined;
+  if (isLowerBetter(config) && config.dataType !== "position") return undefined;
+  return config;
+};
+
+/**
+ * Best single-session record per ranked stat and for match wins. A player's
+ * value in a session is their total for "sum" stats and their mean for
+ * "average" stats (so accuracy stays within 0-100). Lower is better where
+ * `isLowerBetter` says so. Ties go to the earlier session, then to the player
+ * name ascending, so the result does not depend on input order. Blank and
+ * non-numeric values are ignored.
  *
  * @returns Records in stat config order, match wins first; stats nobody has a value for are omitted.
  */
 export function gameRecords(sessions: RecordSession[]): GameRecord[] {
   const best = new Map<string, GameRecord>();
 
-  const offer = (statName: string, session: StreakSession, holder: Holder) => {
-    const config = CONFIG_BY_NAME.get(statName);
-    const kind: GameRecord["kind"] =
-      config?.dataType === "position" ? "average" : "total";
+  const offer = (
+    statName: string,
+    lowerIsBetter: boolean,
+    kind: GameRecord["kind"],
+    session: StreakSession,
+    holder: Holder,
+  ) => {
     const current = best.get(statName);
-    const better =
-      !current ||
-      (kind === "average"
-        ? holder.value < current.value
-        : holder.value > current.value) ||
-      (holder.value === current.value &&
-        session.date.getTime() < current.date.getTime());
-    if (!better) return;
+    if (current && !beats(holder, session, current, lowerIsBetter)) return;
     best.set(statName, {
       statName,
-      label: config?.displayName ?? "Match wins",
+      label: CONFIG_BY_NAME.get(statName)?.displayName ?? "Match wins",
       kind,
       player: holder.player,
       value: holder.value,
@@ -186,8 +216,7 @@ export function gameRecords(sessions: RecordSession[]): GameRecord[] {
         for (const ps of match.playerSessions)
           for (const st of ps.playerStats) {
             const statName = st.gameStat.statName;
-            if (!CONFIG_BY_NAME.has(statName) || UNRANKED.test(statName))
-              continue;
+            if (!rankedConfig(statName)) continue;
             const n = Number(st.value);
             if (st.value.trim() === "" || Number.isNaN(n)) continue;
             let byPlayer = stats.get(statName);
@@ -201,15 +230,19 @@ export function gameRecords(sessions: RecordSession[]): GameRecord[] {
       }
 
     for (const [player, count] of wins)
-      offer(MATCH_WINS, session, { player, value: count });
+      offer(MATCH_WINS, false, "total", session, { player, value: count });
 
     for (const [statName, byPlayer] of stats) {
-      const average = CONFIG_BY_NAME.get(statName)?.dataType === "position";
+      const config = rankedConfig(statName)!;
+      const average = statRollup(config) === "average";
       for (const [player, acc] of byPlayer)
-        offer(statName, session, {
-          player,
-          value: average ? acc.sum / acc.count : acc.sum,
-        });
+        offer(
+          statName,
+          isLowerBetter(config),
+          average ? "average" : "total",
+          session,
+          { player, value: average ? acc.sum / acc.count : acc.sum },
+        );
     }
   }
 
