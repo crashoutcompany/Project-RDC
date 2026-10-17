@@ -54,7 +54,7 @@ describe("statBreakdown", () => {
     ]);
   });
 
-  it("gives totals and per-session averages for number stats", () => {
+  it("gives totals and per-match averages for number stats", () => {
     const [game] = statBreakdown([
       stat(rl, "RL_GOALS", "2"),
       stat(rl, "RL_GOALS", "4"),
@@ -66,7 +66,7 @@ describe("statBreakdown", () => {
         statName: "RL_GOALS",
         displayName: "Goals",
         value: 3,
-        kind: "perSession",
+        kind: "perMatch",
       },
     ]);
   });
@@ -84,7 +84,7 @@ describe("statBreakdown", () => {
         statName: "RL_SAVES",
         displayName: "Saves",
         value: 3,
-        kind: "perSession",
+        kind: "perMatch",
       },
     ]);
   });

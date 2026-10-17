@@ -16,7 +16,7 @@ export type StatRow = {
 /** A match row joined to the approved session it was played in. */
 export type MatchRow = { matchId: number; set: { session: SessionRef } };
 
-export type StatKind = "average" | "total" | "perSession" | "count";
+export type StatKind = "average" | "total" | "perMatch" | "count";
 
 export type StatLine = {
   statName: string;
@@ -62,7 +62,7 @@ type Acc = { config: StatConfig; sum: number; count: number; hits: number };
 
 /**
  * Per-game stat lines. Position stats average (lower is better), number stats
- * give a total and a per-session average, boolean stats count `true` values.
+ * give a total and a per-match average, boolean stats count `true` values.
  * Stats missing from STAT_CONFIGS and unparseable numbers are skipped.
  */
 export function statBreakdown(rows: StatRow[]): GameBreakdown[] {
@@ -113,7 +113,7 @@ export function statBreakdown(rows: StatRow[]): GameBreakdown[] {
           });
           lines.push({
             id: config.id,
-            line: { ...base, value: sum / count, kind: "perSession" },
+            line: { ...base, value: sum / count, kind: "perMatch" },
           });
         }
       }

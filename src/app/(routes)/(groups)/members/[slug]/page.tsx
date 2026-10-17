@@ -372,13 +372,13 @@ function WinBox({
 
 function StatTile({ stat }: { stat: StatLine }) {
   const label =
-    stat.kind === "perSession"
-      ? `${stat.displayName} / session`
+    stat.kind === "perMatch"
+      ? `${stat.displayName} / match`
       : stat.kind === "average"
         ? `${stat.displayName} (avg)`
         : stat.displayName;
   const value =
-    stat.kind === "average" || stat.kind === "perSession"
+    stat.kind === "average" || stat.kind === "perMatch"
       ? stat.value.toFixed(1)
       : String(Math.round(stat.value));
   return (
