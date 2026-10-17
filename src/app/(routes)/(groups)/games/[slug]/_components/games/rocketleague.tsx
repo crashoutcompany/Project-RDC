@@ -1,5 +1,5 @@
 import { ChartConfig } from "@/components/ui/chart";
-import { CustomChart } from "../charts";
+import { ChartGrid, CustomChart } from "../charts";
 import { TabbedChart } from "../tabbed-chart";
 import { getAvgAndSum } from "../../_helpers/stats";
 import { Members } from "../../page";
@@ -61,7 +61,7 @@ const RocketLeague = async ({
   } satisfies ChartConfig;
 
   return (
-    <div className="flex flex-wrap justify-center gap-10">
+    <ChartGrid>
       <CustomChart
         data={membersMap}
         nameKey="playerName"
@@ -113,7 +113,7 @@ const RocketLeague = async ({
         chartData={winsPerPlayer}
         gameName={game.gameName}
       />
-    </div>
+    </ChartGrid>
   );
 };
 export default RocketLeague;

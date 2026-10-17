@@ -75,6 +75,10 @@ function pad(n: number): string {
  * @param url - The URL to parse.
  * @returns The 11-character video ID, or null if no match.
  */
+export const youtubeUrl = (videoId: string) => `https://www.youtube.com/watch?v=${videoId}`;
+/** hqdefault exists for every video; maxresdefault 404s on older uploads. */
+export const youtubeThumbnail = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
 export function extractYoutubeId(url: string): string | null {
   const m = url.match(
     /(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/,

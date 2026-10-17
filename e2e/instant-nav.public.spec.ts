@@ -2,8 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { instant } from "@next/playwright";
 
 /** Suite origin; keeps initial-load `instant()` aligned with Playwright `baseURL`. */
-const BASE_URL =
-  process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 
 /** Known seeded game slug from generateStaticParams / production data. */
 const GAME_FIXTURE_PATH = "/games/mariokart8";
@@ -16,14 +15,20 @@ const MEMBER_FIXTURE_PATH = "/members/mark";
  * (the request after the `/_tree` route lookup). instant() only commits from
  * prefetched data, so clicking before this lands can hang the navigation.
  * Call before the link enters the viewport so the response isn't missed.
+ *
+ * Pass a RegExp for dynamic routes whose shell doesn't depend on the param:
+ * Next shares that page segment across params, so only the first link of the
+ * route (e.g. `/members/dylan`) fetches it and the rest reuse the cache.
  */
-function waitForSegmentPrefetch(page: Page, pathname: string) {
+function waitForSegmentPrefetch(page: Page, pathname: string | RegExp) {
   return page
     .waitForResponse(
       (response) => {
         const request = response.request();
         return (
-          new URL(request.url()).pathname === pathname &&
+          (typeof pathname === "string"
+            ? new URL(request.url()).pathname === pathname
+            : pathname.test(new URL(request.url()).pathname)) &&
           request.headers()["next-router-prefetch"] !== undefined &&
           request.headers()["next-router-segment-prefetch"] !== "/_tree"
         );
@@ -107,13 +112,15 @@ test.describe("instant nav: public soft navigations", () => {
       async () => {
         await page.goto("/");
         await expect(page.getByTestId("home-shell-marker")).toBeVisible();
-        await expect(page.getByTestId("home-games-content")).toHaveCount(0);
       },
       { baseURL: BASE_URL },
     );
-    // Initial-load: reload unlocked document to assert streamed content
+    // Initial-load: reload the unlocked document and check what a visitor
+    // sees: the room poster and both calls to action.
     await page.reload();
-    await expect(page.getByTestId("home-games-content")).toBeVisible();
+    await expect(page.locator('img[src*="arcade-room-poster"]')).toBeVisible();
+    await expect(page.getByTestId("home-games-link")).toBeVisible();
+    await expect(page.getByTestId("home-members-link")).toBeVisible();
   });
 
   test("Game detail shell commits under instant()", async ({ page }) => {
@@ -148,7 +155,7 @@ test.describe("instant nav: public soft navigations", () => {
   });
 
   test("Member detail shell commits under instant()", async ({ page }) => {
-    const prefetched = waitForSegmentPrefetch(page, MEMBER_FIXTURE_PATH);
+    const prefetched = waitForSegmentPrefetch(page, /^\/members\/[^/]+$/);
     await page.goto("/members");
     await expect(page.getByTestId("members-shell-marker")).toBeVisible({
       timeout: 20000,

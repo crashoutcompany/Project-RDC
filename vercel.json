@@ -1,10 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/sheets",
-      "schedule": "0 10 * * 1"
-    },
-    {
       "path": "/api/edit-sessions",
       "schedule": "0 10 * * 1"
     }
