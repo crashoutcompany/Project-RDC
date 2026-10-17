@@ -129,6 +129,12 @@ export function ReplayViewer({ session }: ReplayViewerProps) {
                 </p>
               )}
             </div>
+            <Link
+              href={`/sessions/${session.sessionId}`}
+              className="ac-label text-ac-gold hover:text-ac-cream mb-3"
+            >
+              Session page ▶
+            </Link>
             <Dialog>
               <DialogTrigger asChild>
                 <Button className="ac-title mt-auto w-full text-xs">
