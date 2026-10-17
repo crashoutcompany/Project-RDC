@@ -143,11 +143,14 @@ export type OgStat = { label: string; value: string | number; color?: string };
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
-/** Press Start 2P is about one em per glyph, so shrink the value to fit a 200px box. */
+/**
+ * Press Start 2P is about one em per glyph and a stat box has ~150px inside,
+ * so shrink longer values (clipped to 10 chars) to fit.
+ */
 function statValueSize(length: number) {
   if (length <= 4) return 36;
-  if (length <= 7) return 26;
-  return 18;
+  if (length <= 6) return 24;
+  return 14;
 }
 
 /**
@@ -232,7 +235,7 @@ export async function ogImageResponse({
         {stats.length ? (
           <div style={{ display: "flex" }}>
             {stats.map((stat, i) => {
-              const value = clip(String(stat.value), 12);
+              const value = clip(String(stat.value), 10);
               return (
                 <div
                   key={stat.label}
