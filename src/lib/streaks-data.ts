@@ -23,7 +23,8 @@ export const getAllGameSessions = async () => {
         Game: { select: { gameName: true } },
         dayWinners: { select: { playerName: true } },
       },
-      orderBy: { date: "asc" },
+      // Group in game order; dates ascend within each game.
+      orderBy: [{ gameId: "asc" }, { date: "asc" }],
     }),
   );
   if (!result.success || !result.data) return [];
