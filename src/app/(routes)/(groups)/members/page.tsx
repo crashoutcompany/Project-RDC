@@ -95,8 +95,7 @@ const RANGES: { value: SorryRange; label: string }[] = [
 
 /** Sorry scale with game and time filters driven by `?sorryGame=&sorryRange=`. */
 async function SorrySection({ searchParams }: { searchParams: SearchParams }) {
-  const params = await searchParams;
-  const arenas = await getArenas();
+  const [params, arenas] = await Promise.all([searchParams, getArenas()]);
   const gameParam =
     typeof params.sorryGame === "string" ? params.sorryGame : "";
   const game: GamesEnum | "all" = arenas.some((a) => a.slug === gameParam)
