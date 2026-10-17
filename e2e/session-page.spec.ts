@@ -37,7 +37,7 @@ test.describe("session pages", () => {
   // is sent, so this is a soft 404: noindex + not-found UI, not a 404 status.
   test("unknown session id renders not-found and noindex", async ({ page }) => {
     await page.goto("/sessions/999999999");
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    await expect(page.locator('head meta[name="robots"]')).toHaveAttribute(
       "content",
       /noindex/,
     );
