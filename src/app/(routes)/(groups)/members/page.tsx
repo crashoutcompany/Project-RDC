@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,13 +7,13 @@ import { VersusSelect } from "@/components/arcade/versus-select";
 import { ArenaCard } from "@/components/arcade/arena-card";
 import { STAGE_GRID, StageTitle } from "@/components/arcade/stage-title";
 import { ChallengerBanner, Heading } from "@/components/arcade/ui";
-import { GamesEnum } from "@/lib/constants";
+import { SorryScale } from "./_components/sorry-scale";
 import { cn } from "@/lib/utils";
 import {
   FEATURED_ARENA,
   getArenas,
   getRoster,
-  getSorryScale,
+  getSorryBoards,
   topFive,
   type SorryRange,
 } from "@/lib/rdc-stats";
@@ -87,142 +85,26 @@ async function MembersContent({
   );
 }
 
-const RANGES: { value: SorryRange; label: string }[] = [
-  { value: "all", label: "All-time" },
-  { value: "30d", label: "30 days" },
-  { value: "last10", label: "Last 10" },
-];
+const RANGE_VALUES: SorryRange[] = ["all", "30d", "last10"];
 
-/** Sorry scale with game and time filters driven by `?sorryGame=&sorryRange=`. */
+/** Resolves `?sorryGame=&sorryRange=` to the initial tab of the Sorry scale. */
 async function SorrySection({ searchParams }: { searchParams: SearchParams }) {
-  const [params, arenas] = await Promise.all([searchParams, getArenas()]);
-  const gameParam =
-    typeof params.sorryGame === "string" ? params.sorryGame : "";
-  const game: GamesEnum | "all" = arenas.some((a) => a.slug === gameParam)
-    ? (gameParam as GamesEnum)
-    : "all";
-  const range =
-    RANGES.find((r) => r.value === params.sorryRange)?.value ?? "all";
-  const sorry = await getSorryScale({ game, range });
-  const hasData = sorry.some((e) => e.avgRank !== null);
-  const gameName = arenas.find((a) => a.slug === game)?.name;
-
-  const href = (next: { sorryGame?: string; sorryRange?: SorryRange }) => ({
-    pathname: "/members",
-    query: { sorryGame: game, sorryRange: range, ...next },
-  });
+  const [params, roster, { games, boards }] = await Promise.all([
+    searchParams,
+    getRoster(),
+    getSorryBoards(),
+  ]);
+  const game = games.find((g) => g.slug === params.sorryGame)?.slug ?? "all";
+  const range = RANGE_VALUES.find((r) => r === params.sorryRange) ?? "all";
 
   return (
-    <>
-      <Heading lead="Sorry scale" className="text-ac-gold" />
-      <p className="text-ac-cream/70 mt-2">
-        {gameName
-          ? `Average ranking in ${gameName}.`
-          : "Average ranking across all games."}{" "}
-        Emptiest health bar is the sorriest.
-      </p>
-      <div className="mt-4 mb-6 flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          <FilterTab href={href({ sorryGame: "all" })} active={game === "all"}>
-            All games
-          </FilterTab>
-          {arenas.map((a) => (
-            <FilterTab
-              key={a.slug}
-              href={href({ sorryGame: a.slug })}
-              active={game === a.slug}
-            >
-              {a.name}
-            </FilterTab>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {RANGES.map((r) => (
-            <FilterTab
-              key={r.value}
-              href={href({ sorryRange: r.value })}
-              active={range === r.value}
-            >
-              {r.label}
-            </FilterTab>
-          ))}
-        </div>
-      </div>
-      {hasData ? (
-        <ul className="space-y-3">
-          {sorry.map(({ fighter, avgRank, fill }) => (
-            <li key={fighter.slug} className="flex items-center gap-3">
-              <Image
-                src={fighter.art.portrait}
-                alt=""
-                width={32}
-                height={32}
-                className="ac-pixel border-ac-panel-2 size-8 border-2 object-cover"
-              />
-              <span className="ac-label text-ac-cream w-20">
-                {fighter.name}
-              </span>
-              <SegmentedBar value={fill} />
-              <span className="text-ac-cream/80 w-12 text-right text-2xl tabular-nums">
-                {avgRank === null ? "--" : avgRank.toFixed(1)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="ac-label text-ac-cream/70 border-ac-panel-2 border-2 border-dashed p-6 text-center">
-          No ranked matches in this range
-        </p>
-      )}
-    </>
-  );
-}
-
-function FilterTab({
-  href,
-  active,
-  children,
-}: {
-  href: { pathname: string; query: Record<string, string> };
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      scroll={false}
-      aria-current={active ? "true" : undefined}
-      className={cn(
-        "ac-label border-2 px-3 py-1.5 transition-colors",
-        active
-          ? "border-ac-gold bg-ac-gold text-ac-ink"
-          : "border-ac-cream/40 text-ac-cream/80 hover:border-ac-cream",
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/** Health bar broken into segments, like a fighting-game super meter. */
-function SegmentedBar({ value }: { value: number }) {
-  const segments = 24;
-  const lit = Math.round(Math.max(0, Math.min(1, value)) * segments);
-  return (
-    <div
-      role="meter"
-      aria-valuemin={0}
-      aria-valuemax={segments}
-      aria-valuenow={lit}
-      className="border-ac-cream flex h-4 flex-1 gap-0.5 border-2 p-0.5"
-    >
-      {Array.from({ length: segments }, (_, i) => (
-        <span
-          key={i}
-          className={i < lit ? "bg-ac-gold flex-1" : "flex-1 bg-[#4a4690]"}
-        />
-      ))}
-    </div>
+    <SorryScale
+      roster={roster}
+      games={games}
+      boards={boards}
+      initialGame={game}
+      initialRange={range}
+    />
   );
 }
 

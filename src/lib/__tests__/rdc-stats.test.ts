@@ -286,6 +286,33 @@ describe("sorryScaleFor", () => {
     expect(dylan.avgRank).toBe(1.5);
   });
 
+  it("takes the last 10 sessions across all games, not per game", () => {
+    const recent = Array.from({ length: 10 }, (_, i) =>
+      winsSession(`2025-06-${String(i + 10).padStart(2, "0")}T12:00:00Z`, [
+        "Ben",
+      ]),
+    );
+    const [ben, dylan] = sorryScaleFor(
+      roster,
+      [
+        {
+          slug: GamesEnum.MarioKart8,
+          name: "Mario Kart 8",
+          sessions: [winsSession("2024-01-01T12:00:00Z", ["Dylan"])],
+        },
+        {
+          slug: GamesEnum.RocketLeague,
+          name: "Rocket League",
+          sessions: recent,
+        },
+      ],
+      "last10",
+      now,
+    );
+    expect(ben.avgRank).toBe(1);
+    expect(dylan.avgRank).toBeNull();
+  });
+
   it("returns no ranks when no game has matches in the range", () => {
     const scale = sorryScaleFor(
       roster,
