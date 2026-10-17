@@ -1,4 +1,4 @@
-import { handlePrismaOperation } from "../db";
+import { handlePrismaOperation } from "prisma/db";
 
 export const getSessionById = async (sessionId: number) => {
   return handlePrismaOperation((prisma) =>
