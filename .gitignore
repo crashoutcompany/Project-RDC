@@ -57,3 +57,5 @@ sessions_backup.json
 # neon branch switch state + log
 .neon-switch.log
 .neon-switch.json
+# Playwright local run output
+/test-results/

@@ -42,9 +42,9 @@ async function AuthenticatedAdminShell({
   if (!session || role !== "admin") redirect("/");
 
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider defaultOpen className="[&_[data-slot=sidebar-gap]]:hidden">
       <AdminSidebar />
-      <SidebarInset className="m-16">
+      <SidebarInset className="px-4 py-6 md:px-8">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator

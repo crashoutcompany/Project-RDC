@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth/client";
+import { cn } from "@/lib/utils";
+
+const inputClass =
+  "border-ac-cream bg-ac-ink text-ac-cream placeholder:text-ac-cream/40 focus-visible:border-ac-gold focus-visible:ring-ac-gold/40 h-12 rounded-none border-2 text-xl md:text-xl";
+const submitClass =
+  "font-display bg-ac-blue text-ac-ink hover:bg-ac-blue/90 h-12 w-full cursor-pointer rounded-none text-xs uppercase shadow-[4px_4px_0_var(--ac-gold)]";
+const labelClass = "ac-label text-ac-cream/80 text-[0.6rem]";
 
 export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
   const router = useRouter();
@@ -29,7 +36,8 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
 
       if (result.error) {
         setErrorMessage(
-          result.error.message || "Unable to send a code. Try again in a minute.",
+          result.error.message ||
+            "Unable to send a code. Try again in a minute.",
         );
         return;
       }
@@ -55,7 +63,8 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
 
       if (result.error) {
         setErrorMessage(
-          result.error.message || "Unable to sign in. Check the code and try again.",
+          result.error.message ||
+            "Unable to sign in. Check the code and try again.",
         );
         return;
       }
@@ -75,11 +84,13 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm font-medium">Sign in with email code</p>
+    <div className="flex flex-col gap-3 text-left">
+      <p className="ac-label text-ac-gold">Sign in with email code</p>
       {step === "email" ? (
         <form className="flex flex-col gap-3" onSubmit={sendCode}>
-          <Label htmlFor="email-otp-email">Email</Label>
+          <Label htmlFor="email-otp-email" className={labelClass}>
+            Email
+          </Label>
           <Input
             id="email-otp-email"
             name="email"
@@ -87,21 +98,24 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
             autoComplete="email"
             spellCheck={false}
             placeholder="you@example.com"
+            className={inputClass}
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
-          <Button type="submit" variant="outline" disabled={pending}>
+          <Button type="submit" className={submitClass} disabled={pending}>
             {pending ? "Sending…" : "Send code"}
           </Button>
         </form>
       ) : (
         <form className="flex flex-col gap-3" onSubmit={verifyCode}>
-          <p aria-live="polite" className="text-sm text-muted-foreground">
-            If <span className="break-all font-medium text-foreground">{email.trim()}</span>{" "}
+          <p aria-live="polite" className="text-ac-cream/80 text-lg">
+            If <span className="text-ac-cream break-all">{email.trim()}</span>{" "}
             can use email sign-in, a 6-digit code is on its way.
           </p>
-          <Label htmlFor="email-otp-code">Code</Label>
+          <Label htmlFor="email-otp-code" className={labelClass}>
+            Code
+          </Label>
           <Input
             id="email-otp-code"
             name="otp"
@@ -111,26 +125,28 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
             pattern="[0-9]*"
             maxLength={6}
             placeholder="123456"
-            className="tracking-[0.3em] tabular-nums"
+            className={cn(inputClass, "tracking-[0.3em] tabular-nums")}
             autoFocus
             required
             value={otp}
             onChange={(event) => setOtp(event.target.value)}
           />
-          <Button type="submit" variant="outline" disabled={pending}>
+          <Button type="submit" className={submitClass} disabled={pending}>
             {pending ? "Verifying…" : "Verify"}
           </Button>
-          <button
+          <Button
             type="button"
-            className="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline"
+            variant="link"
+            size="sm"
+            className="text-ac-cream/70 hover:text-ac-gold self-start px-0"
             onClick={changeEmail}
           >
             Use a different email
-          </button>
+          </Button>
         </form>
       )}
       {errorMessage ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-ac-red text-lg">
           {errorMessage}
         </p>
       ) : null}
