@@ -69,6 +69,18 @@ describe("insertNewSessionFromAdmin", () => {
     expect(revalidateTag).toHaveBeenCalledWith("getMember", "max");
   });
 
+  it("connects the entered day winners to the new session", async () => {
+    const dayWinners = [{ playerId: 1, playerName: "Ben" as const }];
+
+    await insertNewSessionFromAdmin({ ...codSessionForm(), dayWinners });
+
+    expect(db.session.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        dayWinners: { connect: [{ playerId: 1 }] },
+      }),
+    });
+  });
+
   it("keeps the case of YouTube video ids in the stored session url", async () => {
     const sessionUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 

@@ -206,6 +206,11 @@ export const insertNewSessionFromAdmin = async (
           date: validatedSession.date,
           videoId: validatedSession.videoId,
           createdBy: user.user?.email || "SYSTEM",
+          dayWinners: {
+            connect: validatedSession.dayWinners.map((p) => ({
+              playerId: p.playerId,
+            })),
+          },
         },
       });
       const newSessionId = newSession.sessionId;

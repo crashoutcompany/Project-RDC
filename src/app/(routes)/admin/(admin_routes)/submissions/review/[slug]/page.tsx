@@ -4,7 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { EditStatus, Player } from "@/generated/prisma/client";
 import { ProposedData } from "@/app/actions/editSession";
-import { SessionChangesWrapper } from "../_components/Changes";
+import {
+  DayWinnersChanges,
+  SessionChangesWrapper,
+} from "../_components/Changes";
 import { Status } from "../_components/Status";
 import { H1, H2 } from "@/components/headings";
 import { ApproveButton, DeclineButton } from "../_components/ActionButtons";
@@ -81,6 +84,10 @@ async function ReviewContent({
                     <div className="py-2 pl-4">
                       <h4 className="mb-1 text-sm font-medium">Changes:</h4>
                       <div className="bg-muted space-y-2 rounded p-4">
+                        <DayWinnersChanges
+                          current={session.dayWinners}
+                          proposed={parsedJson.proposedData.dayWinners}
+                        />
                         {session.sets.length !==
                           parsedJson.proposedData.sets.length && (
                           <h4 className="mb-1 text-sm font-medium">
@@ -149,6 +156,7 @@ export type Session = {
   Game: {
     gameName: string;
   } | null;
+  dayWinners: { playerId: number; playerName: string }[];
   sets: {
     setId: number;
     setWinners: { playerId: number; playerName: string }[];
@@ -191,6 +199,7 @@ const fetchEditRequests = async (
             gameName: true,
           },
         },
+        dayWinners: true,
         sets: {
           include: {
             setWinners: true,

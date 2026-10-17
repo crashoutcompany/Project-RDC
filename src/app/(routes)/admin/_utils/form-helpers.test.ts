@@ -11,6 +11,7 @@ const validSession = (sessionUrl: string): FormValues => ({
   date: new Date("2023-10-01"),
   videoId: MIXED_CASE_VIDEO_ID,
   players: [{ playerId: 1, playerName: "Ben" }],
+  dayWinners: [],
   sets: [
     {
       setId: 1,
@@ -59,6 +60,49 @@ describe("formSchema sessionUrl", () => {
     const parsed = formSchema.safeParse(
       validSession("https://example.com/watch?v=dQw4w9WgXcQ"),
     );
+
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("formSchema dayWinners", () => {
+  const url = `https://www.youtube.com/watch?v=${MIXED_CASE_VIDEO_ID}`;
+
+  it("accepts an empty day winner list", () => {
+    const parsed = formSchema.safeParse(validSession(url));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.dayWinners).toEqual([]);
+  });
+
+  it("accepts day winners drawn from the session players", () => {
+    const parsed = formSchema.safeParse({
+      ...validSession(url),
+      dayWinners: [{ playerId: 1, playerName: "Ben" }],
+    });
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.dayWinners).toEqual([{ playerId: 1, playerName: "Ben" }]);
+  });
+
+  it("rejects a day winner who is not a session player", () => {
+    const parsed = formSchema.safeParse({
+      ...validSession(url),
+      dayWinners: [{ playerId: 2, playerName: "Mark" }],
+    });
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues[0].path).toEqual(["dayWinners", 0]);
+  });
+
+  it("rejects a day winner that is not a known member", () => {
+    const parsed = formSchema.safeParse({
+      ...validSession(url),
+      dayWinners: [{ playerId: 1, playerName: "Nobody" }],
+    });
 
     expect(parsed.success).toBe(false);
   });

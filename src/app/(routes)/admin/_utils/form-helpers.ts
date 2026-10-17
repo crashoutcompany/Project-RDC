@@ -251,6 +251,8 @@ const baseSessionSchema = z.object({
   date: dateSchema,
   thumbnail: thumbnailSchema,
   players: playersSchema,
+  // Entered manually by admins; may be empty (a day with no recorded winner).
+  dayWinners: z.array(playerSchema),
   sets: setsSchema,
 });
 
@@ -439,14 +441,27 @@ const codSchema = baseSessionSchema.extend({
 // ! End of Game specific schemas
 
 // Combined schema with discriminated union
-export const formSchema = z.discriminatedUnion("game", [
-  codSchema,
-  rocketLeagueSchema,
-  marioKart8MatchSchema,
-  lethalCompanySchema,
-  speedrunnersSchema,
-  marvelRivalsSchema,
-]);
+export const formSchema = z
+  .discriminatedUnion("game", [
+    codSchema,
+    rocketLeagueSchema,
+    marioKart8MatchSchema,
+    lethalCompanySchema,
+    speedrunnersSchema,
+    marvelRivalsSchema,
+  ])
+  .check((ctx) => {
+    const { players, dayWinners } = ctx.value;
+    dayWinners.forEach((winner, index) => {
+      if (!players.some((p) => p.playerId === winner.playerId))
+        ctx.issues.push({
+          code: "custom",
+          message: `${winner.playerName} is not a session player`,
+          input: winner,
+          path: ["dayWinners", index],
+        });
+    });
+  });
 
 // Define types based on the Zod schema
 export type FormValues = z.infer<typeof formSchema>;
