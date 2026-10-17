@@ -4,7 +4,7 @@ export const alt = "RDC Stats Tracker";
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
-export default function Image() {
+export default async function Image() {
   return ogImageResponse({
     eyebrow: "Real Dreams Change the World",
     title: "RDC Stats Tracker",

@@ -10,6 +10,12 @@ describe("publicImageDataUrl", () => {
     expect(url?.startsWith("data:image/jpeg;base64,")).toBe(true);
   });
 
+  it("detects the real type when the extension is wrong", async () => {
+    // A PNG saved with a .jpg extension.
+    const url = await publicImageDataUrl("/images/marvel_rvials.jpg");
+    expect(url?.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
   it("refuses paths that escape public/", async () => {
     expect(await publicImageDataUrl("/../package.json")).toBeNull();
     expect(await publicImageDataUrl("/../../etc/passwd")).toBeNull();

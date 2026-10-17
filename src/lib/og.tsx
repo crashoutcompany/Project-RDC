@@ -1,6 +1,6 @@
 import "server-only";
 import { readFile } from "node:fs/promises";
-import { extname, join, sep } from "node:path";
+import { join, sep } from "node:path";
 import { ImageResponse } from "next/og";
 
 export const OG_SIZE = { width: 1200, height: 630 } as const;
@@ -17,22 +17,59 @@ const palette = {
 };
 
 const PUBLIC_DIR = join(process.cwd(), "public");
-const MIME: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-};
+const FONT_DIR = join(process.cwd(), "src/assets/fonts");
+
+/** Site fonts as TTF (Satori can't read the woff2 that next/font serves). */
+const DISPLAY_FONT = "Press Start 2P";
+const BODY_FONT = "VT323";
+
+type OgFonts = NonNullable<
+  NonNullable<ConstructorParameters<typeof ImageResponse>[1]>["fonts"]
+>;
+let fonts: Promise<OgFonts | undefined> | undefined;
+
+async function readFonts(): Promise<OgFonts> {
+  const [display, body] = await Promise.all([
+    readFile(join(FONT_DIR, "PressStart2P-Regular.ttf")),
+    readFile(join(FONT_DIR, "VT323-Regular.ttf")),
+  ]);
+  return [
+    { name: DISPLAY_FONT, data: display, weight: 400, style: "normal" },
+    { name: BODY_FONT, data: body, weight: 400, style: "normal" },
+  ];
+}
+
+const loadFonts = () =>
+  (fonts ??= readFonts().catch(() => {
+    // Render with Satori's default font and retry on the next request.
+    fonts = undefined;
+    return undefined;
+  }));
 const REMOTE_MIME = ["image/jpeg", "image/png", "image/gif"];
+
+/**
+ * Image type from the file's magic bytes. Extensions can't be trusted here:
+ * e.g. public/images/marvel_rvials.jpg is a PNG, and Satori silently drops an
+ * image whose data URL declares the wrong type.
+ */
+function sniffImageType(bytes: Buffer): string | null {
+  if (bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])))
+    return "image/png";
+  if (bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])))
+    return "image/jpeg";
+  if (bytes.subarray(0, 4).toString("ascii") === "GIF8") return "image/gif";
+  return null;
+}
 
 /** Reads a site asset from `public/` as a data URL. Null for missing files or formats Satori cannot draw (e.g. webp). */
 export async function publicImageDataUrl(src: string | null | undefined) {
   if (!src?.startsWith("/")) return null;
   const file = join(PUBLIC_DIR, src);
-  const mime = MIME[extname(file).toLowerCase()];
-  if (!mime || !file.startsWith(PUBLIC_DIR + sep)) return null;
+  if (!file.startsWith(PUBLIC_DIR + sep)) return null;
   try {
-    return `data:${mime};base64,${(await readFile(file)).toString("base64")}`;
+    const bytes = await readFile(file);
+    const mime = sniffImageType(bytes);
+    return mime ? `data:${mime};base64,${bytes.toString("base64")}` : null;
   } catch {
     return null;
   }
@@ -61,7 +98,7 @@ const clip = (text: string, max: number) =>
  * Shared 1200x630 arcade card for every OG image route. Satori only lays out
  * flexbox, so every element with more than one child sets `display: flex`.
  */
-export function ogImageResponse({
+export async function ogImageResponse({
   eyebrow,
   title,
   subtitle,
@@ -83,6 +120,7 @@ export function ogImageResponse({
         background: `linear-gradient(135deg, ${palette.ink} 0%, ${palette.panel} 55%, ${palette.panel2} 100%)`,
         color: palette.cream,
         border: `12px solid ${palette.gold}`,
+        fontFamily: BODY_FONT,
       }}
     >
       <div
@@ -98,31 +136,34 @@ export function ogImageResponse({
           <div
             style={{
               display: "flex",
-              fontSize: 26,
+              fontFamily: DISPLAY_FONT,
+              fontSize: 18,
               color: palette.gold,
-              letterSpacing: 4,
+              letterSpacing: 2,
+              lineHeight: 1.6,
             }}
           >
-            {clip(eyebrow.toUpperCase(), 60)}
+            {clip(eyebrow.toUpperCase(), 40)}
           </div>
           <div
             style={{
               display: "flex",
-              marginTop: 18,
-              fontSize: title.length > 24 ? 64 : 84,
-              fontWeight: 700,
-              lineHeight: 1.05,
+              marginTop: 24,
+              fontFamily: DISPLAY_FONT,
+              // Press Start 2P glyphs are about as wide as the font size.
+              fontSize: title.length > 20 ? 36 : title.length > 10 ? 48 : 64,
+              lineHeight: 1.25,
               color: palette.cream,
             }}
           >
-            {clip(title, 48)}
+            {clip(title.toUpperCase(), 48)}
           </div>
           {subtitle ? (
             <div
               style={{
                 display: "flex",
-                marginTop: 20,
-                fontSize: 32,
+                marginTop: 24,
+                fontSize: 44,
                 color: palette.cream,
                 opacity: 0.8,
               }}
@@ -152,10 +193,11 @@ export function ogImageResponse({
                   <div
                     style={{
                       display: "flex",
-                      fontSize: 20,
+                      fontFamily: DISPLAY_FONT,
+                      fontSize: 13,
                       color: palette.cream,
                       opacity: 0.8,
-                      letterSpacing: 2,
+                      letterSpacing: 1,
                     }}
                   >
                     {stat.label.toUpperCase()}
@@ -163,9 +205,9 @@ export function ogImageResponse({
                   <div
                     style={{
                       display: "flex",
-                      marginTop: 6,
-                      fontSize: value.length > 12 ? 28 : 44,
-                      fontWeight: 700,
+                      marginTop: 12,
+                      fontFamily: DISPLAY_FONT,
+                      fontSize: value.length > 8 ? 20 : 36,
                       color: stat.color ?? palette.blue,
                     }}
                   >
@@ -197,6 +239,6 @@ export function ogImageResponse({
         </div>
       ) : null}
     </div>,
-    { ...OG_SIZE },
+    { ...OG_SIZE, fonts: await loadFonts() },
   );
 }
