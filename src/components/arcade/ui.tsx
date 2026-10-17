@@ -1,7 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Fragment } from "react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { arcadeButtonClass } from "./button-class";
 
 type Tone = "red" | "blue" | "gold" | "green" | "pink";
 
@@ -171,6 +180,27 @@ export function PixelPortrait({
   );
 }
 
+/** Round-win pips beside a fight bar: one won, one still open. */
+function Pips({ mirror = false }: { mirror?: boolean }) {
+  const won = <span className="bg-ac-gold size-2.5" />;
+  const open = <span className="border-ac-cream size-2.5 border-2" />;
+  return (
+    <span aria-hidden className="flex items-center gap-1">
+      {mirror ? (
+        <>
+          {open}
+          {won}
+        </>
+      ) : (
+        <>
+          {won}
+          {open}
+        </>
+      )}
+    </span>
+  );
+}
+
 /** Segmented 1P / timer / 2P bar across the top of a match. */
 export function FightBar({
   left = "1P",
@@ -184,17 +214,23 @@ export function FightBar({
   rightValue?: number;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
       <div>
         <HpBar value={leftValue} variant="p1" align="right" className="h-5" />
-        <p className="ac-label text-ac-red mt-1">1P {left}</p>
+        <div className="mt-1 flex items-center justify-between">
+          <p className="ac-label text-ac-red">1P {left}</p>
+          <Pips />
+        </div>
       </div>
       <span className="ac-title border-ac-gold text-ac-gold border-2 px-3 py-2 text-xl">
         99
       </span>
       <div>
         <HpBar value={rightValue} variant="p2" className="h-5" />
-        <p className="ac-label text-ac-blue mt-1 text-right">{right} 2P</p>
+        <div className="mt-1 flex items-center justify-between">
+          <Pips mirror />
+          <p className="ac-label text-ac-blue text-right">{right} 2P</p>
+        </div>
       </div>
     </div>
   );
@@ -206,26 +242,32 @@ export function Breadcrumbs({
   items: { label: string; href?: string }[];
 }) {
   return (
-    <nav aria-label="Breadcrumb" className="ac-label text-ac-cream/80 mb-4">
-      <ol className="flex flex-wrap items-center gap-2">
+    <Breadcrumb aria-label="Breadcrumb" className="mb-4">
+      <BreadcrumbList>
         {items.map((item, i) => (
-          <li key={item.label} className="flex items-center gap-2">
-            {i > 0 ? <span aria-hidden>›</span> : null}
-            {item.href ? (
-              <Link href={item.href} className="hover:text-ac-gold">
-                {item.label}
-              </Link>
-            ) : (
-              <span className="text-ac-cream" aria-current="page">
-                {item.label}
-              </span>
-            )}
-          </li>
+          <Fragment key={item.label}>
+            {i > 0 ? <BreadcrumbSeparator /> : null}
+            <BreadcrumbItem>
+              {item.href ? (
+                <BreadcrumbLink asChild>
+                  <Link href={item.href}>{item.label}</Link>
+                </BreadcrumbLink>
+              ) : (
+                <BreadcrumbPage>{item.label}</BreadcrumbPage>
+              )}
+            </BreadcrumbItem>
+          </Fragment>
         ))}
-      </ol>
-    </nav>
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }
+
+const ARCADE_BUTTON_VARIANT = {
+  gold: "default",
+  dark: "outline",
+  red: "destructive",
+} as const;
 
 /** Chunky arcade button with a hard offset shadow. */
 export function ArcadeButton({
@@ -237,17 +279,20 @@ export function ArcadeButton({
 }: {
   href: string;
   children: React.ReactNode;
-  variant?: "gold" | "dark" | "red";
+  variant?: keyof typeof ARCADE_BUTTON_VARIANT;
   className?: string;
 } & Omit<React.ComponentProps<typeof Link>, "href" | "className">) {
   return (
-    <Link
-      href={href}
-      className={cn(arcadeButtonClass(variant), className)}
-      {...props}
+    <Button
+      asChild
+      size="lg"
+      variant={ARCADE_BUTTON_VARIANT[variant]}
+      className={className}
     >
-      {children}
-    </Link>
+      <Link href={href} {...props}>
+        {children}
+      </Link>
+    </Button>
   );
 }
 
@@ -301,19 +346,15 @@ export function HowToPlay() {
   );
 }
 
-/** "CONTINUE? 9" call to log in and submit a session. */
+/** "Continue?" call to log in and submit a session. */
 export function ChallengerBanner() {
   return (
-    <section className="ac-grid bg-ac-ink">
-      <div className="mx-auto max-w-6xl px-4 py-14">
-        <div className="border-ac-gold bg-ac-panel relative flex flex-wrap items-center justify-between gap-6 border-4 p-8">
-          <Tag tone="green" className="absolute -top-6 right-6">
-            help us out!!
-          </Tag>
+    <section className="bg-ac-panel">
+      <div className="mx-auto max-w-6xl px-4 pb-14">
+        <div className="border-ac-gold bg-ac-panel flex flex-wrap items-center justify-between gap-6 border-4 p-8">
           <div>
             <h2 className="ac-title text-ac-cream text-2xl md:text-3xl">
-              Continue?{" "}
-              <span className="text-ac-red animate-blink inline-block">9</span>
+              Continue?
             </h2>
             <p className="text-ac-cream/80 mt-3 max-w-md">
               Keeping track of stats takes a lot of time. Log in and submit a

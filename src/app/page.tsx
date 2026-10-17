@@ -6,8 +6,8 @@ import {
   PressStartLink,
 } from "@/components/arcade/scene/arcade-hero";
 import { FullscreenStageLock } from "@/components/arcade/fullscreen-stage";
-import { arcadeButtonClass } from "@/components/arcade/button-class";
 import { Eyebrow, ArcadeButton, Tag } from "@/components/arcade/ui";
+import { buttonVariants } from "@/components/ui/button";
 import { FEATURED_ARENA, getArenas, topFive } from "@/lib/rdc-stats";
 
 export default function Home() {
@@ -56,7 +56,7 @@ export default function Home() {
             <PressStartLink
               href="/games"
               data-testid="home-games-link"
-              className={arcadeButtonClass()}
+              className={buttonVariants({ size: "lg" })}
             >
               ▶ Press start
             </PressStartLink>

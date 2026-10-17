@@ -134,13 +134,15 @@ export function EmailOtpForm({ callbackURL }: { callbackURL?: string }) {
           <Button type="submit" className={submitClass} disabled={pending}>
             {pending ? "Verifying…" : "Verify"}
           </Button>
-          <button
+          <Button
             type="button"
-            className="ac-label text-ac-cream/70 hover:text-ac-gold cursor-pointer self-start underline-offset-4 hover:underline focus-visible:underline"
+            variant="link"
+            size="sm"
+            className="text-ac-cream/70 hover:text-ac-gold self-start px-0"
             onClick={changeEmail}
           >
             Use a different email
-          </button>
+          </Button>
         </form>
       )}
       {errorMessage ? (

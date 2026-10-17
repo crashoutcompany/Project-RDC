@@ -68,7 +68,17 @@ export function GameDashboard({ data, children }: GameDashboardProps) {
       {children && (
         <>
           <Rule />
-          {children}
+          <section>
+            <div className="mb-4">
+              <h2 className="ac-title text-ac-cream text-2xl">
+                Stat <span className="text-ac-gold">board</span>
+              </h2>
+              <p className="text-ac-cream/70 text-sm">
+                All-time numbers for every player
+              </p>
+            </div>
+            {children}
+          </section>
         </>
       )}
     </div>

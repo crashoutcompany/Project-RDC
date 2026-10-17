@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import type { GamesEnum } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Metric = "matches" | "sets" | "days";
@@ -42,20 +43,16 @@ export function WinsMatrix({ arenas, rows }: WinsMatrixProps) {
         aria-label="Win type"
       >
         {METRICS.map((m) => (
-          <button
+          <Button
             key={m.key}
             type="button"
+            size="sm"
+            variant={metric === m.key ? "default" : "outline"}
             aria-pressed={metric === m.key}
             onClick={() => setMetric(m.key)}
-            className={cn(
-              "ac-title ac-skew-sm cursor-pointer border-2 px-4 py-1 text-xs",
-              metric === m.key
-                ? "bg-ac-gold text-ac-ink border-ac-gold"
-                : "border-ac-cream text-ac-cream hover:bg-ac-panel-2",
-            )}
           >
             {m.label}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="overflow-x-auto">

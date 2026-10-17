@@ -5,7 +5,9 @@ import { connection } from "next/server";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Leaderboard } from "@/components/arcade/leaderboard";
 import { VersusSelect } from "@/components/arcade/versus-select";
-import { ChallengerBanner, Heading, Tag } from "@/components/arcade/ui";
+import { ArenaCard } from "@/components/arcade/arena-card";
+import { StageTitle } from "@/components/arcade/stage-title";
+import { ChallengerBanner, Heading } from "@/components/arcade/ui";
 import {
   FEATURED_ARENA,
   getArenas,
@@ -22,19 +24,10 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <>
-      <div className="bg-ac-ink border-ac-panel-2 border-b">
-        <div className="mx-auto max-w-6xl px-4 pt-8 pb-4 text-center">
-          <Tag tone="green" className="text-3xl">
-            who&apos;s the best gamer?
-          </Tag>
-          <h1
-            data-testid="members-shell-marker"
-            className="ac-title text-ac-cream animate-slam-in mt-4 text-2xl md:text-4xl"
-          >
-            Fighter select
-          </h1>
-        </div>
-      </div>
+      {/* Static shell marker; the visible title lives in the streamed stage. */}
+      <h1 data-testid="members-shell-marker" className="sr-only">
+        Fighter select
+      </h1>
       <Suspense fallback={<MembersSkeleton />}>
         <MembersContent />
       </Suspense>
@@ -81,12 +74,22 @@ async function MembersContent() {
               ))}
             </ul>
           </div>
-          <div className="border-ac-gold ac-shadow self-start border-4 bg-ac-panel p-5">
+          <div className="border-ac-gold ac-shadow bg-ac-panel self-start border-4 p-5">
             <p className="ac-label text-ac-gold">Latest champion</p>
             <p className="ac-title text-ac-cream mt-2 mb-4 text-sm">
               {featured?.name ?? "Mario Kart 8"}
             </p>
             <Leaderboard entries={topFive(featured)} />
+          </div>
+        </div>
+      </section>
+      <section className="bg-ac-panel">
+        <div className="mx-auto max-w-6xl px-4 py-14">
+          <Heading lead="Choose your stage" className="mb-8" />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {arenas.map((arena) => (
+              <ArenaCard key={arena.slug} arena={arena} />
+            ))}
           </div>
         </div>
       </section>
@@ -109,7 +112,7 @@ function SegmentedBar({ value }: { value: number }) {
       {Array.from({ length: segments }, (_, i) => (
         <span
           key={i}
-          className={i < lit ? "bg-ac-gold flex-1" : "bg-[#4a4690] flex-1"}
+          className={i < lit ? "bg-ac-gold flex-1" : "flex-1 bg-[#4a4690]"}
         />
       ))}
     </div>
@@ -118,13 +121,26 @@ function SegmentedBar({ value }: { value: number }) {
 
 function MembersSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <Skeleton className="h-96 w-full" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 8 }, (_, i) => (
-          <Skeleton key={i} className="aspect-square" />
-        ))}
+    <>
+      <div className="border-ac-panel-2 border-b-2 bg-black">
+        <div className="mx-auto max-w-6xl px-4 py-4">
+          <Skeleton className="h-12 w-full" />
+        </div>
       </div>
-    </div>
+      <section className="ac-grid bg-ac-ink">
+        <div className="mx-auto max-w-6xl px-4 pt-8 pb-10">
+          <StageTitle />
+          <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] lg:gap-6">
+            <Skeleton className="aspect-[3/4]" />
+            <div className="order-last col-span-2 grid grid-cols-4 gap-2 lg:order-none lg:col-span-1">
+              {Array.from({ length: 8 }, (_, i) => (
+                <Skeleton key={i} className="aspect-square" />
+              ))}
+            </div>
+            <Skeleton className="aspect-[3/4]" />
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

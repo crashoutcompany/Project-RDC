@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import type { Sessions } from "../../_helpers/dashboard";
 import { formatSessionDate } from "@/lib/utils";
 
@@ -146,12 +147,8 @@ function TapeButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="ac-title ac-skew-sm border-ac-cream text-ac-cream hover:bg-ac-cream hover:text-ac-ink cursor-pointer border-2 px-5 py-1.5 text-xs transition-colors"
-    >
+    <Button type="button" variant="outline" onClick={onClick}>
       {children}
-    </button>
+    </Button>
   );
 }

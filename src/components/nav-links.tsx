@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -63,16 +64,18 @@ function NavLinkList({
 export function SignOutButton() {
   const router = useRouter();
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={async () => {
         await authClient.signOut();
         router.push("/");
         router.refresh();
       }}
-      className="ac-label text-ac-cream/70 hover:text-ac-cream cursor-pointer px-2"
+      className="text-foreground/70 hover:text-foreground hover:bg-transparent"
     >
       Log out
-    </button>
+    </Button>
   );
 }
