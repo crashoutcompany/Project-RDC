@@ -139,6 +139,8 @@ describe("approveSession", () => {
       }),
     );
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
+    // Home and member pages read the cached arena aggregate.
+    expect(revalidateTag).toHaveBeenCalledWith("getArenas", "max");
   });
 
   it("surfaces a database failure", async () => {

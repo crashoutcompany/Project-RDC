@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -18,26 +17,34 @@ import {
   ChartConfig,
 } from "@/components/ui/chart";
 
-const BarChart = dynamic(
-  () => import("recharts").then((mod) => mod.BarChart),
-  { ssr: false }
-);
-const YAxis = dynamic(
-  () => import("recharts").then((mod) => mod.YAxis),
-  { ssr: false }
-);
+const BarChart = dynamic(() => import("recharts").then((mod) => mod.BarChart), {
+  ssr: false,
+});
+const YAxis = dynamic(() => import("recharts").then((mod) => mod.YAxis), {
+  ssr: false,
+});
 const CartesianGrid = dynamic(
   () => import("recharts").then((mod) => mod.CartesianGrid),
-  { ssr: false }
+  { ssr: false },
 );
-const XAxis = dynamic(
-  () => import("recharts").then((mod) => mod.XAxis),
-  { ssr: false }
-);
-const Bar = dynamic(
-  () => import("recharts").then((mod) => mod.Bar),
-  { ssr: false }
-);
+const XAxis = dynamic(() => import("recharts").then((mod) => mod.XAxis), {
+  ssr: false,
+});
+const Bar = dynamic(() => import("recharts").then((mod) => mod.Bar), {
+  ssr: false,
+});
+
+/**
+ * Two-column chart layout: the tabbed wins chart (always last) spans both
+ * columns, and an odd chart left before it does too so no row is half empty.
+ */
+export function ChartGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid gap-8 md:grid-cols-2 md:[&>*:last-child]:col-span-2 md:[&>*:nth-last-child(2):nth-child(odd)]:col-span-2">
+      {children}
+    </div>
+  );
+}
 
 export function CustomChart<T extends unknown[]>({
   data,
@@ -62,13 +69,13 @@ export function CustomChart<T extends unknown[]>({
   //   console.error("DataKey not present in data passed to chart");
 
   return (
-    <Card className="w-fit">
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="min-h-60 w-full">
+        <ChartContainer config={config} className="aspect-auto h-[260px] w-full">
           <BarChart accessibilityLayer data={data}>
             <CartesianGrid vertical={false} />
             <XAxis
@@ -82,11 +89,10 @@ export function CustomChart<T extends unknown[]>({
             <ChartLegend
               content={<ChartLegendContent nameKey={nameKey.toString()} />}
             />
-            <Bar dataKey={dataKey} fill="var(--chart-1)" radius={4} />
+            <Bar dataKey={dataKey} fill="var(--chart-1)" />
           </BarChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter></CardFooter>
     </Card>
   );
 }
