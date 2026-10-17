@@ -342,8 +342,11 @@ export async function getSorryBoards(): Promise<SorryBoards> {
   "use cache";
   cacheLife("hours");
   cacheTag(ARENAS_TAG, "getAllSessions", "getAllGames");
-  const [roster, arenas] = await Promise.all([getRoster(), getArenas()]);
-  const games = await getAllGames();
+  const [roster, arenas, games] = await Promise.all([
+    getRoster(),
+    getArenas(),
+    getAllGames(),
+  ]);
   const ordered = arenas.map(({ slug, name }) => ({ slug, name }));
   if (!games.success || !games.data) return { games: ordered, boards: {} };
 
