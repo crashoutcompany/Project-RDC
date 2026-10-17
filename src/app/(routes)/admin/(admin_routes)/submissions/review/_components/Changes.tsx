@@ -140,6 +140,34 @@ export const SessionChangesWrapper = ({
   );
 };
 
+/** Day winners are not part of the set/match diff, so show their add/remove delta. */
+export const DayWinnersChanges = ({
+  current,
+  proposed,
+}: {
+  current: { playerId: number; playerName: string }[];
+  proposed?: { playerId: number; playerName: string }[];
+}) => {
+  if (proposed === undefined) return null;
+  const currentIds = new Set(current.map((w) => w.playerId));
+  const proposedIds = new Set(proposed.map((w) => w.playerId));
+  const removed = current.filter((w) => !proposedIds.has(w.playerId));
+  const added = proposed.filter((w) => !currentIds.has(w.playerId));
+  if (removed.length === 0 && added.length === 0) return null;
+
+  return (
+    <div className="my-3 flex flex-wrap items-center">
+      <div className="text-red-500">Day winners have changed</div>
+      {removed.map((winner) => (
+        <PlayerAndName key={winner.playerId} winner={winner} newWinner={false} />
+      ))}
+      {added.map((winner) => (
+        <PlayerAndName key={winner.playerId} winner={winner} newWinner={true} />
+      ))}
+    </div>
+  );
+};
+
 export const Changes = ({
   players,
 }: {

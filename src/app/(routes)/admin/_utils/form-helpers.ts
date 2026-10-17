@@ -251,6 +251,8 @@ const baseSessionSchema = z.object({
   date: dateSchema,
   thumbnail: thumbnailSchema,
   players: playersSchema,
+  // Entered manually by admins; may be empty (a day with no recorded winner).
+  dayWinners: z.array(playerSchema),
   sets: setsSchema,
 });
 

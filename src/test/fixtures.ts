@@ -10,6 +10,7 @@ export const codSessionForm = (): FormValues => ({
   date: new Date("2023-10-01"),
   videoId: "video123456",
   players: [{ playerId: 1, playerName: "Ben" }],
+  dayWinners: [],
   sets: [
     {
       setId: 1,
@@ -45,6 +46,7 @@ export const mk8SessionForm = (
   videoId: "mk8video123",
   date: new Date("2025-01-01"),
   players: [{ playerId: 1, playerName: "Mark" }],
+  dayWinners: [],
   sets,
 });
 

@@ -165,6 +165,17 @@ export async function approveEditRequest(editId: number, note?: string) {
         ...(dirtyFields.date && { date: new Date(proposedData.date) }),
       },
     });
+
+    // Proposals submitted before day winners existed omit the key; leave them alone.
+    if (proposedData.dayWinners !== undefined)
+      await tx.session.update({
+        where: { sessionId },
+        data: {
+          dayWinners: {
+            set: proposedData.dayWinners.map((w) => ({ playerId: w.playerId })),
+          },
+        },
+      });
   }
 
   // Helper: create match + nested playerSessions and playerStats

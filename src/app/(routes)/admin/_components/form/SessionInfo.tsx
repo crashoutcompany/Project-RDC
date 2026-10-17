@@ -7,10 +7,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Controller, UseFormReturn } from "react-hook-form";
+import { Controller, UseFormReturn, useWatch } from "react-hook-form";
 import GameDropDownForm from "./GameDropDownForm";
 import PlayerSelector from "./PlayerSelector";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { getRDCVideoDetails } from "@/app/actions/action";
 import { toast } from "sonner";
 import { errorCodes } from "@/lib/constants";
@@ -30,10 +30,23 @@ export const SessionInfo = ({
   const [isPending, startTransition] = useTransition();
   const {
     control,
+    getValues,
+    setValue,
     formState: { defaultValues },
   } = form;
+  const sessionPlayers = useWatch({ control, name: "players" });
   const posthog = usePostHog();
   const { data: session } = authClient.useSession();
+
+  // Day winners must be session players; drop any whose player was removed.
+  useEffect(() => {
+    const current = getValues("dayWinners") ?? [];
+    const pruned = current.filter((w) =>
+      (sessionPlayers ?? []).some((p) => p.playerId === w.playerId),
+    );
+    if (pruned.length !== current.length)
+      setValue("dayWinners", pruned, { shouldDirty: true });
+  }, [sessionPlayers, getValues, setValue]);
 
   const handleUrlUpdated = (): void => {
     startTransition(async () => {
@@ -139,6 +152,22 @@ export const SessionInfo = ({
               field={field}
               currentSelectedPlayers={field.value}
               label="Session Players"
+            />
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={control}
+        name="dayWinners"
+        render={({ field }) => (
+          <FormItem>
+            <PlayerSelector
+              rdcMembers={sessionPlayers ?? []}
+              control={form.control}
+              field={field}
+              currentSelectedPlayers={field.value}
+              label="Day Winners"
             />
             <FormMessage />
           </FormItem>

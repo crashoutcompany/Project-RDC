@@ -97,6 +97,32 @@ describe("approveEditRequest", () => {
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
   });
 
+  it("replaces the day winners with the proposed list", async () => {
+    givenPendingEdit(
+      { ...mk8SessionForm(), dayWinners: [DES] },
+      { dayWinners: true },
+    );
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).toHaveBeenCalledWith({
+      where: { sessionId: 1 },
+      data: { dayWinners: { set: [{ playerId: 2 }] } },
+    });
+  });
+
+  it("leaves day winners alone when the proposal predates the field", async () => {
+    const legacy: Partial<FormValues> = mk8SessionForm();
+    delete legacy.dayWinners;
+    givenPendingEdit(legacy as FormValues, { sessionName: true });
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ dayWinners: expect.anything() }) }),
+    );
+  });
+
   it("rebuilds matches in place when the set count is unchanged", async () => {
     givenPendingEdit(mk8SessionForm([mk8Set(1, DES)]), { sets: true });
 

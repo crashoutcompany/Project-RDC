@@ -45,6 +45,7 @@ const EntryCreatorForm = ({
       sessionUrl: "https://www.youtube.com/watch?v=",
       thumbnail: "",
       players: [],
+      dayWinners: [],
       sets: [],
     },
     mode: "onChange",
@@ -121,6 +122,8 @@ const EntryCreatorForm = ({
             try {
               const session: FormValues = JSON.parse(savedForm);
               session.date = new Date(session.date);
+              // Drafts saved before day winners existed have no such key.
+              session.dayWinners ??= [];
               form.reset(session);
             } catch (error) {
               console.error("Error restoring form data:", error);

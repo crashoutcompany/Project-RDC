@@ -30,7 +30,7 @@ const mockPrisma = {
   },
   playerStat: { create: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
   gameStat: { findMany: vi.fn(async () => []), findFirst: vi.fn(), create: vi.fn() },
-  player: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+  player: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   sessionEditRequest: {
     create: vi.fn(async () => ({ id: 1 })),
     findMany: vi.fn(async () => []),
