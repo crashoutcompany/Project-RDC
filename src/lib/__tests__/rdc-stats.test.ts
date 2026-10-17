@@ -8,6 +8,7 @@ import {
   sorryRanks,
   sorryScale,
   summarizeArena,
+  killDeathRatio,
   topFive,
   type Fighter,
   type SorryEntry,
@@ -159,5 +160,15 @@ describe("sorryRanks", () => {
     const ranks = sorryRanks([entry("Ben", 1), entry("Des", null)]);
     expect(ranks.get("ben")).toBe(1);
     expect(ranks.has("des")).toBe(false);
+  });
+});
+
+describe("killDeathRatio", () => {
+  it("divides kills by deaths", () => {
+    expect(killDeathRatio(9, 3)).toBe(3);
+  });
+
+  it("floors deaths at 1", () => {
+    expect(killDeathRatio(5, 0)).toBe(5);
   });
 });
