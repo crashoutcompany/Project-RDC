@@ -1,5 +1,5 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { ImageResponse } from "next/og";
 
@@ -40,12 +40,16 @@ async function readFonts(): Promise<OgFonts> {
 }
 
 const loadFonts = () =>
-  (fonts ??= readFonts().catch(() => {
+  (fonts ??= readFonts().catch((error: unknown) => {
     // Render with Satori's default font and retry on the next request.
+    console.warn("[og] font load failed, using default font", error);
     fonts = undefined;
     return undefined;
   }));
-const REMOTE_MIME = ["image/jpeg", "image/png", "image/gif"];
+
+const REMOTE_MAX_BYTES = 5 * 1024 * 1024;
+const REMOTE_TIMEOUT_MS = 4000;
+const REMOTE_HOST = /^(i\d?\.ytimg\.com|img\.youtube\.com)$/;
 
 /**
  * Image type from the file's magic bytes. Extensions can't be trusted here:
@@ -61,29 +65,74 @@ function sniffImageType(bytes: Buffer): string | null {
   return null;
 }
 
+/** Sniffs a file's type from its first 12 bytes so large non-image files are never read whole. */
+async function sniffFile(file: string) {
+  const handle = await open(file, "r");
+  try {
+    const head = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(head, 0, 12, 0);
+    return sniffImageType(head.subarray(0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Reads a site asset from `public/` as a data URL. Null for missing files or formats Satori cannot draw (e.g. webp). */
 export async function publicImageDataUrl(src: string | null | undefined) {
   if (!src?.startsWith("/")) return null;
   const file = join(PUBLIC_DIR, src);
   if (!file.startsWith(PUBLIC_DIR + sep)) return null;
   try {
+    const mime = await sniffFile(file);
+    if (!mime) return null;
     const bytes = await readFile(file);
-    const mime = sniffImageType(bytes);
-    return mime ? `data:${mime};base64,${bytes.toString("base64")}` : null;
+    return `data:${mime};base64,${bytes.toString("base64")}`;
   } catch {
     return null;
   }
 }
 
-/** Fetches a remote image (e.g. a YouTube thumbnail) as a data URL. Any failure or timeout yields null so the card still renders. */
+/** Reads a response body, giving up (and cancelling the stream) once it passes `max` bytes. */
+async function readCapped(res: Response, max: number) {
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let chunk = await reader.read();
+  while (!chunk.done) {
+    total += chunk.value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk.value);
+    chunk = await reader.read();
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Fetches a YouTube thumbnail as a data URL. Only https on YouTube image hosts,
+ * no redirects, capped at 5 MB, and typed by sniffing the bytes rather than
+ * trusting Content-Type. Any failure yields null so the card still renders.
+ */
 export async function remoteImageDataUrl(url: string | null | undefined) {
   if (!url) return null;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    const type = res.headers.get("content-type")?.split(";")[0] ?? "";
-    if (!res.ok || !REMOTE_MIME.includes(type)) return null;
-    const bytes = Buffer.from(await res.arrayBuffer());
-    return `data:${type};base64,${bytes.toString("base64")}`;
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || !REMOTE_HOST.test(parsed.hostname))
+      return null;
+    const res = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const declared = Number(res.headers.get("content-length"));
+    if (declared > REMOTE_MAX_BYTES) return null;
+    const bytes = await readCapped(res, REMOTE_MAX_BYTES);
+    if (!bytes) return null;
+    const mime = sniffImageType(bytes);
+    return mime ? `data:${mime};base64,${bytes.toString("base64")}` : null;
   } catch {
     return null;
   }
@@ -93,6 +142,13 @@ export type OgStat = { label: string; value: string | number; color?: string };
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/** Press Start 2P is about one em per glyph, so shrink the value to fit a 200px box. */
+function statValueSize(length: number) {
+  if (length <= 4) return 36;
+  if (length <= 7) return 26;
+  return 18;
+}
 
 /**
  * Shared 1200x630 arcade card for every OG image route. Satori only lays out
@@ -176,7 +232,7 @@ export async function ogImageResponse({
         {stats.length ? (
           <div style={{ display: "flex" }}>
             {stats.map((stat, i) => {
-              const value = String(stat.value);
+              const value = clip(String(stat.value), 12);
               return (
                 <div
                   key={stat.label}
@@ -207,11 +263,11 @@ export async function ogImageResponse({
                       display: "flex",
                       marginTop: 12,
                       fontFamily: DISPLAY_FONT,
-                      fontSize: value.length > 8 ? 20 : 36,
+                      fontSize: statValueSize(value.length),
                       color: stat.color ?? palette.blue,
                     }}
                   >
-                    {clip(value, 24)}
+                    {value}
                   </div>
                 </div>
               );
