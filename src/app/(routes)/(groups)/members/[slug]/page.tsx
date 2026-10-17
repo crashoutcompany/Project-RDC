@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { getMember } from "./data";
+import { WinRateTrend } from "./_components/win-rate-trend";
 import { getAllMembers } from "prisma/lib/members";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ARENA_BAR } from "@/components/arcade/arena-colors";
@@ -15,7 +17,33 @@ import {
   Heading,
 } from "@/components/arcade/ui";
 import { getArenas, getRoster, sorryRanks, sorryScale } from "@/lib/rdc-stats";
-import { cn } from "@/lib/utils";
+import {
+  bestSessions,
+  statBreakdown,
+  trendByMonth,
+  type StatLine,
+} from "@/lib/member-profile";
+import { cn, formatSessionDate } from "@/lib/utils";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  if (slug === "__placeholder__")
+    return { title: "Members | RDC Stats Tracker" };
+
+  const member = await getMember(slug);
+  if (!member.success || !member.data)
+    return { title: "Member not found | RDC Stats Tracker" };
+
+  const { playerName, matchWins, setWins, dayWins } = member.data;
+  return {
+    title: `${playerName} | RDC Stats Tracker`,
+    description: `${playerName} has ${matchWins.length} match wins, ${setWins.length} set wins and ${dayWins.length} day wins across RDC sessions.`,
+  };
+}
 
 export async function generateStaticParams() {
   const members = await getAllMembers();
@@ -84,6 +112,10 @@ async function MemberDetailContent({
     days: member.data.dayWins.length,
   };
   const name = member.data.playerName;
+  const breakdown = statBreakdown(member.data.playerStats);
+  const trend = trendByMonth(member.data.playerSessions, member.data.matchWins);
+  const best = bestSessions(member.data.matchWins);
+  const mvps = member.data.mvpOf;
 
   return (
     <div data-testid="member-detail-content">
@@ -153,6 +185,92 @@ async function MemberDetailContent({
               The first one is always the hardest.
             </p>
           ) : null}
+        </div>
+      </section>
+
+      <section className="bg-black">
+        <div className="mx-auto max-w-6xl px-4 py-12">
+          <Heading lead="Stage breakdown" className="text-ac-gold mb-6" />
+          {breakdown.length === 0 ? (
+            <p className="text-ac-cream/70">No stage stats recorded yet.</p>
+          ) : (
+            breakdown.map((game) => (
+              <div key={game.gameSlug} className="mb-8 last:mb-0">
+                <Eyebrow>{game.gameName}</Eyebrow>
+                <dl className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {game.stats.map((stat) => (
+                    <StatTile
+                      key={`${stat.statName}-${stat.kind}`}
+                      stat={stat}
+                    />
+                  ))}
+                </dl>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="ac-grid bg-ac-ink">
+        <div className="mx-auto grid max-w-6xl gap-12 px-4 py-12 md:grid-cols-2">
+          <div>
+            <Heading lead="Win rate by month" className="text-ac-gold mb-6" />
+            {trend.length === 0 ? (
+              <p className="text-ac-cream/70">No matches played yet.</p>
+            ) : (
+              <WinRateTrend data={trend} />
+            )}
+          </div>
+          <div className="grid gap-10">
+            <div>
+              <Heading lead="MVP awards" className="text-ac-gold mb-4" />
+              <p className="ac-title text-ac-gold text-5xl">{mvps.length}</p>
+              {mvps.length === 0 ? (
+                <p className="text-ac-cream/70 mt-2">No MVP awards yet.</p>
+              ) : (
+                <ul className="mt-4 grid gap-2">
+                  {mvps.map((mvp) => (
+                    <li key={mvp.sessionId}>
+                      <Link
+                        href={`/sessions/${mvp.sessionId}`}
+                        className="ac-label text-ac-cream hover:text-ac-gold"
+                      >
+                        ▶ {mvp.sessionName}
+                      </Link>
+                      <span className="text-ac-cream/60 ml-3 text-sm">
+                        {mvp.Game.gameName} · {formatSessionDate(mvp.date)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <Heading lead="Best sessions" className="text-ac-gold mb-4" />
+              {best.length === 0 ? (
+                <p className="text-ac-cream/70">No match wins yet.</p>
+              ) : (
+                <ol className="grid gap-2">
+                  {best.map((s) => (
+                    <li key={s.sessionId}>
+                      <Link
+                        href={`/sessions/${s.sessionId}`}
+                        className="ac-label text-ac-cream hover:text-ac-gold"
+                      >
+                        {s.sessionName}
+                      </Link>
+                      <span className="text-ac-gold ml-3 tabular-nums">
+                        {s.wins} {s.wins === 1 ? "win" : "wins"}
+                      </span>
+                      <span className="text-ac-cream/60 ml-3 text-sm">
+                        {s.gameName} · {formatSessionDate(s.date)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -248,6 +366,27 @@ function WinBox({
     <div className={cn("bg-ac-panel border-4 p-5", tone.split(" ")[0])}>
       <dt className="ac-label text-ac-cream/80">{label}</dt>
       <dd className={cn("ac-title text-5xl", tone.split(" ")[1])}>{value}</dd>
+    </div>
+  );
+}
+
+function StatTile({ stat }: { stat: StatLine }) {
+  const label =
+    stat.kind === "perSession"
+      ? `${stat.displayName} / session`
+      : stat.kind === "average"
+        ? `${stat.displayName} (avg)`
+        : stat.displayName;
+  const value =
+    stat.kind === "average" || stat.kind === "perSession"
+      ? stat.value.toFixed(1)
+      : String(Math.round(stat.value));
+  return (
+    <div className="bg-ac-panel border-ac-panel-2 border-2 p-4">
+      <dt className="ac-label text-ac-cream/80">{label}</dt>
+      <dd className="ac-title text-ac-cream mt-1 text-3xl tabular-nums">
+        {value}
+      </dd>
     </div>
   );
 }
