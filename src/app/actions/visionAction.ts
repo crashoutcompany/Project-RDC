@@ -1,36 +1,47 @@
-import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
-import DocumentIntelligence, {
-  getLongRunningPoller,
-  AnalyzeOperationOutput,
-  isUnexpected,
-} from "@azure-rest/ai-document-intelligence";
+import { VisionResultCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
-import { GameProcessor } from "@/lib/game-processors/game-processor-utils";
-import { MarioKart8Processor } from "@/lib/game-processors/MarioKart8Processor";
-import { RocketLeagueProcessor } from "@/lib/game-processors/RocketLeagueProcessor";
-import { CoDGunGameProcessor } from "@/lib/game-processors/CoDGunGameProcessor";
 import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
-import { AnalysisResults, Stat, VisionPlayer } from "@/lib/visionTypes";
-import { MarvelRivalsProcessor } from "@/lib/game-processors/MarvelRivalsProcessor";
+import { AnalysisResults } from "@/lib/visionTypes";
 import config from "@/lib/config";
+import { createReaders, readerChain, readWithFallback } from "@/lib/vision/readers";
 
-const client = DocumentIntelligence(config.DOCUMENT_INTELLIGENCE_ENDPOINT!, {
-  key: config.DOCUMENT_INTELLIGENCE_API_KEY!,
-});
+export { getGameProcessor } from "@/lib/vision/analyze-scoreboard";
+export type {
+  AnalyzedPlayer,
+  AnalyzedTeamData,
+  AnalyzedPlayersObj,
+} from "@/lib/visionTypes";
 
-export const getGameProcessor = (gameId: number): GameProcessor => {
-  switch (gameId) {
-    case 1:
-      return MarioKart8Processor;
-    case 2:
-      return RocketLeagueProcessor;
-    case 3:
-      return CoDGunGameProcessor;
-    case 6:
-      return MarvelRivalsProcessor;
-    default:
-      throw new Error(`Invalid game id: ${gameId}`);
+// Gemini reads first; Azure's trained models answer only when Gemini fails
+// (after retrying 429s/5xx) or doesn't support the game yet.
+const readers = readerChain(
+  "gemini",
+  createReaders({
+    geminiApiKey: config.GOOGLE_GENERATIVE_AI_API_KEY,
+    azureEndpoint: config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+    azureKey: config.DOCUMENT_INTELLIGENCE_API_KEY,
+  }),
+);
+
+/**
+ * Schedules a log write to run after the response. If after() can't be used
+ * (called outside a request scope, or not mocked in a test) the write runs
+ * directly, so a logging failure never changes what the action returns.
+ */
+const logInBackground = (task: () => Promise<unknown>) => {
+  // async, so nothing here can throw synchronously, even if task itself does.
+  const run = async () => {
+    try {
+      await task();
+    } catch (err) {
+      console.error("[vision] logging failed", err);
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    void run();
   }
 };
 
@@ -41,154 +52,31 @@ export const analyzeScreenShot = async (
 ): Promise<AnalysisResults> => {
   const startTime = performance.now();
   try {
-    const gameProcessor = getGameProcessor(gameId);
-    const gameConfig = GAME_CONFIGS[gameId];
+    const { result, readerId, fallbacks } = await readWithFallback(
+      readers,
+      { base64Source, sessionPlayers, gameId },
+      {
+        onFallback: (f) =>
+          console.warn(`[vision] ${f.from} failed for game ${gameId}: ${f.reason}`),
+      },
+    );
 
-    if (!gameConfig) {
-      throw new Error(`Game config not found for gameId: ${gameId}`);
-    }
-
-    console.log("Analyzing Screenshot with config: ", gameConfig);
-
-    const response = await client
-      .path("/documentModels/{modelId}:analyze", gameConfig.modelId)
-      .post({
-        contentType: "application/json",
-        body: {
-          base64Source: base64Source,
-        },
-        queryParameters: {
-          locale: "en-US",
-        },
-      });
-
-    if (isUnexpected(response)) {
-      after(() => logVisionError(response.body.error));
-      throw response.body.error;
-    }
-
-    const poller = await getLongRunningPoller(client, response);
-
-    const result = (await poller.body) as AnalyzeOperationOutput;
-
-    if (!result.analyzeResult || !result.analyzeResult.documents) {
-      return {
-        status: VisionResultCodes.Failed,
-        message: "Analyze result or documents are undefined",
-      };
-    }
-
-    // Analyzed Result should differ depdending on model
-    // Team based models should return players grouped by team
-    // Individual player models should return all players in one array
-
-    // Each player object from appropriate vision model should have all stats associated with players
-    // , may or may not be broken up into teams depending on model
-    // RL: Blue Team, Orange Team
-    // MK: Yoshi, Mario, Luigi, Peach, etc...
-    const analyzedPlayers = result.analyzeResult.documents[0].fields;
-    // Returns an object containing players (1-grouped by team if applicable)
-    console.log("Analyzed Players: ", analyzedPlayers);
-
-    if (!analyzedPlayers) {
-      throw new Error("Vision Analysis Player Results are undefined");
-    }
-
-    // Go into individual game checks -- if its not a team game we can skip this
-    // and just return the players
-
-    let teamsArray: AnalyzedTeamData[] = [];
-    let playersData: AnalyzedPlayersObj[] = [];
-
-    if (gameConfig.type === "TEAM") {
-      teamsArray = Object.entries(analyzedPlayers).map(
-        ([teamName, teamData]) => ({
-          teamName,
-          players: teamData as unknown as AnalyzedPlayersObj,
-        }),
-      );
-      console.log("Teams Array: ", teamsArray);
+    const reader = {
+      readerId,
+      fallbacks: fallbacks.map((f) => `${f.from}: ${f.reason}`),
+    };
+    if (result.status !== VisionResultCodes.Failed) {
+      const duration = performance.now() - startTime;
+      logInBackground(() => logVisionSuccess(gameId, duration, reader));
     } else {
-      playersData = Object.values(
-        analyzedPlayers,
-      ) as unknown as AnalyzedPlayersObj[];
-      console.log("Players Data: ", playersData);
+      logInBackground(() => logVisionError(new Error(result.message), reader));
     }
 
-    const processedPlayers = gameProcessor.processPlayers(
-      gameConfig.type === "TEAM" ? teamsArray : playersData,
-      sessionPlayers,
-    );
-    console.log("Processed Players: ", processedPlayers);
-
-    // Game-specific corrections (e.g. MK8 7th -> 1st) must still flag review.
-    let statsRequireCheck = false;
-    const validatedPlayers: VisionPlayer[] =
-      processedPlayers.processedPlayers.map((player) => {
-        const validatedStats = player.stats.map((stat: Stat) => {
-          const validatedStat = gameProcessor.validateStats(
-            stat.statValue,
-            sessionPlayers.length,
-          );
-          if (validatedStat.reqCheck) statsRequireCheck = true;
-
-          return {
-            ...stat,
-            statValue: validatedStat.statValue,
-          };
-        });
-
-        return {
-          ...player,
-          stats: validatedStats,
-        };
-      });
-
-    const winners = gameProcessor.calculateWinners(validatedPlayers);
-    console.log("Winners: ", winners);
-
-    const validatedResult: AnalysisResults = gameProcessor.validateResults(
-      validatedPlayers,
-      winners,
-      processedPlayers.reqCheckFlag || statsRequireCheck,
-    );
-
-    console.log("Teams Array: ", teamsArray);
-    console.log("Validated Result: ", validatedResult);
-
-    const duration = performance.now() - startTime;
-    after(() => logVisionSuccess(gameId, duration));
-
-    return validatedResult;
+    return result;
   } catch (error) {
     console.error(error);
     const e = error instanceof Error ? error.message : "Unknown error";
-    logVisionError(error);
+    logInBackground(() => logVisionError(error));
     return { status: VisionResultCodes.Failed, message: e };
   }
-};
-
-type PlayerField = {
-  type: string;
-  content: string;
-  valueString?: string;
-  valueInteger?: number;
-  confidence: number;
-};
-
-export type AnalyzedPlayer = {
-  type: "object";
-  valueObject: {
-    [fieldName: string]: PlayerField;
-  };
-};
-
-export type AnalyzedTeamData = {
-  teamName: string;
-  players: AnalyzedPlayersObj;
-};
-
-export type AnalyzedPlayersObj = {
-  type: "array";
-  valueArray: AnalyzedPlayer[];
 };

@@ -1,4 +1,5 @@
 import { GameProfile } from "./types";
+import { marioKart8 } from "./mario-kart-8";
 import { rocketLeague } from "./rocket-league";
 
 /**
@@ -6,7 +7,7 @@ import { rocketLeague } from "./rocket-league";
  * profile and appending it to GAME_PROFILES. The CLI's --game flag, the
  * output directory layout, and the reference-image lookup all read from here.
  */
-export const GAME_PROFILES: readonly GameProfile[] = [rocketLeague];
+export const GAME_PROFILES: readonly GameProfile[] = [rocketLeague, marioKart8];
 
 const PROFILES_BY_ID = new Map<string, GameProfile>(
   GAME_PROFILES.map((p) => [p.id, p]),
