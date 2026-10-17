@@ -104,11 +104,14 @@ export const logFormSuccess = async (
 
 export const logVisionError = async (
   error: typeof ErrorModelOutput | unknown,
+  /** Which readers were tried and why each fell over, when the failure came from readWithFallback. */
+  reader?: { readerId: string; fallbacks: string[] },
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
   posthog.captureException(error, session?.user?.email || v4(), {
+    ...(reader && { reader: reader.readerId, fallbacks: reader.fallbacks }),
     ...withSessionReplay(sessionReplayId),
   });
 };
@@ -145,33 +148,6 @@ export const logMvpUpdateSuccess = async (
   });
 };
 
-export const logDriveCronJobError = (
-  message: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.captureException(message, "cron-job", {
-      ...additionalInfo,
-    });
-  });
-};
-
-export const logDriveCronJobSuccess = (
-  message: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.capture({
-      event: PostHogEvents.DRIVE_READ_SUCCESS,
-      distinctId: "cron-job",
-      properties: {
-        message,
-        ...additionalInfo,
-      },
-    });
-  });
-};
-
 export const logEditSessionCleanupSuccess = (
   message: string,
   additionalInfo?: Record<string, unknown>,
@@ -194,34 +170,6 @@ export const logEditSessionCleanupError = (
 ) => {
   after(() => {
     posthog.captureException(message, "cron-job", {
-      ...additionalInfo,
-    });
-  });
-};
-
-export const logAiGenSuccess = (
-  event: PostHogEvents,
-  distinctId: string,
-  additionalInfo: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.capture({
-      event,
-      distinctId,
-      properties: {
-        ...additionalInfo,
-      },
-    });
-  });
-};
-
-export const logAiGenFailure = (
-  error: unknown,
-  distinctId: string,
-  additionalInfo?: Record<string, unknown>,
-) => {
-  after(() => {
-    posthog.captureException(error, distinctId, {
       ...additionalInfo,
     });
   });
@@ -250,6 +198,8 @@ export const logAdminAction = async (
 export const logVisionSuccess = async (
   gameId: number,
   durationMs: number,
+  /** Which reader answered, and how many fell over before it. */
+  reader?: { readerId: string; fallbacks: string[] },
   userSession?: Session | null,
   sessionReplayId?: string,
 ) => {
@@ -260,6 +210,7 @@ export const logVisionSuccess = async (
     properties: {
       gameId,
       durationMs,
+      ...(reader && { reader: reader.readerId, fallbacks: reader.fallbacks }),
       ...withSessionReplay(sessionReplayId),
     },
   });

@@ -1,3 +1,7 @@
+import type { AnalysisResults } from "@/lib/visionTypes";
+import type { ReaderId } from "@/lib/vision/readers";
+import type { FinderId } from "./pipeline/finders";
+
 /**
  * Shared types for the scoreboard harvester pipeline. Game-specific knowledge
  * lives in games/ — these types are intentionally game-agnostic.
@@ -9,21 +13,23 @@ export interface ResolvedConfig {
   /** Output root. Final per-run dir is `<out>/<gameId>/<videoId>/`. */
   out: string;
   fps: number;
-  noPhash: boolean;
-  phashThreshold: number;
   ocrMinKeywords: number;
   /**
-   * If true, only accept frames whose OCR includes the active game's
-   * endScreenSentinel keyword (e.g., "WINNER" for Rocket League).
+   * If true, only accept frames whose OCR includes one of the active game's
+   * endScreenSentinels (e.g., "WINNER" for Rocket League).
    */
   requireEndScreen: boolean;
-  /** Max frame gap allowed within a single dedup run. */
-  dedupGap: number;
+  /** Max timestamp gap (seconds) allowed within a single dedup run. */
+  dedupGapSec: number;
   /**
-   * After a confirmed run ends, jump this many frames forward before resuming
+   * After a confirmed run ends, skip ahead this many seconds before resuming
    * OCR. Set to 0 to disable skip-ahead (every frame is OCR'd).
    */
-  skipAheadFrames: number;
+  skipAheadSec: number;
+  /** `fps` samples at a fixed rate; `keyframes` decodes I-frames only. */
+  sampling: "fps" | "keyframes";
+  /** OCR backend; `auto` = Apple Vision on macOS, RapidOCR elsewhere. */
+  ocrEngine: "auto" | "vision" | "rapidocr";
   quality: number;
   /** Width used when normalizing sampled frame JPEGs for pHash/OCR. */
   sampleWidth: number;
@@ -32,11 +38,23 @@ export interface ResolvedConfig {
   /** Number of persistent OCR workers to run concurrently. */
   ocrConcurrency: number;
   keepFrames: boolean;
+  /** Keep the downloaded video.mp4 after a successful run. */
+  keepVideo: boolean;
   start?: number;
   end?: number;
-  submit: boolean;
-  sessionId?: number;
-  referencePath: string;
+  /** Read every saved scoreboard's stats. */
+  analyze: boolean;
+  /** Finds scoreboard frames; `decisions` falls back to `ocr` on errors. */
+  finder: FinderId;
+  /** Reads stats; `gemini` falls back to Azure on errors. */
+  reader: ReaderId;
+  /**
+   * Bulk mode: Gemini reads through its Batch API (half price, slower), and
+   * Decisions runs at higher concurrency (it has no batch API).
+   */
+  batch: boolean;
+  /** Decisions calls in flight at once. */
+  decisionsConcurrency: number;
 }
 
 export interface FrameRecord {
@@ -47,17 +65,21 @@ export interface FrameRecord {
   timestampSec: number;
 }
 
-export interface PHashRecord extends FrameRecord {
-  hashHex: string;
-  /** Hamming distance from the reference scoreboard hash (0–64) */
-  distance: number;
-}
-
 export interface OcrRecord extends FrameRecord {
   /** Raw recognized text lines, top-to-bottom */
   text: string[];
   /** Subset of the active game's keywords that matched on this frame */
   matchedKeywords: string[];
+  /**
+   * Set when the finder already read this frame (Mario Kart walks back across
+   * a few results frames and keeps the clean one). Dedup copies it onto the
+   * match so analyze does not read the screenshot again.
+   */
+  preread?: {
+    analysis: AnalysisResults;
+    readerId: string;
+    fallbacks: string[];
+  };
 }
 
 export interface MatchManifest {
@@ -67,7 +89,10 @@ export interface MatchManifest {
   runLengthFrames: number;
   imagePath: string;
   ocrKeywords: string[];
-  submission: unknown | null;
+  /** Reader + game-processor result for this screenshot, when analyzed. */
+  analysis: AnalysisResults | null;
+  /** Which reader produced `analysis`, and any that failed before it. */
+  reader?: { id: string; fallbacks: string[] };
 }
 
 export interface Manifest {
@@ -80,6 +105,8 @@ export interface Manifest {
     fps: number;
   };
   config: Record<string, unknown>;
+  /** Finder that actually ran, and why it fell back, if it did. */
+  finder?: { id: string; fallback: string | null };
   runtimeMs: number;
   matches: MatchManifest[];
 }

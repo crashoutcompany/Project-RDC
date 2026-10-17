@@ -4,8 +4,13 @@ const azure = vi.hoisted(() => ({
   post: vi.fn(),
   result: vi.fn(),
 }));
+const gemini = vi.hoisted(() => ({ generate: vi.fn() }));
 
-// Only the Azure boundary is faked; game processors run for real.
+// Only the Gemini and Azure boundaries are faked; game processors run for real.
+vi.mock("ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ai")>()),
+  generateText: (...args: unknown[]) => gemini.generate(...args),
+}));
 vi.mock("@azure-rest/ai-document-intelligence", () => ({
   default: vi.fn(() => ({
     path: vi.fn(() => ({ post: (...args: unknown[]) => azure.post(...args) })),
@@ -55,10 +60,81 @@ const mk8Document = (rows: [gamerTag: string, place: string][]) => ({
 
 const analyze = () => handleAnalyzeBtnClick("base64", sessionPlayers, "Mario Kart 8");
 
+type RlRow = [gamerTag: string, fields: Record<string, string>];
+
+/** Azure "RDC-RL" model output: one array field per team. */
+const rlDocument = (teams: Record<string, RlRow[]>) => ({
+  analyzeResult: {
+    documents: [
+      {
+        fields: Object.fromEntries(
+          Object.entries(teams).map(([team, rows]) => [
+            team,
+            {
+              type: "array",
+              valueArray: rows.map(([tag, fields]) => ({
+                type: "object",
+                valueObject: {
+                  PlayerName: { content: tag },
+                  ...Object.fromEntries(
+                    Object.entries(fields).map(([k, v]) => [k, { content: v }]),
+                  ),
+                },
+              })),
+            },
+          ]),
+        ),
+      },
+    ],
+  },
+});
+
+const analyzeRl = () => handleAnalyzeBtnClick("base64", sessionPlayers, "Rocket League");
+
+const geminiDown = Object.assign(new Error("API key not valid"), { statusCode: 403 });
+
 beforeEach(() => {
   signInAs("admin");
   db.game.findFirst.mockResolvedValue({ gameId: 1 } as never);
   azure.post.mockResolvedValue({});
+  // Most cases exercise the Azure fallback; the Gemini cases override this.
+  gemini.generate.mockRejectedValue(geminiDown);
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+describe("Gemini reads first", () => {
+  it("uses Gemini's answer and never calls Azure", async () => {
+    gemini.generate.mockResolvedValue({
+      output: {
+        players: [
+          { gamertag: "SupremeMvp0020", member: "Mark", team: null, stats: { mk8_place: 7 } },
+          { gamertag: "Dpatel254", member: "Dylan", team: null, stats: { mk8_place: 1 } },
+        ],
+        winning_team: null,
+      },
+    });
+
+    const result = await analyze();
+
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    // Azure's 7th → 1st correction doesn't apply to Gemini.
+    expect(result.data.players.map((p) => [p.name, p.stats[0].statValue])).toEqual([
+      ["Mark", "7"],
+      ["Dylan", "1"],
+    ]);
+    expect(result.data.winner).toEqual([expect.objectContaining({ playerId: 2 })]);
+    expect(azure.post).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Azure when Gemini fails", async () => {
+    azure.result.mockResolvedValue(mk8Document([["SupremeMvp0020", "1"]]));
+
+    const result = await analyze();
+
+    expect(result.status).toBe(VisionResultCodes.Success);
+    expect(gemini.generate).toHaveBeenCalledTimes(1);
+    expect(azure.post).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("screenshot analysis (handleAnalyzeBtnClick)", () => {
@@ -118,11 +194,14 @@ describe("screenshot analysis (handleAnalyzeBtnClick)", () => {
 
   it.each([
     ["Azure rejects the request", () => azure.post.mockRejectedValue(new Error("API Error")), "API Error"],
-    ["Azure returns no documents", () => azure.result.mockResolvedValue({}), "Analyze result or documents are undefined"],
-  ])("fails cleanly when %s", async (_label, arrange, message) => {
+    ["Azure returns no documents", () => azure.result.mockResolvedValue({}), "Azure returned no document"],
+  ])("fails cleanly when Gemini fails and %s", async (_label, arrange, message) => {
     arrange();
 
-    expect(await analyze()).toEqual({ status: VisionResultCodes.Failed, message });
+    expect(await analyze()).toEqual({
+      status: VisionResultCodes.Failed,
+      message: `gemini: not authorized (403); azure: ${message}`,
+    });
   });
 
   it("fails for a game that is not in the database", async () => {
@@ -140,7 +219,60 @@ describe("screenshot analysis (handleAnalyzeBtnClick)", () => {
 
     expect(await analyze()).toEqual({
       status: VisionResultCodes.Failed,
-      message: "Invalid game id: 999",
+      message: "gemini: doesn't support game 999; azure: Game config not found for gameId: 999",
     });
+  });
+});
+
+describe("Rocket League screenshot analysis", () => {
+  beforeEach(() => {
+    db.game.findFirst.mockResolvedValue({ gameId: 2 } as never);
+  });
+
+  it("reads both teams even though the model only prefixes orange's fields", async () => {
+    azure.result.mockResolvedValue(
+      rlDocument({
+        BluePlayers: [["Dpatel254", { Score: "250", Goals: "2", Assists: "1", Saves: "0", Shots: "2" }]],
+        OrangePlayers: [["SupremeMvp0020", { RL_Score: "132", RL_Goals: "1", RL_Assists: "0", RL_Saves: "0", RL_Shots: "1" }]],
+      }),
+    );
+
+    const result = await analyzeRl();
+
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    const dylan = result.data.players.find((p) => p.name === "Dylan")!;
+    expect(dylan.stats.map((s) => s.stat)).toEqual(["RL_SCORE", "RL_GOALS", "RL_ASSISTS", "RL_SAVES", "RL_SHOTS"]);
+    // Winners come from summed goals, so blue's goals must count.
+    expect(result.data.winner).toEqual([expect.objectContaining({ playerId: 2 })]);
+  });
+
+  it("drops an unreadable row and asks for review instead of crashing", async () => {
+    azure.result.mockResolvedValue(
+      rlDocument({
+        BluePlayers: [["Dpatel254", { Goals: "1" }]],
+        OrangePlayers: [
+          ["SupremeMvp0020", { RL_Goals: "0" }],
+          ["HAPPY CAMPER", { RL_Goals: "0" }],
+        ],
+      }),
+    );
+
+    const result = await analyzeRl();
+
+    expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    if (result.status === VisionResultCodes.Failed) return;
+    expect(result.data.players.map((p) => p.name)).toEqual(["Dylan", "Mark"]);
+  });
+
+  it("keeps the first value of a merged cell and asks for review", async () => {
+    azure.result.mockResolvedValue(
+      rlDocument({ BluePlayers: [["Dpatel254", { Score: "140\n38", Goals: "0" }]] }),
+    );
+
+    const result = await analyzeRl();
+
+    expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    if (result.status === VisionResultCodes.Failed) return;
+    expect(result.data.players[0].stats[0]).toEqual(expect.objectContaining({ stat: "RL_SCORE", statValue: "140" }));
   });
 });

@@ -23,7 +23,9 @@ import {
   AnalyzedPlayer,
   AnalyzedPlayersObj,
   AnalyzedTeamData,
-} from "@/app/actions/visionAction";
+  Stat,
+  VisionPlayer,
+} from "@/lib/visionTypes";
 import { Player } from "@/generated/prisma/client";
 import {
   findPlayer,
@@ -31,7 +33,6 @@ import {
   PlayerNotFoundError,
 } from "@/app/(routes)/admin/_utils/player-mappings";
 import { STAT_CONFIGS, getStatConfigByFieldKey } from "../stat-configs";
-import { Stat, VisionPlayer } from "../visionTypes";
 
 type WinnerType = "TEAM" | "INDIVIDUAL";
 
@@ -71,32 +72,41 @@ export type GameProcessor = {
 export const processTeam = (
   teamData: AnalyzedTeamData,
   sessionPlayers: Player[],
+  statPrefix?: string,
 ): { processedPlayers: VisionPlayer[]; reqCheckFlag: boolean } => {
   console.log("Processing Team: ", teamData.players);
   let reqCheckFlag = false;
 
   // Process Players
   try {
-    const processedPlayers =
-      teamData.players.valueArray?.map((player) => {
-        console.log(
-          `Processing Player: ${player.valueObject.PlayerName.content} for ${teamData.teamName}`,
-        );
-        const processedPlayer = processPlayer(player, teamData.teamName);
-        console.log("Processed Player: ", processedPlayer);
-        const validatedPlayerData = validateProcessedPlayer(
-          processedPlayer,
-          sessionPlayers,
-        );
-        console.log("Validated Player: ", validatedPlayerData);
+    const processedPlayers: VisionPlayer[] = [];
+    for (const player of teamData.players.valueArray ?? []) {
+      console.log(
+        `Processing Player: ${player.valueObject?.PlayerName?.content} for ${teamData.teamName}`,
+      );
+      const processedPlayer = processPlayer(
+        player,
+        teamData.teamName,
+        statPrefix,
+      );
+      console.log("Processed Player: ", processedPlayer);
+      const validatedPlayerData = validateProcessedPlayer(
+        processedPlayer,
+        sessionPlayers,
+      );
+      console.log("Validated Player: ", validatedPlayerData);
 
-        reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
-        if (!validatedPlayerData) {
-          console.error("Player validation failed: ", processPlayer);
-          return {} as VisionPlayer;
-        }
-        return validatedPlayerData;
-      }) || [];
+      reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
+      // An unrecognized row (a random, or a card subtitle like "HAPPY CAMPER"
+      // read as a name) is dropped and flagged rather than returned as an
+      // empty player, which crashed stat validation downstream.
+      if (!validatedPlayerData) {
+        console.error("Player validation failed: ", processedPlayer);
+        reqCheckFlag = true;
+        continue;
+      }
+      processedPlayers.push(validatedPlayerData);
+    }
     return { processedPlayers, reqCheckFlag };
   } catch (error) {
     console.error("Error processing team: ", error);
@@ -146,11 +156,22 @@ type ProcessedPlayer = {
   teamKey?: string;
 };
 
+/**
+ * Azure field names → stat config keys. Models are inconsistent about the
+ * game prefix (the RL model returns "RL_Goals" for orange but "Goals" for
+ * blue), so with a `statPrefix` a bare key falls back to `<prefix>_<key>`.
+ */
+const resolveFieldKey = (fieldName: string, statPrefix?: string): string => {
+  const fieldKey = fieldName.toLowerCase();
+  if (getStatConfigByFieldKey(fieldKey) || !statPrefix) return fieldKey;
+  const prefixed = `${statPrefix}_${fieldKey}`;
+  return getStatConfigByFieldKey(prefixed) ? prefixed : fieldKey;
+};
+
 export const processPlayer = (
   player: AnalyzedPlayer,
   teamName?: string,
-
-  gameId?: number,
+  statPrefix?: string,
 ): ProcessedPlayer => {
   console.log("Processing Player: ", player);
 
@@ -158,7 +179,7 @@ export const processPlayer = (
     (acc, [fieldName, field]) => {
       if (fieldName !== "PlayerName") {
         console.log("Processing field: ", fieldName);
-        const fieldKey = fieldName.toLowerCase();
+        const fieldKey = resolveFieldKey(fieldName, statPrefix);
         const statConfig = getStatConfigByFieldKey(fieldKey);
 
         if (statConfig) {
@@ -212,6 +233,14 @@ export const validateVisionStatValue = (
 
   if (statValue == undefined) {
     return { statValue: "0", reqCheck: true };
+  }
+
+  // Azure sometimes merges two scoreboard rows into one cell ("140\n38").
+  // Keep the first value, but never store the raw multi-line string.
+  const tokens = statValue.trim().split(/\s*\n\s*/);
+  if (tokens.length > 1) {
+    const first = validateVisionStatValue(tokens[0], validationRules, fieldKey);
+    return { statValue: first.statValue, reqCheck: true };
   }
 
   // Strip percentage sign if present, but only for accuracy stats

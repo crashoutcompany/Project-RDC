@@ -125,6 +125,7 @@
     "jsdom": "^29.1.1",
     "neonctl": "^8.0.1",
     "next-devtools-mcp": "^0.4.0",
+    "openai": "^7.32.0",
     "postcss": "^8.5.4",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.6.12",
