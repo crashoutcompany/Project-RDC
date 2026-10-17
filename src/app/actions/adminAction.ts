@@ -91,6 +91,8 @@ export async function backfillMissingMvps({
 
   let processed = 0;
   const failed: { sessionId: number; error: string }[] = [];
+  // Sequential on purpose: each session makes an AI call, so this stays well
+  // under the provider's rate limits.
   for (const { sessionId } of query.data) {
     try {
       const mvp = await generateMvpForSession(sessionId, {

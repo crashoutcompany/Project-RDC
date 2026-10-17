@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { backfillMissingMvps } from "@/app/actions/adminAction";
 
@@ -8,7 +8,7 @@ type BackfillResult = Awaited<ReturnType<typeof backfillMissingMvps>>;
 
 /** Generates MVPs for approved sessions that are still missing one. */
 export function BackfillMvpButton() {
-  const [isRunning, setIsRunning] = useState(false);
+  const [isRunning, startTransition] = useTransition();
   const [result, setResult] = useState<BackfillResult | null>(null);
 
   return (
@@ -16,17 +16,16 @@ export function BackfillMvpButton() {
       <Button
         className="cursor-pointer disabled:cursor-auto"
         disabled={isRunning}
-        onClick={async () => {
-          setIsRunning(true);
-          try {
-            setResult(await backfillMissingMvps());
-          } catch (error) {
-            console.log("Unexpected error", error);
-            setResult({ error: "Backfill failed" });
-          } finally {
-            setIsRunning(false);
-          }
-        }}
+        onClick={() =>
+          startTransition(async () => {
+            try {
+              setResult(await backfillMissingMvps());
+            } catch (error) {
+              console.log("Unexpected error", error);
+              setResult({ error: "Backfill failed" });
+            }
+          })
+        }
       >
         {isRunning ? "Generating MVPs..." : "Backfill missing MVPs"}
       </Button>
