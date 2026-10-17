@@ -150,6 +150,7 @@ const EMPTY_SEGMENT = "#4a4690";
  * Super-meter style bar of discrete segments. `value` is 0..1. Segments light
  * up one after another on first paint (via `@starting-style`) and again when
  * `value` changes, so it animates from server and client renders alike.
+ * Under `prefers-reduced-motion` segments switch instantly, with no stagger.
  */
 export function SegmentedMeter({
   value,
@@ -185,12 +186,12 @@ export function SegmentedMeter({
           key={i}
           // Colours go through variables, not inline background, so the
           // `starting:` rule can still win the cascade on first paint.
-          className="flex-1 bg-(--seg) transition-colors duration-150 ease-out starting:bg-(--empty)"
+          className="flex-1 bg-(--seg) transition-colors delay-(--delay) duration-150 ease-out motion-reduce:transition-none starting:bg-(--empty)"
           style={
             {
               "--empty": EMPTY_SEGMENT,
               "--seg": i < lit ? BAR_FILL[variant] : EMPTY_SEGMENT,
-              transitionDelay: `${i * stagger}ms`,
+              "--delay": `${i * stagger}ms`,
             } as React.CSSProperties
           }
         />

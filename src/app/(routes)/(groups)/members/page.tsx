@@ -15,6 +15,7 @@ import {
   getRoster,
   getSorryBoards,
   topFive,
+  type SorryBoards,
   type SorryRange,
 } from "@/lib/rdc-stats";
 
@@ -92,7 +93,11 @@ async function SorrySection({ searchParams }: { searchParams: SearchParams }) {
   const [params, roster, { games, boards }] = await Promise.all([
     searchParams,
     getRoster(),
-    getSorryBoards(),
+    // A failed load isn't cached (see getSorryBoards); show the empty state.
+    getSorryBoards().catch((error): SorryBoards => {
+      console.error("Failed to load sorry boards", error);
+      return { games: [], boards: {} };
+    }),
   ]);
   const game = games.find((g) => g.slug === params.sorryGame)?.slug ?? "all";
   const range = RANGE_VALUES.find((r) => r === params.sorryRange) ?? "all";
