@@ -89,10 +89,33 @@ describe("statBreakdown", () => {
     ]);
   });
 
-  it("drops a position stat whose values are all unparseable", () => {
-    expect(statBreakdown([stat(mk8, "MK8_POS", "x")])).toEqual([
-      { gameName: mk8, gameSlug: "mariokart8", stats: [] },
+  it("averages accuracy instead of summing it", () => {
+    const [game] = statBreakdown([
+      stat("Marvel Rivals", "MR_ACCURACY", "40"),
+      stat("Marvel Rivals", "MR_ACCURACY", "60"),
     ]);
+    expect(game.stats).toEqual([
+      {
+        statName: "MR_ACCURACY",
+        displayName: "Accuracy",
+        value: 50,
+        kind: "average",
+      },
+    ]);
+  });
+
+  it("skips stats whose rollup is skip (Days Played)", () => {
+    expect(
+      statBreakdown([stat(mk8, "MK8_DAY", "1"), stat(rl, "RL_DAY", "2")]),
+    ).toEqual([]);
+  });
+
+  it("omits a game whose values all fail to parse", () => {
+    const result = statBreakdown([
+      stat(mk8, "MK8_POS", "x"),
+      stat(rl, "RL_GOALS", "3"),
+    ]);
+    expect(result.map((g) => g.gameName)).toEqual([rl]);
   });
 
   it("skips stats that are not in STAT_CONFIGS", () => {
@@ -150,42 +173,91 @@ describe("trendByMonth", () => {
 
 describe("bestSessions", () => {
   it("returns no sessions for empty input", () => {
-    expect(bestSessions([])).toEqual([]);
+    expect(bestSessions([], [])).toEqual([]);
   });
 
-  it("ranks sessions by wins and keeps the top three by default", () => {
-    const a = session(1, "2025-01-01T12:00:00Z", mk8, "A");
-    const b = session(2, "2025-02-01T12:00:00Z", rl, "B");
-    const c = session(3, "2025-03-01T12:00:00Z", mk8, "C");
-    const d = session(4, "2025-04-01T12:00:00Z", mk8, "D");
+  it("ranks by win rate, not raw wins", () => {
+    const long = session(1, "2025-01-01T12:00:00Z", mk8, "Long");
+    const short = session(2, "2025-02-01T12:00:00Z", rl, "Short");
+    // Long: 3 wins of 10 matches. Short: 2 wins of 2 matches.
+    const played = [
+      row(1, long),
+      row(2, long),
+      row(3, long),
+      row(4, long),
+      row(5, long),
+      row(6, long),
+      row(7, long),
+      row(8, long),
+      row(9, long),
+      row(10, long),
+      row(11, short),
+      row(12, short),
+    ];
     const wins = [
-      row(1, a),
-      row(2, b),
-      row(3, b),
-      row(4, b),
-      row(5, c),
-      row(6, c),
-      row(7, d),
+      row(1, long),
+      row(2, long),
+      row(3, long),
+      row(11, short),
+      row(12, short),
     ];
 
-    const result = bestSessions(wins);
-    expect(result).toEqual([
-      { sessionId: 2, sessionName: "B", gameName: rl, date: b.date, wins: 3 },
-      { sessionId: 3, sessionName: "C", gameName: mk8, date: c.date, wins: 2 },
-      { sessionId: 4, sessionName: "D", gameName: mk8, date: d.date, wins: 1 },
+    const result = bestSessions(played, wins);
+    expect(result.map((s) => s.sessionName)).toEqual(["Short", "Long"]);
+    expect(result[0]).toEqual({
+      sessionId: 2,
+      sessionName: "Short",
+      gameName: rl,
+      date: short.date,
+      wins: 2,
+      matches: 2,
+      rate: 1,
+    });
+    expect(result[1]).toMatchObject({ wins: 3, matches: 10, rate: 0.3 });
+  });
+
+  it("counts a match once even when it is in both lists", () => {
+    const a = session(1, "2025-01-01T12:00:00Z");
+    const result = bestSessions([row(1, a), row(2, a)], [row(1, a)]);
+    expect(result).toMatchObject([{ wins: 1, matches: 2, rate: 0.5 }]);
+  });
+
+  it("counts a win as a played match when it is missing from the played list", () => {
+    const a = session(1, "2025-01-01T12:00:00Z");
+    expect(bestSessions([], [row(1, a)])).toMatchObject([
+      { wins: 1, matches: 1, rate: 1 },
     ]);
   });
 
-  it("breaks ties by most recent session date", () => {
-    const older = session(1, "2025-01-01T12:00:00Z", mk8, "Older");
-    const newer = session(2, "2025-06-01T12:00:00Z", mk8, "Newer");
-    const result = bestSessions([row(1, older), row(2, newer)], 1);
-    expect(result.map((s) => s.sessionName)).toEqual(["Newer"]);
+  it("excludes sessions with no wins", () => {
+    const a = session(1, "2025-01-01T12:00:00Z");
+    expect(bestSessions([row(1, a), row(2, a)], [])).toEqual([]);
   });
 
-  it("respects a custom limit", () => {
-    const a = session(1, "2025-01-01T12:00:00Z");
-    const b = session(2, "2025-02-01T12:00:00Z");
-    expect(bestSessions([row(1, a), row(2, b)], 1)).toHaveLength(1);
+  it("breaks rate ties by wins, then by most recent date", () => {
+    const older = session(1, "2025-01-01T12:00:00Z", mk8, "Older");
+    const newer = session(2, "2025-06-01T12:00:00Z", mk8, "Newer");
+    const big = session(3, "2024-01-01T12:00:00Z", mk8, "Big");
+    const result = bestSessions(
+      [row(1, older), row(2, newer), row(3, big), row(4, big)],
+      [row(1, older), row(2, newer), row(3, big), row(4, big)],
+    );
+    expect(result.map((s) => s.sessionName)).toEqual(["Big", "Newer", "Older"]);
+
+    const tie = bestSessions(
+      [row(1, older), row(2, newer)],
+      [row(1, older), row(2, newer)],
+      1,
+    );
+    expect(tie.map((s) => s.sessionName)).toEqual(["Newer"]);
+  });
+
+  it("keeps the top three by default and respects a custom limit", () => {
+    const sessions = [1, 2, 3, 4].map((id) =>
+      session(id, `2025-0${id}-01T12:00:00Z`),
+    );
+    const wins = sessions.map((s) => row(s.sessionId, s));
+    expect(bestSessions(wins, wins)).toHaveLength(3);
+    expect(bestSessions(wins, wins, 1)).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { STAT_CONFIGS, type StatConfig } from "./stat-configs";
+import { STAT_CONFIGS, statRollup, type StatConfig } from "./stat-configs";
 
 export type SessionRef = {
   sessionId: number;
@@ -44,6 +44,8 @@ export type BestSession = {
   gameName: string;
   date: Date;
   wins: number;
+  matches: number;
+  rate: number;
 };
 
 const CONFIG_BY_NAME = new Map<string, StatConfig>(
@@ -61,16 +63,17 @@ const toNumber = (value: string) => {
 type Acc = { config: StatConfig; sum: number; count: number; hits: number };
 
 /**
- * Per-game stat lines. Position stats average (lower is better), number stats
- * give a total and a per-match average, boolean stats count `true` values.
- * Stats missing from STAT_CONFIGS and unparseable numbers are skipped.
+ * Per-game stat lines, rolled up by `statRollup`: "sum" gives a total and a
+ * per-match average, "average" gives the mean of per-match values, "skip"
+ * omits the stat. Booleans count `true` values. Games with no lines are
+ * dropped. Stats missing from STAT_CONFIGS and unparseable numbers are skipped.
  */
 export function statBreakdown(rows: StatRow[]): GameBreakdown[] {
   const byGame = new Map<string, Map<string, Acc>>();
 
   for (const row of rows) {
     const config = CONFIG_BY_NAME.get(row.gameStat.statName);
-    if (!config) continue;
+    if (!config || statRollup(config) === "skip") continue;
 
     const gameName = row.game.gameName;
     let stats = byGame.get(gameName);
@@ -101,7 +104,7 @@ export function statBreakdown(rows: StatRow[]): GameBreakdown[] {
             line: { ...base, value: hits, kind: "count" },
           });
         else if (count === 0) continue;
-        else if (config.dataType === "position")
+        else if (statRollup(config) === "average")
           lines.push({
             id: config.id,
             line: { ...base, value: sum / count, kind: "average" },
@@ -123,7 +126,8 @@ export function statBreakdown(rows: StatRow[]): GameBreakdown[] {
         gameSlug: gameSlug(gameName),
         stats: lines.map((l) => l.line),
       };
-    });
+    })
+    .filter((game) => game.stats.length > 0);
 }
 
 const monthKey = (date: Date) => date.toISOString().slice(0, 7);
@@ -163,26 +167,56 @@ export function trendByMonth(
   });
 }
 
-/** Sessions ranked by match wins; ties go to the most recent session. */
-export function bestSessions(wins: MatchRow[], n = 3): BestSession[] {
-  const bySession = new Map<number, BestSession>();
+/**
+ * Sessions ranked by the member's match win rate (wins / matches played in the
+ * session), so long sessions don't win on volume alone. Ties go to more wins,
+ * then the most recent session. Only sessions with at least one win are kept.
+ */
+export function bestSessions(
+  played: MatchRow[],
+  wins: MatchRow[],
+  n = 3,
+): BestSession[] {
+  type Entry = {
+    session: SessionRef;
+    matches: Set<number>;
+    wins: Set<number>;
+  };
+  const bySession = new Map<number, Entry>();
+  const entryFor = (session: SessionRef) => {
+    let entry = bySession.get(session.sessionId);
+    if (!entry)
+      bySession.set(
+        session.sessionId,
+        (entry = { session, matches: new Set(), wins: new Set() }),
+      );
+    return entry;
+  };
 
-  for (const {
-    set: { session },
-  } of wins) {
-    const entry = bySession.get(session.sessionId);
-    if (entry) entry.wins++;
-    else
-      bySession.set(session.sessionId, {
-        sessionId: session.sessionId,
-        sessionName: session.sessionName,
-        gameName: session.Game.gameName,
-        date: session.date,
-        wins: 1,
-      });
+  for (const { matchId, set } of played)
+    entryFor(set.session).matches.add(matchId);
+  for (const { matchId, set } of wins) {
+    const entry = entryFor(set.session);
+    entry.matches.add(matchId);
+    entry.wins.add(matchId);
   }
 
   return [...bySession.values()]
-    .sort((a, b) => b.wins - a.wins || b.date.getTime() - a.date.getTime())
+    .filter((entry) => entry.wins.size > 0)
+    .map(({ session, matches, wins }) => ({
+      sessionId: session.sessionId,
+      sessionName: session.sessionName,
+      gameName: session.Game.gameName,
+      date: session.date,
+      wins: wins.size,
+      matches: matches.size,
+      rate: wins.size / matches.size,
+    }))
+    .sort(
+      (a, b) =>
+        b.rate - a.rate ||
+        b.wins - a.wins ||
+        b.date.getTime() - a.date.getTime(),
+    )
     .slice(0, n);
 }

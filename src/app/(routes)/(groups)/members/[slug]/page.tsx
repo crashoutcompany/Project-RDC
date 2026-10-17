@@ -114,7 +114,7 @@ async function MemberDetailContent({
   const name = member.data.playerName;
   const breakdown = statBreakdown(member.data.playerStats);
   const trend = trendByMonth(member.data.playerSessions, member.data.matchWins);
-  const best = bestSessions(member.data.matchWins);
+  const best = bestSessions(member.data.playerSessions, member.data.matchWins);
   const mvps = member.data.mvpOf;
 
   return (
@@ -260,7 +260,7 @@ async function MemberDetailContent({
                         {s.sessionName}
                       </Link>
                       <span className="text-ac-gold ml-3 tabular-nums">
-                        {s.wins} {s.wins === 1 ? "win" : "wins"}
+                        {s.wins}/{s.matches} wins ({Math.round(s.rate * 100)}%)
                       </span>
                       <span className="text-ac-cream/60 ml-3 text-sm">
                         {s.gameName} · {formatSessionDate(s.date)}
