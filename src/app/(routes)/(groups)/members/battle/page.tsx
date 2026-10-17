@@ -27,8 +27,7 @@ type PageProps = {
 export async function generateMetadata({
   searchParams,
 }: PageProps): Promise<Metadata> {
-  const { a, b } = await searchParams;
-  const roster = await getRoster();
+  const [{ a, b }, roster] = await Promise.all([searchParams, getRoster()]);
   const one = findFighter(roster, a);
   const two = findFighter(roster, b);
   if (!one || !two || one.slug === two.slug)
@@ -62,8 +61,11 @@ export default function Page({ searchParams }: PageProps) {
 
 async function BattleContent({ searchParams }: PageProps) {
   await connection();
-  const { a, b } = await searchParams;
-  const [roster, feeds] = await Promise.all([getRoster(), getBattleFeeds()]);
+  const [{ a, b }, roster, feeds] = await Promise.all([
+    searchParams,
+    getRoster(),
+    getBattleFeeds(),
+  ]);
   const one = findFighter(roster, a);
   const two = findFighter(roster, b);
   if (!one || !two || one.slug === two.slug) return <Picker />;
