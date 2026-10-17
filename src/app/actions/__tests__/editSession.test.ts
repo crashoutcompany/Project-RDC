@@ -111,6 +111,19 @@ describe("approveEditRequest", () => {
     });
   });
 
+  it("leaves day winners alone when the proposal did not change them", async () => {
+    givenPendingEdit(
+      { ...mk8SessionForm(), dayWinners: [DES] },
+      { sessionName: true },
+    );
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ dayWinners: expect.anything() }) }),
+    );
+  });
+
   it("leaves day winners alone when the proposal predates the field", async () => {
     const legacy: Partial<FormValues> = mk8SessionForm();
     delete legacy.dayWinners;

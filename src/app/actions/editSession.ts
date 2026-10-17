@@ -166,8 +166,9 @@ export async function approveEditRequest(editId: number, note?: string) {
       },
     });
 
-    // Proposals submitted before day winners existed omit the key; leave them alone.
-    if (proposedData.dayWinners !== undefined)
+    // Only replace winners this proposal changed, so a stale proposal can't
+    // undo a newer edit. Older proposals may omit the key entirely.
+    if (dirtyFields.dayWinners && proposedData.dayWinners !== undefined)
       await tx.session.update({
         where: { sessionId },
         data: {

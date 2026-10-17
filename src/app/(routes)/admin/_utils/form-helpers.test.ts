@@ -87,6 +87,17 @@ describe("formSchema dayWinners", () => {
     expect(parsed.data.dayWinners).toEqual([{ playerId: 1, playerName: "Ben" }]);
   });
 
+  it("rejects a day winner who is not a session player", () => {
+    const parsed = formSchema.safeParse({
+      ...validSession(url),
+      dayWinners: [{ playerId: 2, playerName: "Mark" }],
+    });
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues[0].path).toEqual(["dayWinners", 0]);
+  });
+
   it("rejects a day winner that is not a known member", () => {
     const parsed = formSchema.safeParse({
       ...validSession(url),

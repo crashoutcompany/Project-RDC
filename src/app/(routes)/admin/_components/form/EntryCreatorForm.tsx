@@ -123,8 +123,7 @@ const EntryCreatorForm = ({
               const session: FormValues = JSON.parse(savedForm);
               session.date = new Date(session.date);
               // Drafts saved before day winners existed have no such key.
-              session.dayWinners ??= [];
-              form.reset(session);
+              form.reset({ ...session, dayWinners: session.dayWinners ?? [] });
             } catch (error) {
               console.error("Error restoring form data:", error);
             }

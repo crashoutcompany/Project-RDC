@@ -1,13 +1,6 @@
 import { vi } from "vitest";
 import prisma from "prisma/db";
 import { getMember } from "@/app/(routes)/(groups)/members/[slug]/data";
-import {
-  approvedSession,
-  inApprovedMatch,
-  inApprovedPlayerSession,
-  inApprovedPlayerStat,
-  inApprovedSet,
-} from "prisma/lib/approved";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({
@@ -18,8 +11,12 @@ vi.mock("next/cache", () => ({
 
 const db = vi.mocked(prisma, { deep: true });
 
+// Spelled out rather than imported from prisma/lib/approved, so loosening
+// those filters fails this test instead of silently passing.
+const APPROVED_SET = { session: { isApproved: true } };
+
 describe("getMember", () => {
-  it("counts only approved sessions toward wins, days won and stats", async () => {
+  it("filters wins, days won and stats to approved sessions", async () => {
     db.player.findFirst.mockResolvedValue({
       playerId: 1,
       playerName: "Mark",
@@ -32,15 +29,15 @@ describe("getMember", () => {
         playerName: { equals: "Mark", mode: "insensitive" },
       }),
       include: {
-        matchWins: { where: inApprovedMatch },
-        setWins: { where: inApprovedSet },
-        dayWins: { where: approvedSession },
+        matchWins: { where: { set: APPROVED_SET } },
+        setWins: { where: APPROVED_SET },
+        dayWins: { where: { isApproved: true } },
         playerStats: {
-          where: inApprovedPlayerStat,
+          where: { playerSession: { set: APPROVED_SET } },
           include: { game: true, gameStat: true },
         },
         playerSessions: {
-          where: inApprovedPlayerSession,
+          where: { set: APPROVED_SET },
           include: { playerStats: true },
         },
       },

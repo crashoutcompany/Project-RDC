@@ -77,37 +77,18 @@ async function EditSessionContent({
     return <div>Session not found</div>;
   }
 
-  const players = new Set<
-    Player & {
-      playerName:
-        | "Mark"
-        | "Dylan"
-        | "Ben"
-        | "Lee"
-        | "Des"
-        | "John"
-        | "Aff"
-        | "Ipi";
-    }
-  >(
-    session.data.sets
-      .at(0)
-      ?.matches.at(0)
-      ?.playerSessions.map((playerSession) => {
-        return {
-          playerId: playerSession.player.playerId,
-          playerName: playerSession.player.playerName as
-            | "Mark"
-            | "Dylan"
-            | "Ben"
-            | "Lee"
-            | "Des"
-            | "John"
-            | "Aff"
-            | "Ipi",
-        };
-      }) || [],
-  );
+  type MemberName = FormValues["players"][number]["playerName"];
+  // Collect players from every match so day winners who sat out the first
+  // match still count as session players.
+  const playersById = new Map<number, Player & { playerName: MemberName }>();
+  for (const set of session.data.sets)
+    for (const match of set.matches)
+      for (const { player } of match.playerSessions)
+        playersById.set(player.playerId, {
+          playerId: player.playerId,
+          playerName: player.playerName as MemberName,
+        });
+  const players = Array.from(playersById.values());
 
   const sessionData = session.data;
 
@@ -126,10 +107,10 @@ async function EditSessionContent({
     thumbnail: sessionData.thumbnail,
     videoId: sessionData.videoId,
     date: new Date(sessionData.date),
-    players: Array.from(players),
+    players,
     dayWinners: sessionData.dayWinners.map((player) => ({
       playerId: player.playerId,
-      playerName: player.playerName as FormValues["players"][number]["playerName"],
+      playerName: player.playerName as MemberName,
     })),
     // @ts-expect-error Stat Name not conforming to player names
     sets: sessionData.sets.map((set) => ({
@@ -159,7 +140,7 @@ async function EditSessionContent({
   return (
     <div data-testid="admin-edit-content">
       <EntryCreatorForm
-        rdcMembers={Array.from(players)}
+        rdcMembers={players}
         defaultValues={defaultValues}
         type="edit"
       />
