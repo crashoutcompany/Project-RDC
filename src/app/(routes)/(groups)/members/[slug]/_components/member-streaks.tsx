@@ -23,7 +23,10 @@ export function MemberStreaks({ rows }: { rows: GameStreakRow[] }) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           {rows.map((row) => (
-            <div key={row.gameName} className="bg-ac-panel border-ac-panel-2 border-2 p-5">
+            <div
+              key={row.gameName}
+              className="bg-ac-panel border-ac-panel-2 border-2 p-5"
+            >
               <p className="ac-label text-ac-gold mb-4">{row.gameName}</p>
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>

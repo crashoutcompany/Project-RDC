@@ -86,7 +86,12 @@ export function dayWinStreaks(sessions: StreakSession[]): DayWinStreak[] {
 
   const state = new Map<
     string,
-    { run: number; start: Date; last: number; longest: DayWinStreak["longest"] | null }
+    {
+      run: number;
+      start: Date;
+      last: number;
+      longest: DayWinStreak["longest"] | null;
+    }
   >();
 
   recorded.forEach((session, index) => {
@@ -141,11 +146,7 @@ type Holder = { player: string; value: number };
 export function gameRecords(sessions: RecordSession[]): GameRecord[] {
   const best = new Map<string, GameRecord>();
 
-  const offer = (
-    statName: string,
-    session: StreakSession,
-    holder: Holder,
-  ) => {
+  const offer = (statName: string, session: StreakSession, holder: Holder) => {
     const config = CONFIG_BY_NAME.get(statName);
     const kind: GameRecord["kind"] =
       config?.dataType === "position" ? "average" : "total";
@@ -172,7 +173,10 @@ export function gameRecords(sessions: RecordSession[]): GameRecord[] {
 
   for (const session of sessions) {
     const wins = new Map<string, number>();
-    const stats = new Map<string, Map<string, { sum: number; count: number }>>();
+    const stats = new Map<
+      string,
+      Map<string, { sum: number; count: number }>
+    >();
 
     for (const set of session.sets)
       for (const match of set.matches) {

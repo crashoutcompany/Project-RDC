@@ -44,17 +44,19 @@ describe("dayWinStreaks", () => {
   });
 
   it("skips sessions without day winners instead of breaking the run", () => {
-    const a = dayWinStreaks([
-      day(1, ["A"]),
-      day(2, []),
-      day(3, ["A"]),
-    ]).find((s) => s.player === "A")!;
+    const a = dayWinStreaks([day(1, ["A"]), day(2, []), day(3, ["A"])]).find(
+      (s) => s.player === "A",
+    )!;
     expect(a.longest.length).toBe(2);
     expect(a.current).toBe(2);
   });
 
   it("reports a current streak of 0 once the latest recorded session lacks the player", () => {
-    const streaks = dayWinStreaks([day(1, ["A"]), day(2, ["A"]), day(3, ["B"])]);
+    const streaks = dayWinStreaks([
+      day(1, ["A"]),
+      day(2, ["A"]),
+      day(3, ["B"]),
+    ]);
     expect(streaks.find((s) => s.player === "A")).toMatchObject({
       current: 0,
       longest: { length: 2 },
@@ -142,7 +144,10 @@ describe("gameRecords", () => {
   it("records the lowest session average for position stats", () => {
     const records = gameRecords([
       recordSession(1, "2026-01-01", [
-        { winners: [], stats: [[stat("A", "MK8_POS", "1")], [stat("A", "MK8_POS", "5")]] },
+        {
+          winners: [],
+          stats: [[stat("A", "MK8_POS", "1")], [stat("A", "MK8_POS", "5")]],
+        },
         { winners: [], stats: [[stat("B", "MK8_POS", "2")]] },
       ]),
       recordSession(2, "2026-01-02", [
@@ -174,22 +179,14 @@ describe("gameRecords", () => {
 
   it("keeps the earliest session on ties", () => {
     const records = gameRecords([
-      recordSession(2, "2026-01-02", [
-        { winners: ["A"], stats: [] },
-      ]),
-      recordSession(1, "2026-01-01", [
-        { winners: ["B"], stats: [] },
-      ]),
+      recordSession(2, "2026-01-02", [{ winners: ["A"], stats: [] }]),
+      recordSession(1, "2026-01-01", [{ winners: ["B"], stats: [] }]),
     ]);
     expect(records[0]).toMatchObject({ player: "B", sessionId: 1 });
   });
 });
 
-const line = (
-  sessionId: number,
-  wins: number,
-  matches = 2,
-): SessionLine => ({
+const line = (sessionId: number, wins: number, matches = 2): SessionLine => ({
   sessionId,
   sessionName: `Session ${sessionId}`,
   date: new Date(`2026-02-${String(sessionId).padStart(2, "0")}`),
@@ -213,7 +210,10 @@ describe("primeWindow", () => {
   });
 
   it("prefers the more recent window on ties", () => {
-    const prime = primeWindow([line(1, 1), line(2, 1), line(3, 1), line(4, 1)], 2)!;
+    const prime = primeWindow(
+      [line(1, 1), line(2, 1), line(3, 1), line(4, 1)],
+      2,
+    )!;
     expect(prime.from.sessionId).toBe(3);
   });
 
@@ -241,7 +241,10 @@ describe("primesByGame", () => {
   });
 
   it("counts a match once when it is both played and won", () => {
-    const played = [matchRow(1, 1, "Rocket League"), matchRow(2, 1, "Rocket League")];
+    const played = [
+      matchRow(1, 1, "Rocket League"),
+      matchRow(2, 1, "Rocket League"),
+    ];
     const wins = [matchRow(1, 1, "Rocket League")];
     const [entry] = primesByGame(played, wins, 1);
     expect(entry.gameName).toBe("Rocket League");

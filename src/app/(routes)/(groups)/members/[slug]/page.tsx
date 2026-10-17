@@ -25,7 +25,10 @@ import {
 } from "@/lib/member-profile";
 import { dayWinStreaks, primesByGame } from "@/lib/streaks";
 import { getAllGameSessions } from "@/lib/streaks-data";
-import { MemberStreaks, type GameStreakRow } from "./_components/member-streaks";
+import {
+  MemberStreaks,
+  type GameStreakRow,
+} from "./_components/member-streaks";
 import { cn, formatSessionDate } from "@/lib/utils";
 
 export async function generateMetadata({

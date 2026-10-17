@@ -24,7 +24,9 @@ export function GameRecords({ sessions }: { sessions: RecordSession[] }) {
         <>
           <dl className="grid gap-4 sm:grid-cols-2">
             <div className="bg-ac-panel border-ac-gold border-2 p-4">
-              <dt className="ac-label text-ac-cream/80">Longest day-win streak</dt>
+              <dt className="ac-label text-ac-cream/80">
+                Longest day-win streak
+              </dt>
               <dd className="mt-1">
                 {longest ? (
                   <>
@@ -38,12 +40,16 @@ export function GameRecords({ sessions }: { sessions: RecordSession[] }) {
                     </span>
                   </>
                 ) : (
-                  <span className="text-ac-cream/70">No day winners recorded yet.</span>
+                  <span className="text-ac-cream/70">
+                    No day winners recorded yet.
+                  </span>
                 )}
               </dd>
             </div>
             <div className="bg-ac-panel border-ac-red border-2 p-4">
-              <dt className="ac-label text-ac-cream/80">Active day-win streak</dt>
+              <dt className="ac-label text-ac-cream/80">
+                Active day-win streak
+              </dt>
               <dd className="mt-1">
                 {current ? (
                   <>
@@ -81,7 +87,9 @@ export function GameRecords({ sessions }: { sessions: RecordSession[] }) {
                       </td>
                       <td className="text-ac-cream px-4">{r.player}</td>
                       <td className="text-ac-gold px-4 text-right text-xl tabular-nums">
-                        {r.kind === "average" ? r.value.toFixed(1) : Math.round(r.value)}
+                        {r.kind === "average"
+                          ? r.value.toFixed(1)
+                          : Math.round(r.value)}
                       </td>
                       <td className="px-4">
                         <Link
