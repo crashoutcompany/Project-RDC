@@ -10,7 +10,7 @@ const desktop: StageSignals = {
   deviceMemory: 8,
   cores: 8,
   coarsePointer: false,
-  viewportWidth: 1440,
+  screenShortSide: 900,
   renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)",
 };
 
@@ -26,18 +26,23 @@ describe("classifyStage", () => {
     });
   });
 
-  it("waits for a tap on phones (coarse pointer + narrow viewport)", () => {
-    expect(mode({ coarsePointer: true, viewportWidth: 390 })).toBe("tap");
+  it("waits for a tap on phones (coarse pointer + short screen side)", () => {
+    expect(mode({ coarsePointer: true, screenShortSide: 390 })).toBe("tap");
     expect(classifyStage({ ...desktop, coarsePointer: true }).desktop).toBe(
       false,
     );
   });
 
-  it("still auto-starts on a wide touch device (tablet) but in low power", () => {
+  it("treats a phone held sideways (wider than 768px) as a phone", () => {
+    // The short side is what matters, whatever the current width.
+    expect(mode({ coarsePointer: true, screenShortSide: 412 })).toBe("tap");
+  });
+
+  it("still auto-starts on a tablet but in low power", () => {
     const tablet = classifyStage({
       ...desktop,
       coarsePointer: true,
-      viewportWidth: 1024,
+      screenShortSide: 820,
     });
     expect(tablet).toMatchObject({ mode: "auto", desktop: false });
   });
@@ -58,9 +63,17 @@ describe("classifyStage", () => {
     ["3G", { effectiveType: "3g" }],
     ["slow 2G", { effectiveType: "slow-2g" }],
     ["low memory", { deviceMemory: 2 }],
-    ["4 cores", { cores: 4 }],
+    [
+      "4 cores on a touch device",
+      { cores: 4, coarsePointer: true, screenShortSide: 820 },
+    ],
+    ["4 cores and low memory", { cores: 4, deviceMemory: 2 }],
   ])("waits for a tap with %s", (_, overrides) => {
     expect(mode(overrides)).toBe("tap");
+  });
+
+  it("auto-starts on a capable quad-core desktop", () => {
+    expect(mode({ cores: 4 })).toBe("auto");
   });
 
   it("shows only the poster without WebGL", () => {
@@ -69,9 +82,9 @@ describe("classifyStage", () => {
 
   it("honours ?stage= overrides", () => {
     expect(mode({ param: "off" })).toBe("none");
-    expect(mode({ param: "on", coarsePointer: true, viewportWidth: 390 })).toBe(
-      "auto",
-    );
+    expect(
+      mode({ param: "on", coarsePointer: true, screenShortSide: 390 }),
+    ).toBe("auto");
     expect(mode({ param: "tap" })).toBe("tap");
   });
 });

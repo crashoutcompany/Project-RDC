@@ -14,7 +14,7 @@ import {
   ArcadeButton,
   Heading,
 } from "@/components/arcade/ui";
-import { getArenas, getRoster, sorryScale } from "@/lib/rdc-stats";
+import { getArenas, getRoster, sorryRanks, sorryScale } from "@/lib/rdc-stats";
 import { cn } from "@/lib/utils";
 
 export async function generateStaticParams() {
@@ -77,10 +77,7 @@ async function MemberDetailContent({
   const fighter = roster[index];
   if (!fighter) notFound();
 
-  const ranked = sorryScale(roster, arenas)
-    .filter((e) => e.avgRank !== null)
-    .sort((a, b) => a.avgRank! - b.avgRank!);
-  const sorryRank = ranked.findIndex((e) => e.fighter.slug === key);
+  const sorryRank = sorryRanks(sorryScale(roster, arenas)).get(key);
   const wins = {
     matches: member.data.matchWins.length,
     sets: member.data.setWins.length,
@@ -110,7 +107,7 @@ async function MemberDetailContent({
             <p className="ac-label text-ac-cream mt-1 tracking-wider">
               Sorry rank{" "}
               <span className="text-ac-gold">
-                #{sorryRank === -1 ? "--" : sorryRank + 1} / {roster.length}
+                #{sorryRank ?? "--"} / {roster.length}
               </span>
             </p>
             <div className="border-ac-cream bg-ac-ink/70 mt-4 max-w-md border-2 p-3">

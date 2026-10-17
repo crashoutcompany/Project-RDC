@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -10,7 +9,9 @@ import type { BoardEntry } from "./arcade-scene";
 import { useInView, useStageRoot, useStageSupport } from "./use-stage-support";
 import { resetWhenHidden, startZoom } from "./zoom";
 
-const ArcadeScene = dynamic(() => import("./arcade-scene"), { ssr: false });
+type SceneComponent = typeof import("./arcade-scene").default;
+/** Kept outside components: React Compiler can't compile `import()`. */
+const loadScene = () => import("./arcade-scene").then((m) => m.default);
 
 /** Give up on the 3D room (the poster stays) if it isn't drawing by then. */
 const LOAD_TIMEOUT_MS = 8000;
@@ -22,7 +23,8 @@ const TAP_LOAD_TIMEOUT_MS = 20000;
  * three.js is fetched after the page has fully loaded and the browser is idle;
  * on phones and other skipped devices (see useStageSupport) nothing 3D is
  * fetched until the visitor taps "Tap to start". The scene fades in once it
- * has drawn a frame; slow or failed loads leave the poster in place.
+ * has drawn a frame. Slow or failed loads (the scene chunk, the cabinet model
+ * or WebGL itself) leave the poster in place with a Retry button.
  */
 export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
   const { anchor, root } = useStageRoot();
@@ -79,6 +81,30 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, [root]);
 
+  // Imported by hand rather than with next/dynamic so Retry really imports
+  // again after a failed chunk load. Each attempt remounts the scene.
+  const [Scene, setScene] = useState<SceneComponent | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!armed) return;
+    let live = true;
+    loadScene().then(
+      (scene) => {
+        if (live) setScene(() => scene);
+      },
+      () => {
+        if (live) setStatus("failed");
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [armed, attempt]);
+  const retry = () => {
+    setStatus("loading");
+    setAttempt((n) => n + 1);
+  };
+
   const onReady = useCallback(() => setStatus("ready"), []);
   // Unmounting the scene leaves the poster underneath.
   const onError = useCallback(() => setStatus("failed"), []);
@@ -87,8 +113,13 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
     if (status === "failed") root?.removeAttribute("data-zooming");
   }, [status, root]);
   const mounted =
-    support !== null && support.mode !== "none" && armed && status !== "failed";
+    support !== null &&
+    support.mode !== "none" &&
+    armed &&
+    status !== "failed" &&
+    Scene !== null;
   const showTap = mode === "tap" && status !== "failed" && status !== "ready";
+  const showRetry = armed && status === "failed";
 
   return (
     <>
@@ -110,6 +141,16 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
           )}
         </button>
       ) : null}
+      {showRetry ? (
+        <button
+          type="button"
+          data-testid="home-retry-3d"
+          onClick={retry}
+          className="ac-label bg-ac-ink/85 text-ac-gold border-ac-gold hover:bg-ac-gold hover:text-ac-ink absolute top-4 right-4 z-10 cursor-pointer border-2 px-3 py-2 transition-colors"
+        >
+          <span aria-hidden>↻ </span>Retry 3D
+        </button>
+      ) : null}
       {mounted ? (
         <div
           className={cn(
@@ -117,7 +158,8 @@ export function ArcadeHeroScene({ board }: { board: BoardEntry[] }) {
             status === "ready" ? "opacity-100" : "opacity-0",
           )}
         >
-          <ArcadeScene
+          <Scene
+            key={attempt}
             board={board}
             animate={!support.reducedMotion}
             powerPreference={support.desktop ? "high-performance" : "low-power"}

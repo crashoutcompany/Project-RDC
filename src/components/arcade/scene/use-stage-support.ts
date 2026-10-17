@@ -25,25 +25,31 @@ export type StageSignals = {
   deviceMemory: number | undefined;
   cores: number;
   coarsePointer: boolean;
-  viewportWidth: number;
+  /** Shorter side of the screen in CSS px, so rotation doesn't matter. */
+  screenShortSide: number;
   /** null when WebGL isn't available at all. */
   renderer: string | null;
 };
 
-/** Phones: touch-first pointer on a narrow screen. */
-export const PHONE_MAX_WIDTH = 768;
+/**
+ * Phones: touch-first pointer and a screen whose shorter side is at most this
+ * wide. Using the short side keeps a phone held sideways (often >768px wide)
+ * a phone; tablets start around 744px.
+ */
+export const PHONE_MAX_SHORT_SIDE = 600;
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
 
 /**
  * Decides how the 3D arcade room may start. It only auto-starts where it's
- * cheap; phones, reduced motion, Data Saver or a slow connection, low-memory
- * or <=4-core devices (boards like a Raspberry Pi) and GPU-less software
+ * cheap; phones (in either orientation), reduced motion, Data Saver or a slow
+ * connection, low-memory devices, <=4-core touch devices and GPU-less software
  * renderers (SwiftShader, llvmpipe) wait for a tap instead. `?stage=off`
  * forces the poster, `?stage=on` forces auto-start, `?stage=tap` the button.
  */
 export function classifyStage(s: StageSignals): StageSupport {
-  const phone = s.coarsePointer && s.viewportWidth <= PHONE_MAX_WIDTH;
+  const phone = s.coarsePointer && s.screenShortSide <= PHONE_MAX_SHORT_SIDE;
+  const lowMemory = s.deviceMemory !== undefined && s.deviceMemory < 4;
   const desktop = !s.coarsePointer;
   const base = { desktop, reducedMotion: s.reducedMotion };
 
@@ -57,8 +63,10 @@ export function classifyStage(s: StageSignals): StageSupport {
     s.reducedMotion ||
     s.saveData ||
     /(^|-)2g$|^3g$/.test(s.effectiveType) ||
-    (s.deviceMemory !== undefined && s.deviceMemory < 4) ||
-    s.cores <= 4 ||
+    lowMemory ||
+    // Few cores only matters on touch or low-memory hardware: plenty of
+    // capable desktops are quad-core.
+    ((s.coarsePointer || lowMemory) && s.cores <= 4) ||
     SOFTWARE_RENDERER.test(s.renderer);
   return { ...base, mode: skip ? "tap" : "auto" };
 }
@@ -112,7 +120,7 @@ function detectStage(): StageSupport {
     deviceMemory: nav.deviceMemory,
     cores: nav.hardwareConcurrency,
     coarsePointer: window.matchMedia("(pointer: coarse)").matches,
-    viewportWidth: window.innerWidth,
+    screenShortSide: Math.min(window.screen.width, window.screen.height),
     renderer: probeRenderer(),
   });
   return stageSupport;

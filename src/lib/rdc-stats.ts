@@ -1,11 +1,13 @@
 import "server-only";
 import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import { getAllGames } from "prisma/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { gameImages, GamesEnum } from "@/lib/constants";
 import { getFighterArt, ROSTER_ORDER, type FighterArt } from "@/lib/fighters";
 import { formatSessionDate } from "@/lib/utils";
+import { ARENAS_TAG } from "@/lib/revalidate";
 import type { Sessions } from "@/app/(routes)/(groups)/games/[slug]/_helpers/dashboard";
 
 export type PlayerRecord = {
@@ -82,7 +84,10 @@ export function summarizeArena(
   sessions: Sessions,
 ): Omit<Arena, "index"> {
   const records: Record<string, PlayerRecord> = {};
-  const positions: Record<string, { name: string; sum: number; count: number }> = {};
+  const positions: Record<
+    string,
+    { name: string; sum: number; count: number }
+  > = {};
   const record = (player: string) =>
     (records[player.toLowerCase()] ??= {
       name: player,
@@ -147,8 +152,16 @@ export function summarizeArena(
   };
 }
 
-/** Every game in display order with its aggregated stats. Deduped per request. */
+/**
+ * Every game in display order with its aggregated stats. The aggregate is
+ * cached as one small entry (so Home and member pages don't re-read every
+ * approved session on each load) and revalidated with `ARENAS_TAG` when a
+ * session is approved or edited; React `cache` dedupes within a request.
+ */
 export const getArenas = cache(async (): Promise<Arena[]> => {
+  "use cache";
+  cacheLife("max");
+  cacheTag(ARENAS_TAG, "getAllSessions", "getAllGames");
   const games = await getAllGames();
   if (!games.success || !games.data) return [];
 
@@ -215,6 +228,17 @@ export function topFive(arena: Arena | undefined, count = 5) {
     .sort(([, a], [, b]) => b.matches - a.matches)
     .slice(0, count)
     .map(([slug, r]) => ({ slug, player: r.name, wins: r.matches }));
+}
+
+/**
+ * Sorry rank by player slug: #1 is the sorriest, i.e. the worst (highest)
+ * average leaderboard rank. Members without any wins have no rank.
+ */
+export function sorryRanks(entries: SorryEntry[]): Map<string, number> {
+  const ranked = entries
+    .filter((e) => e.avgRank !== null)
+    .sort((a, b) => b.avgRank! - a.avgRank!);
+  return new Map(ranked.map((e, i) => [e.fighter.slug, i + 1]));
 }
 
 /**
