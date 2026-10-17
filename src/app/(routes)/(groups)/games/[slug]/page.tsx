@@ -8,6 +8,7 @@ import CallOfDuty from "./_components/games/callofduty";
 import RocketLeague from "./_components/games/rocketleague";
 import Speedrunners from "./_components/games/speedrunners";
 import LethalCompany from "./_components/games/lethalcompany";
+import MarvelRivals from "./_components/games/marvelrivals";
 import { gameImages, GamesEnum } from "@/lib/constants";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
@@ -29,8 +30,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  if (slug === "__placeholder__")
-    return { title: "Games | RDC Stats Tracker" };
+  if (slug === "__placeholder__") return { title: "Games | RDC Stats Tracker" };
 
   const games = await getAllGames();
   if (!games.success || !games.data)
@@ -110,9 +110,7 @@ async function GameDetailContent({
   const sessionsData =
     sessionsResult.success && sessionsResult.data ? sessionsResult.data : [];
   const winsData =
-    winsResult.success && winsResult.data
-      ? winsResult.data
-      : { sessions: [] };
+    winsResult.success && winsResult.data ? winsResult.data : { sessions: [] };
   const winsPerPlayer = calcWinsPerPlayer(winsData);
 
   if (!membersResult.success || !membersResult.data) return <NoMembers />;
@@ -166,6 +164,15 @@ async function GameDetailContent({
     case GamesEnum.LethalCompany:
       gameComponent = (
         <LethalCompany
+          game={game}
+          members={membersResult.data}
+          winsPerPlayer={winsPerPlayer}
+        />
+      );
+      break;
+    case GamesEnum.MarvelRivals:
+      gameComponent = (
+        <MarvelRivals
           game={game}
           members={membersResult.data}
           winsPerPlayer={winsPerPlayer}
