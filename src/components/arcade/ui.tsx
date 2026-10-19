@@ -144,6 +144,62 @@ export function HpBar({
   );
 }
 
+const EMPTY_SEGMENT = "#4a4690";
+
+/**
+ * Super-meter style bar of discrete segments. `value` is 0..1. Segments light
+ * up one after another on first paint (via `@starting-style`) and again when
+ * `value` changes, so it animates from server and client renders alike.
+ * Under `prefers-reduced-motion` segments switch instantly, with no stagger.
+ */
+export function SegmentedMeter({
+  value,
+  segments = 24,
+  variant = "gold",
+  stagger = 25,
+  label,
+  className,
+}: {
+  value: number;
+  segments?: number;
+  variant?: keyof typeof BAR_FILL;
+  /** Delay between neighbouring segments, in ms. */
+  stagger?: number;
+  label?: string;
+  className?: string;
+}) {
+  const lit = Math.round(Math.max(0, Math.min(1, value)) * segments);
+  return (
+    <div
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={segments}
+      aria-valuenow={lit}
+      className={cn(
+        "border-ac-cream flex h-4 gap-0.5 border-2 p-0.5",
+        className,
+      )}
+    >
+      {Array.from({ length: segments }, (_, i) => (
+        <span
+          key={i}
+          // Colours go through variables, not inline background, so the
+          // `starting:` rule can still win the cascade on first paint.
+          className="flex-1 bg-(--seg) transition-colors delay-(--delay) duration-150 ease-out motion-reduce:transition-none starting:bg-(--empty)"
+          style={
+            {
+              "--empty": EMPTY_SEGMENT,
+              "--seg": i < lit ? BAR_FILL[variant] : EMPTY_SEGMENT,
+              "--delay": `${i * stagger}ms`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * Member photo rendered from a tiny source and scaled up with nearest-neighbour
  * sampling, so it reads as pixel art.
