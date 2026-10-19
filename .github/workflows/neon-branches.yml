@@ -24,8 +24,33 @@ permissions:
   contents: read
 
 jobs:
+  # The shared workflow builds the Neon branch name from the PR's head ref, and
+  # neondatabase/delete-branch-action pastes that name into a shell script. Only
+  # hand same-repo PRs with an ordinary branch name to it, so a crafted ref
+  # (e.g. one containing $( ) or backticks) can never reach a job holding
+  # NEON_API_KEY.
+  guard:
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      safe: ${{ steps.check.outputs.safe }}
+    steps:
+      - id: check
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "safe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Not managing a Neon branch for an unusual head ref"
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+          fi
+
   neon:
-    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    needs: guard
+    if: needs.guard.outputs.safe == 'true'
     uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@v1
     secrets: inherit
 
