@@ -9,6 +9,12 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    groups:
+      # sdk-node pins its own @opentelemetry/* versions; bumping one package
+      # alone leaves two copies in the lockfile, so update them together.
+      opentelemetry:
+        patterns:
+          - "@opentelemetry/*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
