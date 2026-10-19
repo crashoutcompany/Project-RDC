@@ -94,6 +94,9 @@ describe("approveEditRequest", () => {
       where: { sessionId: 1 },
       data: { sessionName: "Renamed" },
     });
+    expect(db.match.deleteMany).not.toHaveBeenCalled();
+    expect(db.gameSet.deleteMany).not.toHaveBeenCalled();
+    expect(db.gameSet.update).not.toHaveBeenCalled();
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
   });
 
@@ -109,6 +112,24 @@ describe("approveEditRequest", () => {
       where: { sessionId: 1 },
       data: { dayWinners: { set: [{ playerId: 2 }] } },
     });
+  });
+
+  it("leaves match stats alone when the proposal did not change sets", async () => {
+    givenPendingEdit(
+      { ...mk8SessionForm([mk8Set(1, DES)]), sessionName: "Renamed" },
+      { sessionName: true },
+    );
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).toHaveBeenCalledWith({
+      where: { sessionId: 1 },
+      data: { sessionName: "Renamed" },
+    });
+    expect(db.match.deleteMany).not.toHaveBeenCalled();
+    expect(db.gameSet.deleteMany).not.toHaveBeenCalled();
+    expect(db.gameSet.update).not.toHaveBeenCalled();
+    expect(db.playerStat.createMany).not.toHaveBeenCalled();
   });
 
   it("leaves day winners alone when the proposal did not change them", async () => {
