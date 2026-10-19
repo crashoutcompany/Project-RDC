@@ -103,7 +103,10 @@ export function toVerdict(
   };
 }
 
-export function buildDetectPrompt(profile: GameProfile, count: number): string {
+/** A game profile that has the `ai` prompt block the AI finder needs. */
+export type AiProfile = GameProfile & { ai: NonNullable<GameProfile["ai"]> };
+
+export function buildDetectPrompt(profile: AiProfile, count: number): string {
   return [
     `You are screening frames sampled from a ${profile.displayName} video to find the end-of-match results screen.`,
     `The image is a grid of ${count} separate video frame${count === 1 ? "" : "s"}, each labeled with a number in a yellow box in its top-left corner (numbered left-to-right, top-to-bottom).`,
@@ -119,7 +122,7 @@ export function buildDetectPrompt(profile: GameProfile, count: number): string {
 }
 
 export interface AiClassifierOptions {
-  profile: GameProfile;
+  profile: AiProfile;
   /** `<providerId>:<modelId>`, e.g. "google:gemini-2.5-flash" or "local:qwen2.5vl:7b". */
   modelSpec: string;
   /** Tiles per side of each contact sheet (1 = one frame per request). */

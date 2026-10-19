@@ -2,6 +2,7 @@ import type { FrameRecord } from "../types";
 import { clusterConsecutive } from "./dedup";
 import {
   detectFrames,
+  selectCoarseFrames,
   selectRefineFrames,
   type FrameClassifier,
 } from "./detect";
@@ -44,23 +45,23 @@ const fakeClassifier = (
   return { classifier, seen };
 };
 
-const opts = { dedupGap: 3, skipAheadFrames: 0, concurrency: 1, label: "t" };
+const opts = { dedupGapSec: 3, skipAheadSec: 0, concurrency: 1, label: "t" };
 
 describe("detectFrames", () => {
-  it("returns confirmed frames with the classifier's evidence", async () => {
+  it("returns confirmed frames with the classifier's evidence as matched keywords", async () => {
     const { classifier } = fakeClassifier(new Set([3, 4]));
     const out = await detectFrames(makeFrames(range(1, 6)), classifier, opts);
     expect(out.map((r) => r.frameId)).toEqual([3, 4]);
-    expect(out[0].evidence).toEqual(["hit"]);
+    expect(out[0].matchedKeywords).toEqual(["hit"]);
   });
 
-  it("skips ahead in frame-ID space once a run ends", async () => {
-    // Run at 3-4 ends when frame 8 (8 - 4 > dedupGap 3) is unconfirmed;
+  it("skips ahead in timestamp space once a run ends", async () => {
+    // Run at 3-4 ends when frame 8 (8 - 4 > dedupGapSec 3) is unconfirmed;
     // skip-ahead 10 → frames below 14 are never classified.
     const { classifier, seen } = fakeClassifier(new Set([3, 4, 12, 15]));
     const out = await detectFrames(makeFrames(range(1, 20)), classifier, {
       ...opts,
-      skipAheadFrames: 10,
+      skipAheadSec: 10,
     });
     expect(out.map((r) => r.frameId)).toEqual([3, 4, 15]);
     expect(seen.flat()).not.toContain(12);
@@ -73,7 +74,7 @@ describe("detectFrames", () => {
     });
     const out = await detectFrames(makeFrames(range(1, 12)), classifier, {
       ...opts,
-      skipAheadFrames: 10,
+      skipAheadSec: 10,
       concurrency: 4,
     });
     // Frame 7 was already in flight (concurrency 4) when frame 5 ended the
@@ -88,12 +89,12 @@ describe("detectFrames", () => {
     const sequential = await detectFrames(
       makeFrames(range(1, 30)),
       fakeClassifier(hits).classifier,
-      { ...opts, skipAheadFrames: 6 },
+      { ...opts, skipAheadSec: 6 },
     );
     const concurrent = await detectFrames(
       makeFrames(range(1, 30)),
       fakeClassifier(hits, { shuffle: true, batchSize: 2 }).classifier,
-      { ...opts, skipAheadFrames: 6, concurrency: 3 },
+      { ...opts, skipAheadSec: 6, concurrency: 3 },
     );
     expect(concurrent.map((r) => r.frameId)).toEqual(
       sequential.map((r) => r.frameId),
@@ -108,7 +109,7 @@ describe("detectFrames", () => {
     });
     const out = await detectFrames(makeFrames(range(1, 12)), classifier, {
       ...opts,
-      skipAheadFrames: 10,
+      skipAheadSec: 10,
     });
     expect(seen[0]).toEqual([1, 2, 3, 4]);
     expect(seen[1]).toEqual([5, 6, 7, 8]);
@@ -121,6 +122,25 @@ describe("detectFrames", () => {
     });
     const out = await detectFrames(makeFrames(range(1, 8)), classifier, opts);
     expect(out.map((r) => r.frameId)).toEqual([6]);
+  });
+});
+
+describe("selectCoarseFrames", () => {
+  it("keeps one frame per stride, going by timestamps rather than ids", () => {
+    // Keyframe-style sampling: gaps of 2s and 5s.
+    const frames = [0, 2, 4, 9, 11, 13, 20].map((timestampSec, i) => ({
+      frameId: i + 1,
+      filePath: `/frames/${i + 1}.jpg`,
+      timestampSec,
+    }));
+    expect(selectCoarseFrames(frames, 4).map((f) => f.frameId)).toEqual([
+      1, 3, 4, 6, 7,
+    ]);
+  });
+
+  it("keeps everything without a stride", () => {
+    const frames = makeFrames(range(1, 5));
+    expect(selectCoarseFrames(frames, 0)).toEqual(frames);
   });
 });
 
@@ -142,7 +162,7 @@ describe("selectRefineFrames", () => {
 
   it("returns nothing without a stride", () => {
     const all = makeFrames(range(1, 10));
-    expect(selectRefineFrames(all, [makeFrames([3])], 1, new Set())).toEqual(
+    expect(selectRefineFrames(all, [makeFrames([3])], 0, new Set())).toEqual(
       [],
     );
   });

@@ -1,3 +1,7 @@
+import type { AnalysisResults } from "@/lib/visionTypes";
+import type { ReaderId } from "@/lib/vision/readers";
+import type { FinderId } from "./pipeline/finders";
+
 /**
  * Shared types for the scoreboard harvester pipeline. Game-specific knowledge
  * lives in games/ — these types are intentionally game-agnostic.
@@ -9,56 +13,64 @@ export interface ResolvedConfig {
   /** Output root. Final per-run dir is `<out>/<gameId>/<videoId>/`. */
   out: string;
   fps: number;
-  noPhash: boolean;
-  phashThreshold: number;
   ocrMinKeywords: number;
   /**
-   * If true, only accept frames whose OCR includes the active game's
-   * endScreenSentinel keyword (e.g., "WINNER" for Rocket League).
+   * If true, only accept frames whose OCR includes one of the active game's
+   * endScreenSentinels (e.g., "WINNER" for Rocket League).
    */
   requireEndScreen: boolean;
-  /** Max frame gap allowed within a single dedup run. */
-  dedupGap: number;
+  /** Max timestamp gap (seconds) allowed within a single dedup run. */
+  dedupGapSec: number;
   /**
-   * After a confirmed run ends, jump this many frames forward before resuming
+   * After a confirmed run ends, skip ahead this many seconds before resuming
    * OCR. Set to 0 to disable skip-ahead (every frame is OCR'd).
    */
-  skipAheadFrames: number;
+  skipAheadSec: number;
+  /** `fps` samples at a fixed rate; `keyframes` decodes I-frames only. */
+  sampling: "fps" | "keyframes";
+  /** OCR backend; `auto` = Apple Vision on macOS, RapidOCR elsewhere. */
+  ocrEngine: "auto" | "vision" | "rapidocr";
   quality: number;
   /** Width used when normalizing sampled frame JPEGs for pHash/OCR. */
   sampleWidth: number;
   /** ffmpeg JPEG quality for sampled frames. Lower is higher quality. */
   jpegQuality: number;
-  /** Classifier calls in flight at once (OCR workers, or concurrent AI requests). */
-  detectConcurrency: number;
-  /** Which detector confirmed the frames. */
-  detector: "ocr" | "ai";
-  /** `<providerId>:<modelId>` spec for the AI detector. */
-  detectModel?: string;
-  /** AI detector: classify one frame every N frames (coarse pass). */
-  aiStrideFrames: number;
-  /** AI detector: tiles per side of each contact sheet. */
-  aiGrid: number;
-  /** AI detector: minimum confidence for a post-match verdict. */
-  aiMinConfidence: number;
-  /** AI detector: re-check every frame around each coarse hit. */
-  aiRefine: boolean;
-  /** Optional ffmpeg `-hwaccel` override ("none" for software decode). */
-  hwaccel?: string;
-  /** Run extraction on each saved match and write draft stats. */
-  draft: boolean;
-  /** `<providerId>:<modelId>` spec for draft extraction. */
-  extractModel?: string;
-  /** Session roster for draft extraction; empty means every known RDC member. */
-  players: string[];
-  /** When set, also write vision-eval fixtures (image + draft expected.json) here. */
-  emitFixtures?: string;
+  /** Number of persistent OCR workers to run concurrently. */
+  ocrConcurrency: number;
   keepFrames: boolean;
+  /** Keep the downloaded video.mp4 after a successful run. */
+  keepVideo: boolean;
   start?: number;
   end?: number;
-  submit: boolean;
-  sessionId?: number;
-  referencePath: string;
+  /** Read every saved scoreboard's stats. */
+  analyze: boolean;
+  /** Finds scoreboard frames; `decisions` falls back to `ocr` on errors. */
+  finder: FinderId;
+  /** Reads stats; `gemini` falls back to Azure on errors. */
+  reader: ReaderId;
+  /**
+   * Bulk mode: Gemini reads through its Batch API (half price, slower), and
+   * Decisions runs at higher concurrency (it has no batch API).
+   */
+  batch: boolean;
+  /** Decisions calls in flight at once. */
+  decisionsConcurrency: number;
+  /** ffmpeg `-hwaccel` for `fps` sampling (e.g. cuda, vaapi); undefined = per-platform default. */
+  hwaccel?: string;
+  /** Settings for `--finder ai`. */
+  ai: {
+    /** `<providerId>:<modelId>`; undefined = `$HARVEST_DETECT_MODEL`, `$VISION_MODEL`, then the app default. */
+    model?: string;
+    /** Coarse pass: classify one frame every this many seconds. */
+    strideSec: number;
+    /** Frames per request = grid x grid contact sheet. */
+    grid: number;
+    minConfidence: number;
+    /** Re-check every frame around coarse hits so dedup can pick the run's first frame. */
+    refine: boolean;
+    /** Classifier requests in flight at once. */
+    concurrency: number;
+  };
 }
 
 export interface FrameRecord {
@@ -69,20 +81,21 @@ export interface FrameRecord {
   timestampSec: number;
 }
 
-export interface PHashRecord extends FrameRecord {
-  hashHex: string;
-  /** Hamming distance from the reference scoreboard hash (0–64) */
-  distance: number;
-}
-
-/** A frame the active detector confirmed as an end-of-match scoreboard. */
-export interface DetectionRecord extends FrameRecord {
+export interface OcrRecord extends FrameRecord {
+  /** Raw recognized text lines, top-to-bottom */
+  text: string[];
+  /** Subset of the active game's keywords that matched on this frame */
+  matchedKeywords: string[];
   /**
-   * Why it was confirmed: matched keywords for OCR, `<kind>@<confidence>`
-   * for the AI detector.
+   * Set when the finder already read this frame (Mario Kart walks back across
+   * a few results frames and keeps the clean one). Dedup copies it onto the
+   * match so analyze does not read the screenshot again.
    */
-  evidence: string[];
-  confidence?: number;
+  preread?: {
+    analysis: AnalysisResults;
+    readerId: string;
+    fallbacks: string[];
+  };
 }
 
 export interface MatchManifest {
@@ -91,28 +104,11 @@ export interface MatchManifest {
   timestampStr: string;
   runLengthFrames: number;
   imagePath: string;
-  /** Matched OCR keywords; empty for AI-detected matches. */
   ocrKeywords: string[];
-  detection: {
-    detector: "ocr" | "ai";
-    model?: string;
-    evidence: string[];
-    confidence?: number;
-  };
-  /** Present when --draft ran extraction on this match. */
-  draft?: MatchDraft;
-  submission: unknown | null;
-}
-
-export interface MatchDraft {
-  model: string;
-  /** VisionResultCodes value: Success, CheckRequest, or Failed. */
-  status: string;
-  message?: string;
-  /** Path of the match-NN.json draft, relative to the run directory. */
-  draftPath: string;
-  players?: { name: string; stats: { stat: string; statValue: string }[] }[];
-  winners?: string[];
+  /** Reader + game-processor result for this screenshot, when analyzed. */
+  analysis: AnalysisResults | null;
+  /** Which reader produced `analysis`, and any that failed before it. */
+  reader?: { id: string; fallbacks: string[] };
 }
 
 export interface Manifest {
@@ -125,6 +121,8 @@ export interface Manifest {
     fps: number;
   };
   config: Record<string, unknown>;
+  /** Finder that actually ran, and why it fell back, if it did. */
+  finder?: { id: string; fallback: string | null };
   runtimeMs: number;
   matches: MatchManifest[];
 }

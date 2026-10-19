@@ -4,8 +4,6 @@ import { NextRequest } from "next/server";
 import { handlePrismaOperation } from "prisma/db";
 import { Resend } from "resend";
 
-const resend = new Resend(config.RESEND_API_KEY!);
-
 const escapeHtml = (unsafe: string) => {
   return unsafe
     .replace(/&/g, "&amp;")
@@ -27,6 +25,12 @@ export async function GET(req: NextRequest) {
 
     if (authHeader !== `Bearer ${cronSecret}`)
       return new Response("Unauthorized", { status: 401 });
+
+    // Built per request: Resend throws on a missing key, which would fail the
+    // build when the module is evaluated for page-data collection.
+    if (!config.RESEND_API_KEY)
+      return new Response("Missing Resend API key", { status: 500 });
+    const resend = new Resend(config.RESEND_API_KEY);
 
     const sendList =
       config.RESEND_JOB_SEND_LIST?.split(";").filter(Boolean) || [];

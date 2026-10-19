@@ -5,8 +5,8 @@ import { CoDGunGameProcessor } from "./CoDGunGameProcessor";
 import { MarvelRivalsProcessor } from "./MarvelRivalsProcessor";
 
 // Lives here rather than in visionAction.ts so CLI scripts (vision-eval, the
-// scoreboard harvester's --draft) can use it without importing server
-// analytics -> Better Auth, which throws at load without BETTER_AUTH_SECRET.
+// scoreboard harvester) can use it without importing server analytics ->
+// Better Auth, which throws at load without BETTER_AUTH_SECRET.
 export const getGameProcessor = (gameId: number): GameProcessor => {
   switch (gameId) {
     case 1:

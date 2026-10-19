@@ -83,6 +83,10 @@ const Component = async ({ params }: { params: Promise<{ slug: string }> }) => {
     videoId: sessionData.videoId,
     date: new Date(sessionData.date),
     players: Array.from(players),
+    dayWinners: sessionData.dayWinners.map((player) => ({
+      playerId: player.playerId,
+      playerName: player.playerName as FormValues["players"][number]["playerName"],
+    })),
     // @ts-expect-error Stat Name not conforming to player names
     sets: sessionData.sets.map((set) => ({
       setId: set.setId,

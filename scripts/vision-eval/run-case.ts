@@ -17,8 +17,6 @@ export interface CaseResult {
  * without its `after()`/PostHog calls, which need an active Next.js request
  * scope that a bare CLI script never has. Keep this in sync with
  * `src/app/actions/visionAction.ts` if that orchestration changes.
- *
- * Also used by the scoreboard harvester's `--draft` stage.
  */
 export const runVisionCase = async (
   imageBase64: string,

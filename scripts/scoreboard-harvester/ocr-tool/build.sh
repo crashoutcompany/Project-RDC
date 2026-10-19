@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 
 if [ "$(uname -s)" != "Darwin" ]; then
     echo "vision-ocr uses Apple's Vision framework and only builds on macOS." >&2
-    echo "On other platforms, harvest with the AI detector instead: --detector ai" >&2
+    echo "On other platforms the harvester uses RapidOCR (pip install rapidocr onnxruntime) or --finder ai." >&2
     exit 1
 fi
 

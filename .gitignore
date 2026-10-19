@@ -54,5 +54,8 @@ next-env.d.ts
 
 sessions_backup.json
 
-# neon branch switch log
+# neon branch switch state + log
 .neon-switch.log
+.neon-switch.json
+# Playwright local run output
+/test-results/

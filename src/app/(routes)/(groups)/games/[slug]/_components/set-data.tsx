@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ProcessedSet } from "./match-data";
+import type { ProcessedSet } from "@/lib/mvp/process-sets";
 
 type RLPlayerStats = {
   player: string;

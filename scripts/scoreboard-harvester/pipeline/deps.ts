@@ -1,12 +1,25 @@
+import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
+
+export type OcrEngineName = "vision" | "rapidocr";
+
+/** A daemon that speaks the `--daemon` line protocol (see pipeline/ocr.ts). */
+export interface OcrEngine {
+  name: OcrEngineName;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
 
 export interface DepCheckResult {
   ok: boolean;
   ytDlpPath: string;
+  /** Extra yt-dlp args (e.g. a JS runtime for YouTube's signature challenge). */
+  ytDlpArgs: string[];
   ffmpegPath: string;
   ffprobePath: string;
-  visionOcrPath: string;
+  ocrEngine: OcrEngine | null;
   errors: string[];
 }
 
@@ -44,7 +57,10 @@ export function which(
   return null;
 }
 
-function isExecutable(filePath: string, isWindows: boolean): boolean {
+function isExecutable(
+  filePath: string,
+  isWindows: boolean = process.platform === "win32",
+): boolean {
   try {
     if (!fs.statSync(filePath).isFile()) return false;
     // Windows has no exec bit; a matching PATHEXT suffix is what makes it runnable.
@@ -69,52 +85,89 @@ export function installHint(
   if (tool === "yt-dlp") {
     if (platform === "darwin") return "brew install yt-dlp (or pipx install yt-dlp)";
     if (platform === "win32") return "winget install yt-dlp (or pipx install yt-dlp)";
-    return "pipx install yt-dlp (or your distro's yt-dlp package)";
+    return "pip install --user yt-dlp (or pipx install yt-dlp, or your distro's package)";
   }
   if (platform === "darwin") return "brew install ffmpeg";
   if (platform === "win32") return "winget install ffmpeg (or choco install ffmpeg)";
   return "sudo apt install ffmpeg / sudo dnf install ffmpeg / sudo pacman -S ffmpeg";
 }
 
-/** Absolute path where `pnpm harvest:build-ocr` writes the macOS OCR binary. */
-export function visionOcrBinPath(harvesterRoot: string): string {
-  return path.join(harvesterRoot, "bin", "vision-ocr");
-}
-
 /**
- * Whether the Apple Vision OCR binary is built and runnable. existsSync alone
- * lets non-executable files slip through and fail at spawn-time with a noisy
- * EACCES, so probe with X_OK.
+ * yt-dlp now needs a JavaScript runtime to solve YouTube's signature
+ * challenge and only auto-detects deno. We are already running under Node, so
+ * hand it this binary when the installed yt-dlp understands the flag.
  */
-export function isVisionOcrUsable(harvesterRoot: string): boolean {
-  if (process.platform !== "darwin") return false;
-  try {
-    fs.accessSync(visionOcrBinPath(harvesterRoot), fs.constants.X_OK);
-    return true;
-  } catch {
-    return false;
+function ytDlpRuntimeArgs(ytDlpPath: string): string[] {
+  if (which("deno")) return [];
+  const help = spawnSync(ytDlpPath, ["--help"], { encoding: "utf8" });
+  if (!help.stdout?.includes("--js-runtimes")) return [];
+  return ["--js-runtimes", `node:${process.execPath}`];
+}
+
+function resolveOcrEngine(
+  harvesterRoot: string,
+  requested: OcrEngineName | "auto",
+  errors: string[],
+): OcrEngine | null {
+  const visionOcrPath = path.join(harvesterRoot, "bin", "vision-ocr");
+  const python = process.env.HARVEST_PYTHON || "python3";
+  const daemon = path.join(harvesterRoot, "ocr-tool", "rapid-ocr-daemon.py");
+
+  const wantsVision =
+    requested === "vision" ||
+    (requested === "auto" &&
+      process.platform === "darwin" &&
+      isExecutable(visionOcrPath));
+
+  if (wantsVision) {
+    if (isExecutable(visionOcrPath))
+      return { name: "vision", command: visionOcrPath, args: ["--daemon"] };
+    errors.push(
+      `vision-ocr binary not built or not executable at ${visionOcrPath}. ` +
+        `Run: pnpm harvest:build-ocr`,
+    );
+    return null;
   }
+
+  const probe = spawnSync(python, ["-c", "import rapidocr, onnxruntime"], {
+    encoding: "utf8",
+  });
+  if (probe.status === 0)
+    return {
+      name: "rapidocr",
+      command: python,
+      args: [daemon, "--daemon"],
+    };
+
+  errors.push(
+    `RapidOCR not importable with ${python}. Install: ` +
+      `pip install --user rapidocr onnxruntime` +
+      (process.platform === "darwin"
+        ? " (or build Apple Vision OCR: pnpm harvest:build-ocr)"
+        : ""),
+  );
+  return null;
 }
 
 /**
- * Verifies that the external dependencies the chosen run needs are present.
- * Returns a structured result so the CLI can print a clear remediation
- * message before exiting.
+ * Verifies that all external dependencies (yt-dlp, ffmpeg, ffprobe, an OCR
+ * engine) are present. Returns a structured result so the CLI can print a
+ * clear remediation message before exiting.
  *
  * @param harvesterRoot - Absolute path to the harvester directory.
- * @param opts.requireYtDlp - Whether yt-dlp must be present (only needed for URL input).
- * @param opts.requireVisionOcr - Whether the macOS vision-ocr binary must be
- *   present (only for `--detector ocr`).
- * @returns DepCheckResult with resolved paths and any errors.
+ * @param requireYtDlp - Whether yt-dlp must be present (only needed for URL input).
+ * @param ocrEngine - `auto` picks Apple Vision on macOS, RapidOCR elsewhere;
+ *   `none` skips the OCR check (the AI finder needs no OCR).
  */
 export function checkDeps(
   harvesterRoot: string,
-  opts: { requireYtDlp: boolean; requireVisionOcr: boolean },
+  requireYtDlp: boolean,
+  ocrEngine: OcrEngineName | "auto" | "none" = "auto",
 ): DepCheckResult {
   const errors: string[] = [];
 
   const ytDlpPath = which("yt-dlp");
-  if (opts.requireYtDlp && !ytDlpPath)
+  if (requireYtDlp && !ytDlpPath)
     errors.push(`yt-dlp not found on PATH. Install: ${installHint("yt-dlp")}`);
 
   const ffmpegPath = which("ffmpeg");
@@ -127,26 +180,18 @@ export function checkDeps(
       `ffprobe not found on PATH (ships with ffmpeg). Install: ${installHint("ffmpeg")}`,
     );
 
-  const visionOcrPath = visionOcrBinPath(harvesterRoot);
-  if (opts.requireVisionOcr) {
-    if (process.platform !== "darwin")
-      errors.push(
-        "--detector ocr uses Apple's Vision framework and only runs on macOS. " +
-          "Use --detector ai instead.",
-      );
-    else if (!isVisionOcrUsable(harvesterRoot))
-      errors.push(
-        `vision-ocr binary not built or not executable at ${visionOcrPath}. ` +
-          `Run: pnpm harvest:build-ocr`,
-      );
-  }
+  const engine =
+    ocrEngine === "none"
+      ? null
+      : resolveOcrEngine(harvesterRoot, ocrEngine, errors);
 
   return {
     ok: errors.length === 0,
     ytDlpPath: ytDlpPath ?? "",
+    ytDlpArgs: ytDlpPath ? ytDlpRuntimeArgs(ytDlpPath) : [],
     ffmpegPath: ffmpegPath ?? "",
     ffprobePath: ffprobePath ?? "",
-    visionOcrPath,
+    ocrEngine: engine,
     errors,
   };
 }

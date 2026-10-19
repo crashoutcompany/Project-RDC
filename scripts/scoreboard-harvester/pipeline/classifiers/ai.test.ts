@@ -20,6 +20,8 @@ import {
   toVerdict,
 } from "./ai";
 
+const rl = { ...rocketLeague, ai: rocketLeague.ai! };
+
 describe("parseTileResults", () => {
   it("maps answers onto tiles by index", () => {
     const parsed = parseTileResults(
@@ -85,9 +87,9 @@ describe("toVerdict", () => {
 
 describe("buildDetectPrompt", () => {
   it("includes the profile's description, rejects and tile count", () => {
-    const prompt = buildDetectPrompt(rocketLeague, 9);
-    expect(prompt).toContain(rocketLeague.ai.description);
-    expect(prompt).toContain(rocketLeague.ai.reject);
+    const prompt = buildDetectPrompt(rl, 9);
+    expect(prompt).toContain(rl.ai.description);
+    expect(prompt).toContain(rl.ai.reject);
     expect(prompt).toContain("indices 1-9");
   });
 });
@@ -118,7 +120,7 @@ describe("createAiClassifier", () => {
 
   const make = () =>
     createAiClassifier({
-      profile: rocketLeague,
+      profile: rl,
       modelSpec: "google:gemini-2.5-flash",
       grid: 2,
       minConfidence: 0.6,
@@ -182,7 +184,7 @@ describe("createAiClassifier", () => {
   it("rejects an unknown provider prefix up front", () => {
     expect(() =>
       createAiClassifier({
-        profile: rocketLeague,
+        profile: rl,
         modelSpec: "nope:model",
         grid: 1,
         minConfidence: 0.6,

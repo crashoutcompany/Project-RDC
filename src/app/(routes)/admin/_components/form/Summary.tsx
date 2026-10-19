@@ -26,6 +26,8 @@ interface FormSummaryProps {
 export const FormSummary = ({ defaultValues }: FormSummaryProps) => {
   const formContext = useFormContext<FormValues>();
   const sets = defaultValues?.sets || formContext?.getValues("sets") || [];
+  const dayWinners =
+    defaultValues?.dayWinners || formContext?.getValues("dayWinners") || [];
   const [openSets, setOpenSets] = useState<boolean[]>(sets.map(() => false));
 
   const toggleSet = (index: number) => {
@@ -37,6 +39,14 @@ export const FormSummary = ({ defaultValues }: FormSummaryProps) => {
   return (
     <>
       <H2>Form Summary</H2>
+      <div className="mb-4 flex items-center gap-4">
+        <span className="text-lg font-semibold">Day Winners</span>
+        <div className="flex -space-x-2">
+          {dayWinners.map((winner) => (
+            <PlayerAvatar key={winner.playerId} player={winner} />
+          ))}
+        </div>
+      </div>
       <div className="@container grid gap-4">
         {sets.map((set, index) => (
           <Collapsible key={set.setId} open={openSets[index]}>

@@ -255,6 +255,8 @@ const baseSessionSchema = z.object({
   date: dateSchema,
   thumbnail: thumbnailSchema,
   players: playersSchema,
+  // Entered manually by admins; may be empty (a day with no recorded winner).
+  dayWinners: z.array(playerSchema),
   sets: setsSchema,
 });
 
@@ -289,10 +291,10 @@ const rocketLeagueSchema = baseSessionSchema.extend({
                 message: "Winning team must have more goals than losing team.",
               });
           }),
-        ),
+        ).nonempty("At least one match is required"),
       }),
     )
-    .nonempty(),
+    .nonempty("At least one set is required"),
 });
 
 const marioKart8MatchSchema = baseSessionSchema.extend({
@@ -342,9 +344,9 @@ const marioKart8MatchSchema = baseSessionSchema.extend({
               input: ctx.value,
             });
         }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 const lethalCompanySchema = baseSessionSchema.extend({
@@ -418,9 +420,9 @@ const marvelRivalsSchema = baseSessionSchema.extend({
               });
             }
           }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 const codSchema = baseSessionSchema.extend({
@@ -490,22 +492,35 @@ const codSchema = baseSessionSchema.extend({
               input: ctx.value,
             });
         }),
-      ),
+      ).nonempty("At least one match is required"),
     }),
-  ),
+  ).nonempty("At least one set is required"),
 });
 
 // ! End of Game specific schemas
 
 // Combined schema with discriminated union
-export const formSchema = z.discriminatedUnion("game", [
-  codSchema,
-  rocketLeagueSchema,
-  marioKart8MatchSchema,
-  lethalCompanySchema,
-  speedrunnersSchema,
-  marvelRivalsSchema,
-]);
+export const formSchema = z
+  .discriminatedUnion("game", [
+    codSchema,
+    rocketLeagueSchema,
+    marioKart8MatchSchema,
+    lethalCompanySchema,
+    speedrunnersSchema,
+    marvelRivalsSchema,
+  ])
+  .check((ctx) => {
+    const { players, dayWinners } = ctx.value;
+    dayWinners.forEach((winner, index) => {
+      if (!players.some((p) => p.playerId === winner.playerId))
+        ctx.issues.push({
+          code: "custom",
+          message: `${winner.playerName} is not a session player`,
+          input: winner,
+          path: ["dayWinners", index],
+        });
+    });
+  });
 
 // Define types based on the Zod schema
 export type FormValues = z.infer<typeof formSchema>;

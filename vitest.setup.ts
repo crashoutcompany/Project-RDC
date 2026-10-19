@@ -1,5 +1,3 @@
-import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 
 const noop = () => {};
@@ -15,7 +13,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -44,8 +41,31 @@ vi.mock("next/headers", () => ({
   })),
 }));
 
+// Server actions read the caller through these; drive them with `signInAs`
+// from src/test/session.ts. Defaults to signed out.
+vi.mock("@/lib/auth/server", () => ({
+  getAuthoritativeSession: vi.fn(async () => null),
+  getRscSession: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  auth: { api: { getSession: vi.fn(), signOut: vi.fn() } },
+}));
+
+vi.mock("@/lib/config", () => ({
+  default: {
+    YOUTUBE_API_KEY: "test-youtube-key",
+    DOCUMENT_INTELLIGENCE_ENDPOINT: "https://example.test",
+    DOCUMENT_INTELLIGENCE_API_KEY: "test-key",
+  },
+}));
+
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/posthog/server-analytics", () => ({
   logAdminAction: vi.fn(),
+  logMvpUpdateFailure: vi.fn(),
+  logMvpUpdateSuccess: vi.fn(),
   logFormError: vi.fn(),
   logFormSuccess: vi.fn(),
   logVisionAction: vi.fn(),
@@ -55,6 +75,5 @@ vi.mock("@/posthog/server-analytics", () => ({
 }));
 
 vi.mock("@/posthog/server-init", () => ({
-  captureException: vi.fn(),
-  capture: vi.fn(),
+  default: { capture: vi.fn(), captureException: vi.fn() },
 }));

@@ -69,16 +69,17 @@ Getting screenshots and a starting `expected.json`:
 
   ```bash
   pnpm harvest -- extract --game rocket-league --video ./game.mp4 \
-    --detect-model google:gemini-2.5-flash --emit-fixtures scripts/vision-eval/fixtures
+    --finder ai --ai-model google:gemini-2.5-flash --emit-fixtures scripts/vision-eval/fixtures
   ```
 
-  This finds each end-of-match scoreboard, runs the app's real extraction on it, and
-  writes `<video-id>-match-NN/{image.png,expected.json}` straight into the fixtures
-  directory. Every generated `expected.json` starts with `"_draft": true` — **check
+  This finds each end-of-match scoreboard, reads it with the harvester's reader chain
+  (add `--reader llm --reader-model <spec>` to read with the model you're evaluating),
+  and writes `<video-id>-match-NN/{image.png,expected.json}` straight into the
+  fixtures directory. Every generated `expected.json` starts with `"_draft": true` — **check
   every stat value against the actual screenshot and delete `_draft` before trusting
   it**; `loadFixtures` warns loudly on any case still marked as a draft, and this eval
   script only reports scores, it doesn't verify them for you. See the harvester's
-  README for detector/model options.
+  README for finder/model options.
 - Real uploads you've already saved from the admin vision modal (hand-label
   `expected.json` yourself).
 - Grab a frame manually (`ffmpeg -ss <time> -i video.mp4 -frames:v 1 image.png`) and

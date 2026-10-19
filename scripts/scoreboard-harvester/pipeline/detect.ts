@@ -1,4 +1,4 @@
-import type { DetectionRecord, FrameRecord } from "../types";
+import type { FrameRecord, OcrRecord } from "../types";
 
 /** One classifier decision for one frame. */
 export interface FrameVerdict {
@@ -14,8 +14,7 @@ export interface FrameVerdict {
  * must return exactly one verdict per frame, in the same order.
  */
 export interface FrameClassifier {
-  /** "ocr" or "ai" — recorded in the manifest. */
-  id: "ocr" | "ai";
+  id: "ai";
   /** Model spec for AI classifiers, recorded in the manifest. */
   model?: string;
   batchSize: number;
@@ -25,24 +24,24 @@ export interface FrameClassifier {
 
 export interface DetectOptions {
   /**
-   * Max frame-id gap inside one "run" of confirmed frames. The skip-ahead
-   * trigger looks for an unconfirmed frame more than this far past the last
-   * confirmed one to know a run has ended; dedup reuses the same value to
-   * cluster confirmed records into matches.
+   * Max timestamp gap (seconds) inside one "run" of confirmed frames. The
+   * skip-ahead trigger looks for an unconfirmed frame more than this far past
+   * the last confirmed one to know a run has ended; dedup reuses the same
+   * value to cluster confirmed records into matches.
    */
-  dedupGap: number;
+  dedupGapSec: number;
   /**
-   * After a confirmed run ends, jump this many frame IDs forward before
+   * After a confirmed run ends, jump this many seconds forward before
    * resuming. 0 disables skip-ahead.
    *
-   * This is in *frame ID space*, not array-index space — so it works the
-   * same whether the input is every sampled frame, pHash survivors, or the
-   * AI detector's coarse stride.
+   * This is in *timestamp space*, not array-index space, so it works the same
+   * whether frames come every second, from keyframe sampling (irregular gaps),
+   * or from the AI finder's coarse stride.
    */
-  skipAheadFrames: number;
+  skipAheadSec: number;
   /** Classifier batches in flight at once. */
   concurrency: number;
-  /** Log prefix, e.g. "ocr" or "ai". */
+  /** Log prefix, e.g. "ai". */
   label: string;
 }
 
@@ -58,8 +57,8 @@ type BatchResult =
  * machine behaves exactly as if frames were classified one at a time:
  *
  * once a run of confirmed frames ends — an unconfirmed frame more than
- * `dedupGap` past the last confirmed frameId — frames below
- * `lastConfirmed + skipAheadFrames` are skipped. Frames already in flight
+ * `dedupGapSec` past the last confirmed timestamp — frames earlier than
+ * `lastConfirmed + skipAheadSec` are skipped. Frames already in flight
  * (or later in the same batch) that fall under the new boundary are ignored.
  * This relies on real games having a minimum interval between consecutive
  * end-of-match scoreboards (see games/<id>.ts).
@@ -68,23 +67,24 @@ type BatchResult =
  * @param classifier - Detector to run. The caller owns `close()`, so one
  *   classifier can serve several passes (the AI detector's coarse + refine).
  * @param opts - Run/skip-ahead tuning.
- * @returns Confirmed frames, in original order.
+ * @returns Confirmed frames in the shape the dedup stage expects, with the
+ *   classifier's evidence (`<kind>@<confidence>`) as the matched keywords.
  */
 export async function detectFrames(
   frames: FrameRecord[],
   classifier: FrameClassifier,
   opts: DetectOptions,
-): Promise<DetectionRecord[]> {
-  const out: DetectionRecord[] = [];
+): Promise<OcrRecord[]> {
+  const out: OcrRecord[] = [];
   const concurrency = Number.isFinite(opts.concurrency)
     ? Math.max(1, Math.floor(opts.concurrency))
     : 1;
   const batchSize = Math.max(1, Math.floor(classifier.batchSize));
   const { label } = opts;
 
-  let lastConfirmedFrameId = -1;
+  let lastConfirmedSec = -Infinity;
   let inRun = false;
-  let skipToFrameId = -1;
+  let skipToSec = -Infinity;
   let skippedTotal = 0;
   let ignoredInFlight = 0;
   let failedTotal = 0;
@@ -94,7 +94,7 @@ export async function detectFrames(
   if (frames.length === 0) return out;
 
   const isSkipped = (frame: FrameRecord) =>
-    opts.skipAheadFrames > 0 && frame.frameId < skipToFrameId;
+    opts.skipAheadSec > 0 && frame.timestampSec < skipToSec;
 
   let cursor = 0;
   const queue: Promise<BatchResult>[] = [];
@@ -168,20 +168,19 @@ export async function detectFrames(
       }
 
       if (verdict.isScoreboard) {
-        out.push({
-          ...frame,
-          evidence: verdict.evidence,
-          confidence: verdict.confidence,
-        });
-        lastConfirmedFrameId = frame.frameId;
+        out.push({ ...frame, text: [], matchedKeywords: verdict.evidence });
+        lastConfirmedSec = frame.timestampSec;
         inRun = true;
-      } else if (inRun && frame.frameId - lastConfirmedFrameId > opts.dedupGap) {
+      } else if (
+        inRun &&
+        frame.timestampSec - lastConfirmedSec > opts.dedupGapSec
+      ) {
         // We just confirmed we've exited a run. Schedule a skip-ahead.
-        if (opts.skipAheadFrames > 0) {
-          skipToFrameId = lastConfirmedFrameId + opts.skipAheadFrames;
+        if (opts.skipAheadSec > 0) {
+          skipToSec = lastConfirmedSec + opts.skipAheadSec;
           console.log(
-            `[${label}] skip-ahead: run ended at frame ${lastConfirmedFrameId}, ` +
-              `jumping past frame ${skipToFrameId - 1}`,
+            `[${label}] skip-ahead: run ended at ${lastConfirmedSec.toFixed(0)}s, ` +
+              `jumping to ${skipToSec.toFixed(0)}s`,
           );
         }
         inRun = false;
@@ -208,31 +207,54 @@ export async function detectFrames(
 }
 
 /**
- * Picks the frames the AI detector's refine pass should classify: every
- * sampled frame in the window around each coarse run that the coarse stride
- * skipped. Coarse hits a `stride` apart bound the true run to within
- * `stride - 1` frames on each side.
+ * Picks the frames the AI finder's refine pass should classify: every sampled
+ * frame within one stride of each coarse run that the coarse pass skipped.
+ * Coarse hits a stride apart bound the true run to within a stride on each
+ * side, and dedup keeps the earliest frame of a run, so the refine pass is
+ * what finds it.
  *
- * @param allFrames - Every sampled frame, ascending frameId.
+ * @param allFrames - Every sampled frame, ascending.
  * @param runs - Coarse confirmed runs (see `clusterConsecutive`).
- * @param strideFrames - Coarse sampling stride, in frames.
+ * @param strideSec - Coarse sampling stride, in seconds.
  * @param alreadyClassified - frameIds the coarse pass already saw.
- * @returns Frames to refine, ascending frameId.
+ * @returns Frames to refine, ascending.
  */
 export function selectRefineFrames(
   allFrames: FrameRecord[],
   runs: FrameRecord[][],
-  strideFrames: number,
+  strideSec: number,
   alreadyClassified: ReadonlySet<number>,
 ): FrameRecord[] {
-  if (strideFrames <= 1 || runs.length === 0) return [];
+  if (strideSec <= 0 || runs.length === 0) return [];
   const windows = runs.map((run) => ({
-    lo: run[0].frameId - strideFrames + 1,
-    hi: run.at(-1)!.frameId + strideFrames - 1,
+    lo: run[0].timestampSec - strideSec,
+    hi: run.at(-1)!.timestampSec + strideSec,
   }));
   return allFrames.filter(
     (frame) =>
       !alreadyClassified.has(frame.frameId) &&
-      windows.some((w) => frame.frameId >= w.lo && frame.frameId <= w.hi),
+      windows.some(
+        (w) => frame.timestampSec >= w.lo && frame.timestampSec <= w.hi,
+      ),
   );
+}
+
+/**
+ * The coarse pass's frames: the first frame, then the next one at least
+ * `strideSec` later, and so on. With keyframe sampling the gaps are uneven, so
+ * this works in timestamps rather than "every Nth frame".
+ */
+export function selectCoarseFrames(
+  frames: FrameRecord[],
+  strideSec: number,
+): FrameRecord[] {
+  if (strideSec <= 0) return frames;
+  const out: FrameRecord[] = [];
+  let nextAt = -Infinity;
+  for (const frame of frames) {
+    if (frame.timestampSec < nextAt) continue;
+    out.push(frame);
+    nextAt = frame.timestampSec + strideSec;
+  }
+  return out;
 }

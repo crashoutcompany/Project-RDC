@@ -1,8 +1,9 @@
 import {
   AnalyzedPlayersObj,
   AnalyzedTeamData,
-} from "@/app/actions/visionAction";
-import { VisionResult, VisionPlayer } from "../visionTypes";
+  VisionResult,
+  VisionPlayer,
+} from "@/lib/visionTypes";
 import { Player } from "@/generated/prisma/client";
 import {
   GameProcessor,

@@ -1,13 +1,26 @@
 import { MetadataRoute } from "next";
 import { getAllGames } from "prisma/lib/games";
 import { getAllMembers } from "prisma/lib/members";
+import { getApprovedSessionIds } from "prisma/lib/public-session";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const BASE_URL = "https://rdcstats.com";
-  const [games, members] = await Promise.all([getAllGames(), getAllMembers()]);
+  const [games, members, sessions] = await Promise.all([
+    getAllGames(),
+    getAllMembers(),
+    getApprovedSessionIds(),
+  ]);
 
   if (!games.success || !games.data) games.data = [];
   if (!members.success || !members.data) members.data = [];
+  if (!sessions.success || !sessions.data) sessions.data = [];
+
+  const sessionsMeta: MetadataRoute.Sitemap = sessions.data.map((session) => ({
+    url: `${BASE_URL}/sessions/${session.sessionId}`,
+    lastModified: session.date,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
 
   const gamesMeta: MetadataRoute.Sitemap = games.data.map((game) => ({
     url: `${BASE_URL}/games/${game.gameName.replace(/\s/g, "").toLowerCase()}`,
@@ -50,5 +63,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     ...gamesMeta,
     ...membersData,
+    ...sessionsMeta,
   ];
 }

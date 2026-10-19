@@ -2,8 +2,11 @@
 # Neon branch auto-switch hook
 # Only run on branch checkout (not file checkout)
 # $3 is 1 for branch checkout, 0 for file checkout
+[ "$3" = "1" ] || exit 0
 
-if [ "$3" = "1" ]; then
-  npm run update-neon-branch
-fi
+# Fresh worktrees (git worktree add) have no node_modules yet
+[ -x node_modules/.bin/tsx ] || exit 0
+command -v pnpm >/dev/null 2>&1 || exit 0
 
+# Never fail the checkout
+pnpm --silent run update-neon-branch || true

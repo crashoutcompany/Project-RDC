@@ -1,16 +1,55 @@
-import { GAME_CONFIGS, VisionResultCodes } from "@/lib/constants";
+import { VisionResultCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
-import { getGameProcessor } from "@/lib/game-processors";
 import { logVisionError, logVisionSuccess } from "@/posthog/server-analytics";
 import { after } from "next/server";
-import { AnalysisResults, Stat, VisionPlayer } from "@/lib/visionTypes";
+import { AnalysisResults } from "@/lib/visionTypes";
+import config from "@/lib/config";
 import {
-  buildRosterHint,
-  getVisionProvider,
-  toLegacyAnalyzed,
-} from "@/lib/vision";
+  createReaders,
+  primaryReaderFromEnv,
+  readerChain,
+  readWithFallback,
+} from "@/lib/vision/readers";
 
-export { getGameProcessor };
+export { getGameProcessor } from "@/lib/vision/analyze-scoreboard";
+export type {
+  AnalyzedPlayer,
+  AnalyzedTeamData,
+  AnalyzedPlayersObj,
+} from "@/lib/visionTypes";
+
+// Gemini reads first; Azure's trained models answer only when Gemini fails
+// (after retrying 429s/5xx) or doesn't support the game yet.
+// VISION_PROVIDER=llm puts the VISION_MODEL reader (e.g. a local model) ahead of them.
+const readers = readerChain(
+  primaryReaderFromEnv(),
+  createReaders({
+    geminiApiKey: config.GOOGLE_GENERATIVE_AI_API_KEY,
+    azureEndpoint: config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+    azureKey: config.DOCUMENT_INTELLIGENCE_API_KEY,
+  }),
+);
+
+/**
+ * Schedules a log write to run after the response. If after() can't be used
+ * (called outside a request scope, or not mocked in a test) the write runs
+ * directly, so a logging failure never changes what the action returns.
+ */
+const logInBackground = (task: () => Promise<unknown>) => {
+  // async, so nothing here can throw synchronously, even if task itself does.
+  const run = async () => {
+    try {
+      await task();
+    } catch (err) {
+      console.error("[vision] logging failed", err);
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
+};
 
 export const analyzeScreenShot = async (
   base64Source: string,
@@ -18,100 +57,32 @@ export const analyzeScreenShot = async (
   gameId: number,
 ): Promise<AnalysisResults> => {
   const startTime = performance.now();
-  let providerId = "unknown";
   try {
-    const gameProcessor = getGameProcessor(gameId);
-    const gameConfig = GAME_CONFIGS[gameId];
+    const { result, readerId, fallbacks } = await readWithFallback(
+      readers,
+      { base64Source, sessionPlayers, gameId },
+      {
+        onFallback: (f) =>
+          console.warn(`[vision] ${f.from} failed for game ${gameId}: ${f.reason}`),
+      },
+    );
 
-    if (!gameConfig) {
-      throw new Error(`Game config not found for gameId: ${gameId}`);
+    const reader = {
+      readerId,
+      fallbacks: fallbacks.map((f) => `${f.from}: ${f.reason}`),
+    };
+    if (result.status !== VisionResultCodes.Failed) {
+      const duration = performance.now() - startTime;
+      logInBackground(() => logVisionSuccess(gameId, duration, reader));
+    } else {
+      logInBackground(() => logVisionError(new Error(result.message), reader));
     }
 
-    const provider = getVisionProvider();
-    providerId = provider.id;
-
-    const scoreboard = await provider.extract({
-      imageBase64: base64Source,
-      gameId,
-      rosterHint: buildRosterHint(sessionPlayers),
-    });
-    console.log("Extracted scoreboard: ", scoreboard);
-
-    // Translated back to the Azure-shaped types
-    const legacyData = toLegacyAnalyzed(scoreboard, gameId);
-
-    const processedPlayers = gameProcessor.processPlayers(
-      legacyData,
-      sessionPlayers,
-    );
-    console.log("Processed Players: ", processedPlayers);
-
-    let statsReqCheck = false;
-    const validatedPlayers: VisionPlayer[] =
-      processedPlayers.processedPlayers.map((player) => {
-        const validatedStats = player.stats.map((stat: Stat) => {
-          const validatedStat = gameProcessor.validateStats(
-            stat.statValue,
-            sessionPlayers.length,
-          );
-          if (validatedStat.reqCheck) statsReqCheck = true;
-
-          return {
-            ...stat,
-            statValue: validatedStat.statValue,
-          };
-        });
-
-        return {
-          ...player,
-          stats: validatedStats,
-        };
-      });
-
-    const winners = gameProcessor.calculateWinners(validatedPlayers);
-    console.log("Winners: ", winners);
-
-    const validatedResult: AnalysisResults = gameProcessor.validateResults(
-      validatedPlayers,
-      winners,
-      processedPlayers.reqCheckFlag || statsReqCheck,
-    );
-
-    console.log("Validated Result: ", validatedResult);
-
-    const duration = performance.now() - startTime;
-    after(() => logVisionSuccess(gameId, duration, providerId));
-
-    return validatedResult;
+    return result;
   } catch (error) {
     console.error(error);
     const e = error instanceof Error ? error.message : "Unknown error";
-    after(() => logVisionError(error, providerId));
+    logInBackground(() => logVisionError(error));
     return { status: VisionResultCodes.Failed, message: e };
   }
-};
-
-type PlayerField = {
-  type: string;
-  content: string;
-  valueString?: string;
-  valueInteger?: number;
-  confidence: number;
-};
-
-export type AnalyzedPlayer = {
-  type: "object";
-  valueObject: {
-    [fieldName: string]: PlayerField;
-  };
-};
-
-export type AnalyzedTeamData = {
-  teamName: string;
-  players: AnalyzedPlayersObj;
-};
-
-export type AnalyzedPlayersObj = {
-  type: "array";
-  valueArray: AnalyzedPlayer[];
 };

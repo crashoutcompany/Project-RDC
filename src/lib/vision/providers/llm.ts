@@ -45,7 +45,14 @@ export interface LlmVisionProviderOptions {
   scheduleFlush?: (flush: () => Promise<void>) => void;
 }
 
-const scheduleFlushAfterResponse = (flush: () => Promise<void>) => after(flush);
+/** `after()` only works inside a Next request; CLIs (the harvester) have none, so flush inline there. */
+const scheduleFlushAfterResponse = (flush: () => Promise<void>) => {
+  try {
+    after(flush);
+  } catch {
+    void flush();
+  }
+};
 
 /**
  * LLM-based vision provider: any model reachable through the `ai` SDK
