@@ -2,12 +2,52 @@ name: Neon branches
 
 on:
   pull_request:
-    types: [opened, reopened, closed]
+    types: [opened, reopened]
+  # Close runs on pull_request_target: GitHub skips `pull_request` workflows
+  # (closed included) for PRs with merge conflicts, so a superseded PR closed
+  # while conflicting never got its branch deleted. pull_request_target runs
+  # from the base branch and doesn't need a mergeable PR. The delete job only
+  # calls the Neon API and never checks out or runs PR code.
+  pull_request_target:
+    types: [closed]
+  # Safety net for anything the events above miss; see .github/scripts/neon-sweep.sh.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only list the branches that would be deleted.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   neon:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
     uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@v1
     secrets: inherit
+
+  sweep:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    concurrency:
+      group: neon-sweep
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install neonctl
+        run: npm i -g neonctl@v2
+      - name: Delete branches of closed PRs and stale CI branches
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID || vars.NEON_PROJECT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
+        run: .github/scripts/neon-sweep.sh
