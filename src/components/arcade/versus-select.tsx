@@ -92,8 +92,14 @@ export function VersusSelect({ fighters }: { fighters: Fighter[] }) {
                 >
                   VS
                 </span>
-                <Button size="lg" onClick={() => setRound((r) => r + 1)}>
-                  ▶ Fight
+                <Button
+                  size="lg"
+                  asChild
+                  onClick={() => setRound((r) => r + 1)}
+                >
+                  <Link href={`/members/battle?a=${one.slug}&b=${two.slug}`}>
+                    ▶ Fight
+                  </Link>
                 </Button>
               </div>
             </div>

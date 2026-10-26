@@ -14,6 +14,13 @@ const db = vi.mocked(prisma, { deep: true });
 // Spelled out rather than imported from prisma/lib/approved, so loosening
 // those filters fails this test instead of silently passing.
 const APPROVED_SET = { session: { isApproved: true } };
+const SESSION_FIELDS = {
+  sessionId: true,
+  sessionName: true,
+  date: true,
+  Game: { select: { gameName: true } },
+};
+const SESSION = { select: SESSION_FIELDS };
 
 describe("getMember", () => {
   it("filters wins, days won and stats to approved sessions", async () => {
@@ -29,16 +36,24 @@ describe("getMember", () => {
         playerName: { equals: "Mark", mode: "insensitive" },
       }),
       include: {
-        matchWins: { where: { set: APPROVED_SET } },
+        matchWins: {
+          where: { set: APPROVED_SET },
+          select: { matchId: true, set: { select: { session: SESSION } } },
+        },
         setWins: { where: APPROVED_SET },
         dayWins: { where: { isApproved: true } },
+        mvpOf: {
+          where: { isApproved: true },
+          select: SESSION_FIELDS,
+          orderBy: { date: "desc" },
+        },
         playerStats: {
           where: { playerSession: { set: APPROVED_SET } },
           include: { game: true, gameStat: true },
         },
         playerSessions: {
           where: { set: APPROVED_SET },
-          include: { playerStats: true },
+          select: { matchId: true, set: { select: { session: SESSION } } },
         },
       },
     });
