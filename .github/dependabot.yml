@@ -15,6 +15,11 @@ updates:
       opentelemetry:
         patterns:
           - "@opentelemetry/*"
+      # Radix primitives share internal packages; bump them together so the
+      # tree keeps one copy of each instead of drifting PR by PR.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

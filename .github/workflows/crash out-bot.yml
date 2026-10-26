@@ -1,0 +1,26 @@
+name: crashout-bot mentions
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+jobs:
+  forward:
+    if: contains(github.event.comment.body || github.event.review.body || '', '@crashout-bot')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Forward to Grok Bot
+        env:
+          URL: ${{ secrets.GROKBOT_WEBHOOK_URL }}
+          AUTH: ${{ secrets.GROKBOT_WEBHOOK_AUTH }}
+          PAYLOAD: ${{ toJSON(github.event) }}
+        run: |
+          echo "$PAYLOAD" | jq '{repo: .repository.full_name,
+            author: (.comment.user.login // .review.user.login),
+            body: (.comment.body // .review.body),
+            url: (.comment.html_url // .review.html_url),
+            pr: (.pull_request.html_url // .issue.html_url)}' \
+          | curl -sf -X POST "$URL" -H "Authorization: $AUTH" \
+              -H "Content-Type: application/json" --data @-
