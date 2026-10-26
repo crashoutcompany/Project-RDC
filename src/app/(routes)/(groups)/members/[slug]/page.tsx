@@ -23,6 +23,12 @@ import {
   trendByMonth,
   type StatLine,
 } from "@/lib/member-profile";
+import { dayWinStreaks, primesByGame } from "@/lib/streaks";
+import { getAllGameSessions } from "@/lib/streaks-data";
+import {
+  MemberStreaks,
+  type GameStreakRow,
+} from "./_components/member-streaks";
 import { cn, formatSessionDate } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -93,10 +99,11 @@ async function MemberDetailContent({
   const { slug } = await params;
   // Roster and record keys are lowercase; URLs may not be.
   const key = slug.toLowerCase();
-  const [member, roster, arenas] = await Promise.all([
+  const [member, roster, arenas, gameSessions] = await Promise.all([
     getMember(slug),
     getRoster(),
     getArenas(),
+    getAllGameSessions(),
   ]);
 
   if (!member.success || !member.data || slug === "__placeholder__") notFound();
@@ -116,6 +123,18 @@ async function MemberDetailContent({
   const trend = trendByMonth(member.data.playerSessions, member.data.matchWins);
   const best = bestSessions(member.data.playerSessions, member.data.matchWins);
   const mvps = member.data.mvpOf;
+  const primes = new Map(
+    primesByGame(member.data.playerSessions, member.data.matchWins).map(
+      ({ gameName, prime }) => [gameName, prime],
+    ),
+  );
+  const streakRows: GameStreakRow[] = gameSessions
+    .map(({ gameName, sessions }) => ({
+      gameName,
+      streak: dayWinStreaks(sessions).find((s) => s.player === name) ?? null,
+      prime: primes.get(gameName) ?? null,
+    }))
+    .filter((row) => row.streak || row.prime);
 
   return (
     <div data-testid="member-detail-content">
@@ -331,6 +350,12 @@ async function MemberDetailContent({
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section className="ac-grid bg-ac-ink">
+        <div className="mx-auto max-w-6xl px-4 py-12">
+          <MemberStreaks rows={streakRows} />
         </div>
       </section>
 
