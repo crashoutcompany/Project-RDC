@@ -23,8 +23,8 @@ export const codSessionForm = (): FormValues => ({
               playerId: 1,
               playerSessionName: "Ben",
               playerStats: [
-                { statId: "1", stat: StatName.COD_SCORE, statValue: "100" },
-                { statId: "2", stat: StatName.COD_POS, statValue: "1" },
+                { statId: 1, stat: StatName.COD_SCORE, statValue: "100" },
+                { statId: 2, stat: StatName.COD_POS, statValue: "1" },
               ],
             },
           ],
