@@ -52,7 +52,6 @@ export async function generateMetadata({
   return {
     title: `${session.sessionName} | RDC Stats Tracker`,
     description,
-    openGraph: session.thumbnail ? { images: [session.thumbnail] } : undefined,
   };
 }
 
