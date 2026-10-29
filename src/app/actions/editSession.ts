@@ -343,15 +343,21 @@ export async function approveEditRequest(editId: number, note?: string) {
         newJson.proposedData,
       );
 
-      const proposedSets = newJson.proposedData.sets || [];
-      // Recreated player stats carry the session date, so use the edited one.
-      const editedSession = newJson.dirtyFields.date
-        ? { ...session, date: new Date(newJson.proposedData.date) }
-        : session;
+      // Only replace sets this proposal changed. A name/URL/date-only edit
+      // still carries a full sets snapshot from submit time; applying it
+      // would delete live matches and recreate them from that snapshot, so a
+      // stale or restored form could wipe newer stats.
+      if (newJson.dirtyFields.sets) {
+        const proposedSets = newJson.proposedData.sets || [];
+        // Recreated player stats carry the session date, so use the edited one.
+        const editedSession = newJson.dirtyFields.date
+          ? { ...session, date: new Date(newJson.proposedData.date) }
+          : session;
 
-      if (canUpdateSetsInPlace(session, proposedSets))
-        await updateExistingSets(tx, editedSession, proposedSets);
-      else await replaceAllSets(tx, editedSession, proposedSets);
+        if (canUpdateSetsInPlace(session, proposedSets))
+          await updateExistingSets(tx, editedSession, proposedSets);
+        else await replaceAllSets(tx, editedSession, proposedSets);
+      }
     });
 
     revalidateSessionData();
