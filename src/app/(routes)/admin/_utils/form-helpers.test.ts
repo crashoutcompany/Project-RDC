@@ -1,5 +1,6 @@
 import { formSchema, FormValues } from "./form-helpers";
 import { StatName } from "@/lib/stat-names";
+import { mk8SessionForm } from "@/test/fixtures";
 
 const MIXED_CASE_VIDEO_ID = "dQw4w9WgXcQ";
 
@@ -23,8 +24,8 @@ const validSession = (sessionUrl: string): FormValues => ({
             {
               playerId: 1,
               playerStats: [
-                { statId: "1", stat: StatName.COD_SCORE, statValue: "100" },
-                { statId: "2", stat: StatName.COD_POS, statValue: "1" },
+                { statId: 1, stat: StatName.COD_SCORE, statValue: "100" },
+                { statId: 2, stat: StatName.COD_POS, statValue: "1" },
               ],
               playerSessionName: "Ben",
             },
@@ -105,5 +106,48 @@ describe("formSchema dayWinners", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("formSchema statId", () => {
+  const url = `https://www.youtube.com/watch?v=${MIXED_CASE_VIDEO_ID}`;
+
+  it("accepts numeric ids from the create form and string ids from edit hydration", () => {
+    const fromCreate = formSchema.safeParse(validSession(url));
+    expect(fromCreate.success).toBe(true);
+    if (fromCreate.success)
+      expect(fromCreate.data.sets[0].matches[0].playerSessions[0].playerStats.map((s) => s.statId)).toEqual([1, 2]);
+
+    const fromEdit = structuredClone(validSession(url));
+    fromEdit.sets[0].matches[0].playerSessions[0].playerStats = fromEdit.sets[0].matches[0].playerSessions[0].playerStats.map(
+      (stat) => ({ ...stat, statId: String(stat.statId) as never }),
+    );
+    const parsedEdit = formSchema.safeParse(fromEdit);
+    expect(parsedEdit.success).toBe(true);
+    if (parsedEdit.success)
+      expect(parsedEdit.data.sets[0].matches[0].playerSessions[0].playerStats.map((s) => s.statId)).toEqual([1, 2]);
+
+    const mk8Edit = mk8SessionForm();
+    mk8Edit.sets[0].matches[0].playerSessions[0].playerStats[0].statId = "1" as never;
+    const parsedMk8 = formSchema.safeParse(mk8Edit);
+    expect(parsedMk8.success).toBe(true);
+    if (parsedMk8.success)
+      expect(parsedMk8.data.sets[0].matches[0].playerSessions[0].playerStats[0].statId).toBe(1);
+  });
+
+  it("rejects a missing or non-numeric stat id", () => {
+    const missing = validSession(url);
+    missing.sets[0].matches[0].playerSessions[0].playerStats[0] = {
+      ...missing.sets[0].matches[0].playerSessions[0].playerStats[0],
+      statId: "" as never,
+    };
+    expect(formSchema.safeParse(missing).success).toBe(false);
+
+    const invalid = validSession(url);
+    invalid.sets[0].matches[0].playerSessions[0].playerStats[0] = {
+      ...invalid.sets[0].matches[0].playerSessions[0].playerStats[0],
+      statId: "score" as never,
+    };
+    expect(formSchema.safeParse(invalid).success).toBe(false);
   });
 });
