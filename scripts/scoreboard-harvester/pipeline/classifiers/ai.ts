@@ -11,10 +11,11 @@ import { DetectionCache, hashFile } from "../detection-cache";
 import type { FrameClassifier, FrameVerdict } from "../detect";
 
 /** Bump when the prompt or schema changes meaning, so stale cached verdicts aren't reused. */
-const PROMPT_VERSION = 1;
+const PROMPT_VERSION = 2;
 
 export const TILE_KINDS = [
   "post-match",
+  "podium",
   "in-match-scoreboard",
   "other",
 ] as const;
@@ -113,7 +114,8 @@ export function buildDetectPrompt(profile: AiProfile, count: number): string {
     "",
     "Classify every tile:",
     `- "post-match": ${profile.ai.description}`,
-    `- "in-match-scoreboard": a scoreboard overlaid on live gameplay.`,
+    ...(profile.ai.podium ? [`- "podium": ${profile.ai.podium}`] : []),
+    `- "in-match-scoreboard": a table of player stats overlaid on live gameplay. The score and clock in the normal HUD alone are "other".`,
     `- "other": anything else, including: ${profile.ai.reject}`,
     "",
     "Webcam overlays, stream borders, or chat on top of the game are normal and do not change the answer.",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildGameOutputSchema, buildVisionPrompt } from "./game-specs";
 
 const teamsWithKey = (teamKey: string) => ({
+  hasStatsTable: true,
   teams: [{ teamKey, players: [{ name: "Mark", rl_goals: 3 }] }],
 });
 
@@ -14,6 +15,14 @@ describe("buildGameOutputSchema", () => {
     // What a local 7B model actually answered: unmappable, so every team was dropped.
     expect(schema.safeParse(teamsWithKey("BlueTeam")).success).toBe(false);
     expect(schema.safeParse(teamsWithKey("Mark")).success).toBe(false);
+  });
+
+  it("requires the stats-table judgment and puts it before the rows", () => {
+    const schema = buildGameOutputSchema(2);
+    const withoutJudgment = { ...teamsWithKey("blue"), hasStatsTable: undefined };
+
+    expect(schema.safeParse(withoutJudgment).success).toBe(false);
+    expect(Object.keys(schema.shape)[0]).toBe("hasStatsTable");
   });
 });
 

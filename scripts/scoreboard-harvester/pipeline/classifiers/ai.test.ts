@@ -79,6 +79,7 @@ describe("toVerdict", () => {
     expect(
       toVerdict({ kind: "in-match-scoreboard", confidence: 0.99 }, 0.6).isScoreboard,
     ).toBe(false);
+    expect(toVerdict({ kind: "podium", confidence: 0.99 }, 0.6).isScoreboard).toBe(false);
     expect(toVerdict({ kind: "post-match", confidence: 0.8 }, 0.6).evidence).toEqual([
       "post-match@0.80",
     ]);
@@ -91,6 +92,12 @@ describe("buildDetectPrompt", () => {
     expect(prompt).toContain(rl.ai.description);
     expect(prompt).toContain(rl.ai.reject);
     expect(prompt).toContain("indices 1-9");
+  });
+
+  it("offers the podium label only for games that describe one", () => {
+    expect(buildDetectPrompt(rl, 4)).toContain(`- "podium": ${rl.ai.podium}`);
+    const noPodium = { ...rl, ai: { description: rl.ai.description, reject: rl.ai.reject } };
+    expect(buildDetectPrompt(noPodium, 4)).not.toContain('"podium"');
   });
 });
 

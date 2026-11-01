@@ -115,6 +115,9 @@ export const createLlmVisionProvider = (
       // isn't trustworthy for its dynamic per-stat fields, so we assert our
       // hand-written contract at this one boundary instead.
       const raw = result.output as unknown as RawVisionOutput;
+      // Rows written after "no stats table" are invented; callers treat an
+      // empty scoreboard as "nothing to read".
+      if (raw.hasStatsTable === false) return {};
 
       return {
         teams: raw.teams?.map((team) => ({

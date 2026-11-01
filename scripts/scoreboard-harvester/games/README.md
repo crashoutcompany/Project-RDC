@@ -58,6 +58,7 @@ export const yourGame: GameProfile = {
 
 - **`description`**: what is on screen only at the true end of a match. The layout (tables? one banner?), the columns and labels, and any WINNER/VICTORY banner or MVP badge.
 - **`reject`**: the screens most likely to be confused with it. The in-match scoreboard is the classic trap, since it often shares the columns. Say what differs (gameplay still visible, a running clock, no end-of-match banner), and mention menus, loading screens and replays.
+- **`podium`** (optional): an end-of-match celebration that comes before the stats and shares their banner, such as Rocket League's WINNER podium. It gets its own label, which models keep apart from the real results screen far better than when it's one item in `reject`.
 - Keep both to a sentence or two. The model sees them next to the actual frames.
 
 A game without an `ai` block works with every other finder; `--finder ai` refuses it with a clear error.

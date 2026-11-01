@@ -55,6 +55,14 @@ export const buildGameOutputSchema = (gameId: number) => {
         .describe('Team identifier as shown on screen, e.g. "blue" or "orange"');
 
   return z.object({
+    // First on purpose: llama.cpp's grammar emits keys in schema order, so the
+    // model commits to this before writing any player. A prompt rule alone
+    // didn't stop it turning podium captions ("1 Goal") into stat rows.
+    hasStatsTable: z
+      .boolean()
+      .describe(
+        "True only if a stats table with one row per player and stat columns is visible. False for gameplay, replays, menus, or a podium/MVP screen showing only player cards.",
+      ),
     teams: z
       .array(
         z.object({
@@ -89,6 +97,7 @@ export interface RawVisionPlayer {
 }
 
 export interface RawVisionOutput {
+  hasStatsTable?: boolean;
   teams?: { teamKey: string; players: RawVisionPlayer[] }[];
   players?: RawVisionPlayer[];
 }
@@ -117,7 +126,7 @@ ${statList}
 ${roster}
 
 Rules:
-- If the image has no stats table with one row per player (e.g. gameplay, a replay, or a podium/MVP celebration screen showing only player cards), return no players at all.
+- First decide hasStatsTable. If the image has no stats table with one row per player (e.g. gameplay, a replay, or a podium/MVP celebration screen showing only player cards), set it to false and return no players at all.
 - Only report rows you can actually see. Never add a player because they are in the known players list.
 - Copy numbers exactly as displayed; do not compute or guess a value that isn't visible.
 - Omit a stat entirely for a player if it is not visible on screen, rather than guessing 0.

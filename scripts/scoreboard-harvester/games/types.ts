@@ -84,6 +84,12 @@ export interface GameProfile {
     description: string;
     /** Screens that look similar but must NOT count. */
     reject: string;
+    /**
+     * An end-of-match celebration shown before the stats (e.g. RL's WINNER
+     * podium). Gets its own label: lumped into "other", models called it
+     * post-match because it shares the WINNER banner.
+     */
+    podium?: string;
   };
   /**
    * games.game_id: selects the scoreboard spec (Gemini, Decisions), the Azure

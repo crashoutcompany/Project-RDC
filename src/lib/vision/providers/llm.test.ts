@@ -53,6 +53,44 @@ describe("createLlmVisionProvider", () => {
     });
   });
 
+  it("drops every row when the model says there's no stats table", async () => {
+    generateTextMock.mockResolvedValue({
+      output: {
+        hasStatsTable: false,
+        teams: [{ teamKey: "blue", players: [{ name: "Ben", rl_goals: 1 }] }],
+      },
+    });
+    const provider = createLlmVisionProvider("local:qwen");
+
+    const result = await provider.extract({
+      imageBase64: "iVBORw0KGgo",
+      gameId: 2,
+      rosterHint: ["Ben"],
+    });
+
+    expect(result).toEqual({});
+  });
+
+  it("keeps the rows when the model says there is a stats table", async () => {
+    generateTextMock.mockResolvedValue({
+      output: {
+        hasStatsTable: true,
+        teams: [{ teamKey: "blue", players: [{ name: "Ben", rl_goals: 1 }] }],
+      },
+    });
+    const provider = createLlmVisionProvider("local:qwen");
+
+    const result = await provider.extract({
+      imageBase64: "iVBORw0KGgo",
+      gameId: 2,
+      rosterHint: ["Ben"],
+    });
+
+    expect(result.teams).toEqual([
+      { teamKey: "blue", players: [{ name: "Ben", stats: { rl_goals: 1 } }] },
+    ]);
+  });
+
   it("uses the jpeg media type for jpeg-magic-byte input", async () => {
     generateTextMock.mockResolvedValue({ output: { players: [] } });
     const provider = createLlmVisionProvider("google:gemini-2.5-flash");
