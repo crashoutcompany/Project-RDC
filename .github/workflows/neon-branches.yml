@@ -26,7 +26,7 @@ permissions:
 jobs:
   neon:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@5d2d4262884eeddf65a9b5ea29d62327a1698c5d # v1.3.0
+    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@020f7e78cd5cd56b0d110210bd2ef1b715c75be3 # v1.4.0
     with:
       vercel-preview-env: true
     secrets: inherit
