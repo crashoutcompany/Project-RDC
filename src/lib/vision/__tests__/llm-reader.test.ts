@@ -75,6 +75,40 @@ describe("llmReader", () => {
     expect(result.data.winner?.map((p) => p.name)).toEqual(["Mark"]);
   });
 
+  it("returns no players or winners, instead of throwing, when no team can be mapped", async () => {
+    providers.extract.mockResolvedValue({
+      teams: rocketLeagueBoard.teams!.map((team, i) => ({
+        ...team,
+        teamKey: i ? "RedTeam" : "BlueTeam",
+      })),
+    });
+
+    const result = await llmReader().read({
+      base64Source: "abc",
+      gameId: 2,
+      sessionPlayers: players,
+    });
+
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    expect(result.data.players).toEqual([]);
+    expect(result.data.winner).toEqual([]);
+  });
+
+  it("fails, so the next reader is tried, when the model reports no stats table", async () => {
+    providers.extract.mockResolvedValue({ teams: [] });
+
+    const result = await llmReader().read({
+      base64Source: "abc",
+      gameId: 2,
+      sessionPlayers: players,
+    });
+
+    expect(result).toEqual({
+      status: VisionResultCodes.Failed,
+      message: "Model found no scoreboard stats in the image",
+    });
+  });
+
   it("falls back to the next reader when the model errors", async () => {
     providers.extract.mockRejectedValue(
       Object.assign(new Error("bad key"), { statusCode: 401 }),

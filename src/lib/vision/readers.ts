@@ -92,6 +92,10 @@ export function llmReader(opts: LlmReaderOptions = {}): ScoreboardReader {
         gameId,
         rosterHint: buildRosterHint(sessionPlayers),
       });
+      // The prompt asks for no rows when there's no stats table (e.g. the RL podium screen).
+      const rows = scoreboard.players ?? scoreboard.teams?.flatMap((team) => team.players) ?? [];
+      if (!rows.length)
+        return { status: VisionResultCodes.Failed, message: "Model found no scoreboard stats in the image" };
       return processScoreboard({
         fields: toLegacyAnalyzed(scoreboard, gameId),
         gameId,

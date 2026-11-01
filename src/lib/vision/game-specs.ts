@@ -1,6 +1,7 @@
 import z from "zod";
 import { GAME_CONFIGS } from "@/lib/constants";
 import { getStatConfigsByGame, StatConfig } from "@/lib/stat-configs";
+import { TEAM_KEY_TO_LEGACY_NAME } from "./team-keys";
 
 /**
  * Builds the structured-output schema and prompt for a game's scoreboard
@@ -41,15 +42,23 @@ export const buildGameOutputSchema = (gameId: number) => {
   const playerSchema = buildPlayerSchema(getStatConfigsByGame(gameId));
   const isTeamGame = gameConfig.type === "TEAM";
 
+  // A free-text key lets models answer "BlueTeam" or a gamertag, which the
+  // bridge can't map, so the processor silently drops the whole team. With
+  // structured outputs an enum makes the server reject anything else.
+  const knownTeamKeys = Object.keys(TEAM_KEY_TO_LEGACY_NAME[gameId] ?? {});
+  const teamKeySchema = knownTeamKeys.length
+    ? z
+        .enum(knownTeamKeys as [string, ...string[]])
+        .describe(`Team color as shown on screen: ${knownTeamKeys.join(" or ")}`)
+    : z
+        .string()
+        .describe('Team identifier as shown on screen, e.g. "blue" or "orange"');
+
   return z.object({
     teams: z
       .array(
         z.object({
-          teamKey: z
-            .string()
-            .describe(
-              'Team identifier as shown on screen, e.g. "blue" or "orange"',
-            ),
+          teamKey: teamKeySchema,
           players: z.array(playerSchema),
         }),
       )
@@ -108,6 +117,8 @@ ${statList}
 ${roster}
 
 Rules:
+- If the image has no stats table with one row per player (e.g. gameplay, a replay, or a podium/MVP celebration screen showing only player cards), return no players at all.
+- Only report rows you can actually see. Never add a player because they are in the known players list.
 - Copy numbers exactly as displayed; do not compute or guess a value that isn't visible.
 - Omit a stat entirely for a player if it is not visible on screen, rather than guessing 0.
 - Return only the structured data, no commentary.`;

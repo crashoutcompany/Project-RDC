@@ -318,6 +318,8 @@ export const calculateTeamWinners = (
       }, 0);
       return { teamName, score, players: teamPlayers };
     });
+    // No player was mapped to a team (e.g. a misread scoreboard): no winner.
+    if (!teamScores.length) return [];
 
     const winningTeam = teamScores.reduce(
       (winner, current) => (current.score > winner.score ? current : winner),

@@ -11,7 +11,7 @@
  *   pnpm harvest -- extract   --game rocket-league --url <youtube> [--finder ocr|ai] [--reader azure|llm] [--batch]
  *   pnpm harvest -- weekly    [--write] [--limit 4]
  */
-import { loadAppEnv } from "./load-env";
+import "./load-env";
 import { parseArgs } from "util";
 import path from "path";
 
@@ -412,10 +412,6 @@ async function main(): Promise<void> {
     printUsage();
     process.exit(1);
   }
-  // `extract` reads the same env files as `pnpm dev`, so model keys set up for
-  // the app just work. `weekly` writes to a database, so it only gets what
-  // --env-file gave it: a missing DATABASE_URL must fail, not fall back to dev.
-  if (command === "extract") loadAppEnv();
   if (values["reader-model"]) process.env.VISION_MODEL = values["reader-model"];
 
   let profile: GameProfile;
