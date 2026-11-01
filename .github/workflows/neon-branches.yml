@@ -36,7 +36,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    uses: crashoutcompany/.github/.github/workflows/neon-sweep.yml@5d2d4262884eeddf65a9b5ea29d62327a1698c5d # v1.3.0
+    uses: crashoutcompany/.github/.github/workflows/neon-sweep.yml@020f7e78cd5cd56b0d110210bd2ef1b715c75be3 # v1.4.0
     with:
       dry-run: ${{ inputs.dry-run || false }}
       vercel-preview-env: true
