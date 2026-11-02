@@ -124,7 +124,7 @@ async function EditSessionContent({
           playerId: playerSession.player.playerId,
           playerSessionName: playerSession.player.playerName,
           playerStats: playerSession.playerStats.map((ps) => ({
-            statId: String(ps.gameStat.statId),
+            statId: ps.gameStat.statId,
             stat: ps.gameStat.statName,
             statValue: ps.value,
           })),
