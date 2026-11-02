@@ -6,7 +6,9 @@ import { withAppDefaults } from "./src/lib/next-config";
 const nextConfig: NextConfig = withAppDefaults(
   {
     serverExternalPackages: [
+      "@opentelemetry/api",
       "@opentelemetry/sdk-node",
+      "@opentelemetry/sdk-trace",
       "@opentelemetry/resources",
       "@posthog/ai",
       "@ai-sdk/otel",
