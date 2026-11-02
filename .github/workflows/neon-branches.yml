@@ -1,13 +1,43 @@
 name: Neon branches
 
 on:
+  # synchronize reruns create on every push: a no-op for the Neon branch, but it
+  # refreshes the Vercel preview env vars (and recreates an expired branch).
   pull_request:
-    types: [opened, reopened, closed]
+    types: [opened, reopened, synchronize]
+  # Close runs on pull_request_target: GitHub skips pull_request workflows
+  # (closed included) for PRs with merge conflicts, so those PRs kept their
+  # Neon branch. The shared delete job only calls the Neon API.
+  pull_request_target:
+    types: [closed]
+  # Safety net for missed events; see neon-sweep.yml in crashoutcompany/.github.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only list the branches that would be deleted.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   neon:
-    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@v1
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@020f7e78cd5cd56b0d110210bd2ef1b715c75be3 # v1.4.0
+    with:
+      vercel-preview-env: true
+    secrets: inherit
+
+  sweep:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: crashoutcompany/.github/.github/workflows/neon-sweep.yml@020f7e78cd5cd56b0d110210bd2ef1b715c75be3 # v1.4.0
+    with:
+      dry-run: ${{ inputs.dry-run || false }}
+      vercel-preview-env: true
     secrets: inherit

@@ -90,9 +90,13 @@ const playersSchema = z
 
 // Stat Schema Definitions
 
+// Prisma ids are numbers; the edit/approve pages (and some restored drafts)
+// historically stringified them. Coerce so neither path fails validation.
+const statIdSchema = z.coerce.number().int().min(1, "StatId is required");
+
 // ? Rocket League
 const rocketLeagueStats = z.object({
-  statId: z.int().min(1, "StatId is required"),
+  statId: statIdSchema,
   stat: z.literal([
     StatName.RL_GOALS,
     StatName.RL_ASSISTS,
@@ -111,7 +115,7 @@ const rocketLeagueStats = z.object({
 // ? Mario Kart 8
 
 const marioKart8Stats = z.object({
-  statId: z.int().min(1, "StatId is required"),
+  statId: statIdSchema,
   stat: z.literal(StatName.MK8_POS),
   statValue: z
     .string()
@@ -124,7 +128,7 @@ const marioKart8Stats = z.object({
 // ? COD Gun Game Stats
 
 const codStats = z.object({
-  statId: z.string().trim().min(1, "StatId is required"),
+  statId: statIdSchema,
   stat: z.literal([
     StatName.COD_KILLS,
     StatName.COD_DEATHS,
@@ -144,7 +148,7 @@ const codStats = z.object({
 
 const marvelRivalsStats = z
   .object({
-    statId: z.int().min(1, "StatId is required"),
+    statId: statIdSchema,
     stat: z.literal([
       StatName.MR_KILLS,
       StatName.MR_DEATHS,

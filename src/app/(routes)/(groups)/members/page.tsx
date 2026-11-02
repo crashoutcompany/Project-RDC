@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,13 +7,16 @@ import { VersusSelect } from "@/components/arcade/versus-select";
 import { ArenaCard } from "@/components/arcade/arena-card";
 import { STAGE_GRID, StageTitle } from "@/components/arcade/stage-title";
 import { ChallengerBanner, Heading } from "@/components/arcade/ui";
+import { SorryScale } from "./_components/sorry-scale";
 import { cn } from "@/lib/utils";
 import {
   FEATURED_ARENA,
   getArenas,
   getRoster,
-  sorryScale,
+  getSorryBoards,
   topFive,
+  type SorryBoards,
+  type SorryRange,
 } from "@/lib/rdc-stats";
 
 export const metadata: Metadata = {
@@ -22,7 +24,12 @@ export const metadata: Metadata = {
   description: "Pick two RDC members and see who comes out on top.",
 };
 
-export default function Page() {
+type SearchParams = Promise<{
+  sorryGame?: string | string[];
+  sorryRange?: string | string[];
+}>;
+
+export default function Page({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       {/* Static shell marker; the visible title lives in the streamed stage. */}
@@ -30,18 +37,21 @@ export default function Page() {
         Fighter select
       </h1>
       <Suspense fallback={<MembersSkeleton />}>
-        <MembersContent />
+        <MembersContent searchParams={searchParams} />
       </Suspense>
       <ChallengerBanner />
     </>
   );
 }
 
-async function MembersContent() {
+async function MembersContent({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   await connection();
   const [roster, arenas] = await Promise.all([getRoster(), getArenas()]);
   const featured = arenas.find((a) => a.slug === FEATURED_ARENA);
-  const sorry = sorryScale(roster, arenas);
 
   return (
     <div data-testid="members-content">
@@ -49,31 +59,9 @@ async function MembersContent() {
       <section className="bg-black">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 lg:grid-cols-[3fr_2fr]">
           <div>
-            <Heading lead="Sorry scale" className="text-ac-gold" />
-            <p className="text-ac-cream/70 mt-2 mb-6">
-              Average ranking across all games. Emptiest health bar is the
-              sorriest.
-            </p>
-            <ul className="space-y-3">
-              {sorry.map(({ fighter, avgRank, fill }) => (
-                <li key={fighter.slug} className="flex items-center gap-3">
-                  <Image
-                    src={fighter.art.portrait}
-                    alt=""
-                    width={32}
-                    height={32}
-                    className="ac-pixel border-ac-panel-2 size-8 border-2 object-cover"
-                  />
-                  <span className="ac-label text-ac-cream w-20">
-                    {fighter.name}
-                  </span>
-                  <SegmentedBar value={fill} />
-                  <span className="text-ac-cream/80 w-12 text-right text-2xl tabular-nums">
-                    {avgRank === null ? "--" : avgRank.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+              <SorrySection searchParams={searchParams} />
+            </Suspense>
           </div>
           <div className="border-ac-gold ac-shadow bg-ac-panel self-start border-4 p-5">
             <p className="ac-label text-ac-gold">Latest champion</p>
@@ -98,25 +86,30 @@ async function MembersContent() {
   );
 }
 
-/** Health bar broken into segments, like a fighting-game super meter. */
-function SegmentedBar({ value }: { value: number }) {
-  const segments = 24;
-  const lit = Math.round(Math.max(0, Math.min(1, value)) * segments);
+const RANGE_VALUES: SorryRange[] = ["all", "30d", "last10"];
+
+/** Resolves `?sorryGame=&sorryRange=` to the initial tab of the Sorry scale. */
+async function SorrySection({ searchParams }: { searchParams: SearchParams }) {
+  const [params, roster, { games, boards }] = await Promise.all([
+    searchParams,
+    getRoster(),
+    // A failed load isn't cached (see getSorryBoards); show the empty state.
+    getSorryBoards().catch((error): SorryBoards => {
+      console.error("Failed to load sorry boards", error);
+      return { games: [], boards: {} };
+    }),
+  ]);
+  const game = games.find((g) => g.slug === params.sorryGame)?.slug ?? "all";
+  const range = RANGE_VALUES.find((r) => r === params.sorryRange) ?? "all";
+
   return (
-    <div
-      role="meter"
-      aria-valuemin={0}
-      aria-valuemax={segments}
-      aria-valuenow={lit}
-      className="border-ac-cream flex h-4 flex-1 gap-0.5 border-2 p-0.5"
-    >
-      {Array.from({ length: segments }, (_, i) => (
-        <span
-          key={i}
-          className={i < lit ? "bg-ac-gold flex-1" : "flex-1 bg-[#4a4690]"}
-        />
-      ))}
-    </div>
+    <SorryScale
+      roster={roster}
+      games={games}
+      boards={boards}
+      initialGame={game}
+      initialRange={range}
+    />
   );
 }
 

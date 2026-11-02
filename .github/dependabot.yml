@@ -9,3 +9,18 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    groups:
+      # sdk-node pins its own @opentelemetry/* versions; bumping one package
+      # alone leaves two copies in the lockfile, so update them together.
+      opentelemetry:
+        patterns:
+          - "@opentelemetry/*"
+      # Radix primitives share internal packages; bump them together so the
+      # tree keeps one copy of each instead of drifting PR by PR.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

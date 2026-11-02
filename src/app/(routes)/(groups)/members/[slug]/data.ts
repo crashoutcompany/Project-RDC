@@ -9,6 +9,22 @@ import {
   inApprovedSet,
 } from "prisma/lib/approved";
 
+// Session info reached through a match or player session's set.
+const setSession = {
+  set: {
+    select: {
+      session: {
+        select: {
+          sessionId: true,
+          sessionName: true,
+          date: true,
+          Game: { select: { gameName: true } },
+        },
+      },
+    },
+  },
+};
+
 export const getMember = async (slug: string) => {
   "use cache";
   cacheLife("max");
@@ -22,9 +38,22 @@ export const getMember = async (slug: string) => {
         },
       },
       include: {
-        matchWins: { where: inApprovedMatch },
+        matchWins: {
+          where: inApprovedMatch,
+          select: { matchId: true, ...setSession },
+        },
         setWins: { where: inApprovedSet },
         dayWins: { where: approvedSession },
+        mvpOf: {
+          where: approvedSession,
+          select: {
+            sessionId: true,
+            sessionName: true,
+            date: true,
+            Game: { select: { gameName: true } },
+          },
+          orderBy: { date: "desc" },
+        },
         playerStats: {
           where: inApprovedPlayerStat,
           include: {
@@ -34,9 +63,7 @@ export const getMember = async (slug: string) => {
         },
         playerSessions: {
           where: inApprovedPlayerSession,
-          include: {
-            playerStats: true,
-          },
+          select: { matchId: true, ...setSession },
         },
       },
     }),

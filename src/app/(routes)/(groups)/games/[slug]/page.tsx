@@ -19,6 +19,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { GameDashboard } from "./_components/dashboard/game-dashboard";
 import { assembleDashboardData } from "./_helpers/dashboard";
+import { GameRecords } from "./_components/game-records";
 
 export type Members = NonNullable<
   Awaited<ReturnType<typeof getAllMembers>>["data"]
@@ -184,6 +185,9 @@ async function GameDetailContent({
   return (
     <div data-testid="game-detail-content">
       <GameDashboard data={dashboardData}>{gameComponent}</GameDashboard>
+      <div className="mt-12">
+        <GameRecords sessions={sessionsData} />
+      </div>
     </div>
   );
 }

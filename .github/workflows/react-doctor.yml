@@ -18,4 +18,4 @@ concurrency:
 
 jobs:
   react-doctor:
-    uses: crashoutcompany/.github/.github/workflows/react-doctor.yml@v1
+    uses: crashoutcompany/.github/.github/workflows/react-doctor.yml@020f7e78cd5cd56b0d110210bd2ef1b715c75be3 # v1.4.0
