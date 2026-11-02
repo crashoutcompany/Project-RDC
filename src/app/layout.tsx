@@ -5,6 +5,8 @@ import Script from "next/script";
 import { Press_Start_2P, Sedgwick_Ave_Display, VT323 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PRODUCTION_URL } from "@/lib/auth/config";
+import { resolveAuthBaseUrl } from "@/lib/auth/base-url";
 
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -31,8 +33,11 @@ const sedgwick = Sedgwick_Ave_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(resolveAuthBaseUrl(PRODUCTION_URL)),
   title: "RDC Stats Tracker",
   description: "Who's the best gamer?",
+  openGraph: { siteName: "RDC Stats Tracker", type: "website" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

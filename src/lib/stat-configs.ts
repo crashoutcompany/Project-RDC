@@ -1,5 +1,7 @@
 import { StatName } from "./stat-names";
 
+export type StatRollup = "sum" | "average" | "skip";
+
 export interface StatConfig {
   id: number;
   name: StatName;
@@ -9,6 +11,14 @@ export interface StatConfig {
   displayName: string;
   category?: "performance" | "outcome" | "offensive" | "defensive";
   dataType: "number" | "position" | "boolean";
+  /**
+   * How per-match values combine across matches and sessions. Defaults:
+   * position stats average, everything else sums. `skip` keeps a stat out of
+   * aggregates entirely (e.g. "Days Played" repeats the same number per match).
+   */
+  rollup?: StatRollup;
+  /** Smaller is better (deaths). Position stats are always lower-is-better. */
+  lowerIsBetter?: boolean;
   validationRules?: {
     min?: number;
     max?: number;
@@ -38,6 +48,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Days Played",
     category: "performance",
     dataType: "number",
+    rollup: "skip",
     validationRules: { min: 0, allowZero: true },
   },
   // Rocket League Stats
@@ -105,6 +116,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Days Played",
     category: "performance",
     dataType: "number",
+    rollup: "skip",
     validationRules: { min: 0, allowZero: true },
   },
 
@@ -140,6 +152,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Deaths",
     category: "defensive",
     dataType: "number",
+    lowerIsBetter: true,
     validationRules: { min: 0, allowZero: true },
   },
   cod_pos: {
@@ -177,6 +190,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Deaths",
     category: "outcome",
     dataType: "number",
+    lowerIsBetter: true,
     validationRules: { min: 0, allowZero: true },
   },
 
@@ -236,6 +250,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Deaths",
     category: "defensive",
     dataType: "number",
+    lowerIsBetter: true,
     validationRules: { min: 0, allowZero: true },
   },
   mr_assists: {
@@ -391,6 +406,7 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
     displayName: "Accuracy",
     category: "performance",
     dataType: "number",
+    rollup: "average",
     validationRules: { min: 0, max: 100, allowZero: true },
   },
   mr_most_kills: {
@@ -407,6 +423,15 @@ export const STAT_CONFIGS: Record<string, StatConfig> = {
 };
 
 // Utility functions to work with stat configs
+
+/** The effective rollup rule for a stat, applying the dataType defaults. */
+export const statRollup = (config: StatConfig): StatRollup =>
+  config.rollup ?? (config.dataType === "position" ? "average" : "sum");
+
+/** Whether a smaller value is better for this stat. */
+export const isLowerBetter = (config: StatConfig): boolean =>
+  config.dataType === "position" || config.lowerIsBetter === true;
+
 export const getStatConfigByFieldKey = (
   fieldKey: string,
 ): StatConfig | undefined => {

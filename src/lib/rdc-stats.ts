@@ -266,3 +266,121 @@ export function sorryScale(roster: Fighter[], arenas: Arena[]): SorryEntry[] {
 /** Kill/death ratio. Deaths are floored at 1 so a player with no deaths still gets a finite value. */
 export const killDeathRatio = (kills: number, deaths: number) =>
   kills / Math.max(deaths, 1);
+
+export type SorryRange = "all" | "30d" | "last10";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keeps sessions inside a time window. `last10` is the 10 most recent by
+ * date; `30d` is relative to `now`. Never mutates the input.
+ */
+export function filterSessions<T extends { date: Date | string }>(
+  sessions: T[],
+  range: SorryRange,
+  now = new Date(),
+): T[] {
+  const time = (s: T) => new Date(s.date).getTime();
+  if (range === "last10")
+    return [...sessions].sort((a, b) => time(b) - time(a)).slice(0, 10);
+  if (range === "30d") {
+    const cutoff = now.getTime() - 30 * DAY_MS;
+    return sessions.filter((s) => time(s) >= cutoff);
+  }
+  return sessions;
+}
+
+/**
+ * Pure core of `getSorryBoards`: windows the sessions, summarizes each game's
+ * remainder as an arena, then scores the roster with the usual sorry scale.
+ * `last10` takes the 10 most recent sessions across every feed, so in the
+ * all-games view a game nobody has played lately drops out.
+ */
+export function sorryScaleFor(
+  roster: Fighter[],
+  feeds: { slug: GamesEnum; name: string; sessions: Sessions }[],
+  range: SorryRange,
+  now = new Date(),
+): SorryEntry[] {
+  const kept = new Set(
+    filterSessions(
+      feeds.flatMap((f) => f.sessions),
+      range,
+      now,
+    ),
+  );
+  const arenas = feeds.map((feed, i) => ({
+    ...summarizeArena(
+      feed.slug,
+      feed.name,
+      feed.sessions.filter((s) => kept.has(s)),
+    ),
+    index: i + 1,
+  }));
+  return sorryScale(roster, arenas);
+}
+
+const SORRY_RANGES: SorryRange[] = ["all", "30d", "last10"];
+
+/** One sorry-scale row without the fighter, keyed by roster slug. */
+export type SorryScore = Pick<SorryEntry, "avgRank" | "fill"> & {
+  slug: string;
+};
+
+export type SorryBoards = {
+  games: { slug: GamesEnum; name: string }[];
+  /** `boards[game][range]`, where `game` is a slug or `"all"`. */
+  boards: Record<string, Record<SorryRange, SorryScore[]>>;
+};
+
+/**
+ * Every game x range sorry scale, computed from one read of the approved
+ * sessions so the filter tabs can switch on the client without a round trip.
+ * Cached for hours rather than `max` because the 30-day window moves. Throws
+ * when a query fails, so a transient DB error isn't cached as an empty board.
+ */
+export async function getSorryBoards(): Promise<SorryBoards> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ARENAS_TAG, "getAllSessions", "getAllGames");
+  const [roster, arenas, games] = await Promise.all([
+    getRoster(),
+    getArenas(),
+    getAllGames(),
+  ]);
+  const ordered = arenas.map(({ slug, name }) => ({ slug, name }));
+  if (!games.success || !games.data)
+    throw new Error("Sorry boards: failed to load games");
+
+  const bySlug = new Map(games.data.map((g) => [toSlug(g.gameName), g]));
+  const feeds = await Promise.all(
+    ordered.flatMap(({ slug, name }) => {
+      const game = bySlug.get(slug);
+      if (!game) return [];
+      return getAllSessionsByGame(game.gameId).then((sessions) => {
+        if (!sessions.success || !sessions.data)
+          throw new Error(`Sorry boards: failed to load ${name} sessions`);
+        return { slug, name, sessions: sessions.data };
+      });
+    }),
+  );
+
+  const now = new Date();
+  const boards: SorryBoards["boards"] = {};
+  for (const game of ["all", ...ordered.map((g) => g.slug)]) {
+    const scope = feeds.filter((f) => game === "all" || f.slug === game);
+    boards[game] = Object.fromEntries(
+      SORRY_RANGES.map((range) => [
+        range,
+        sorryScaleFor(roster, scope, range, now).map(
+          ({ fighter, avgRank, fill }) => ({
+            slug: fighter.slug,
+            avgRank,
+            fill,
+          }),
+        ),
+      ]),
+    ) as Record<SorryRange, SorryScore[]>;
+  }
+  return { games: ordered, boards };
+}
