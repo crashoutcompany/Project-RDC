@@ -40,6 +40,23 @@ describe("createSessionEditRequest", () => {
     expect(db.sessionEditRequest.create).not.toHaveBeenCalled();
   });
 
+  it("accepts an MK8 proposal whose stat ids were stringified by the edit form", async () => {
+    const proposal = mk8SessionForm();
+    proposal.sets[0].matches[0].playerSessions[0].playerStats[0].statId =
+      "1" as never;
+
+    expect(
+      await createSessionEditRequest(1, proposal, { sessionName: true }),
+    ).toEqual({ error: null });
+
+    const { data } = db.sessionEditRequest.create.mock.calls[0][0];
+    const stored = JSON.parse(data.proposedData as string);
+    expect(
+      stored.proposedData.sets[0].matches[0].playerSessions[0].playerStats[0]
+        .statId,
+    ).toBe(1);
+  });
+
   it("rejects a proposal that fails the form schema", async () => {
     // Mario Kart matches must have exactly one winner.
     const invalid = mk8SessionForm();
