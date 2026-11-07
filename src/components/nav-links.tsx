@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/", label: "Home", testId: "nav-home-link" },
   { href: "/members", label: "Members", testId: "nav-members-link" },
   { href: "/games", label: "Games", testId: "nav-games-link" },
+  { href: "/daily", label: "Daily", testId: "nav-daily-link" },
   { href: "/about", label: "About", testId: "nav-about-link" },
 ];
 
