@@ -155,11 +155,32 @@ describe("Gemini output through the game processors", () => {
   it("flags a value Gemini couldn't read for review", () => {
     quiet();
     const fields = geminiOutputToFields(GAMES["mario-kart-8"], {
-      players: [{ gamertag: "Mark", member: "Mark", team: null, stats: { mk8_place: null } }],
+      players: [
+        { gamertag: "Mark", member: "Mark", team: null, stats: { mk8_place: null } },
+        { gamertag: "Dylan", member: "Dylan", team: null, stats: { mk8_place: 1 } },
+      ],
       winning_team: null,
     });
     const result = processScoreboard({ fields, gameId: 1, sessionPlayers: players, ocrCorrections: false });
     expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    expect(result.data.players.find((p) => p.name === "Mark")?.stats[0].statValue).toBe("0");
+    expect(result.data.winner?.map((p) => p.name)).toEqual(["Dylan"]);
+  });
+
+  it("does not crown anyone when every Mario Kart place is unreadable", () => {
+    quiet();
+    const fields = geminiOutputToFields(GAMES["mario-kart-8"], {
+      players: [
+        { gamertag: "Mark", member: "Mark", team: null, stats: { mk8_place: null } },
+        { gamertag: "Dylan", member: "Dylan", team: null, stats: { mk8_place: null } },
+      ],
+      winning_team: null,
+    });
+    const result = processScoreboard({ fields, gameId: 1, sessionPlayers: players, ocrCorrections: false });
+    expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    expect(result.data.winner).toEqual([]);
   });
 
   it("rejects text that doesn't match the schema", () => {

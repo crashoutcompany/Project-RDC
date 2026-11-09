@@ -179,7 +179,12 @@ describe("screenshot analysis (handleAnalyzeBtnClick)", () => {
       ]),
     );
 
-    expect((await analyze()).status).toBe(VisionResultCodes.CheckRequest);
+    const result = await analyze();
+    expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    if (result.status === VisionResultCodes.Failed) return;
+    // Unreadable place becomes "0" for the form, but 0 must not beat 1st.
+    expect(result.data.players.find((p) => p.name === "Mark")?.stats[0].statValue).toBe("0");
+    expect(result.data.winner).toEqual([expect.objectContaining({ playerId: 2, name: "Dylan" })]);
   });
 
   it("corrects the common OCR misread of 1st place as 7th in small lobbies and asks for review", async () => {
