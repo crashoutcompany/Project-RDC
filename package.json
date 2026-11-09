@@ -76,7 +76,7 @@
     "@upstash/redis": "^1.39.0",
     "ai": "^7.0.83",
     "babel-plugin-react-compiler": "^1.0.0",
-    "better-auth": "^1.7.2",
+    "better-auth": "^1.7.17",
     "botid": "^1.5.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
