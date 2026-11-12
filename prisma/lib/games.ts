@@ -1,5 +1,3 @@
-"use server";
-
 import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
 import { StatName } from "@/lib/stat-names";
