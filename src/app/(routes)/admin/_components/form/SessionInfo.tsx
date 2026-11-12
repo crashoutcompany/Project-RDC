@@ -74,7 +74,7 @@ export const SessionInfo = ({
       const { error, video } = await getRDCVideoDetails(
         videoId,
         form.getValues("game"),
-        session?.user?.email ?? distinctId,
+        session?.user?.id ?? distinctId,
       );
 
       if (error !== undefined) {

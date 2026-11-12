@@ -8,11 +8,11 @@ export default function PostHogIdentify() {
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
-    if (session?.user?.email) {
-      posthog.identify(session.user.email);
+    if (session?.user?.id) {
+      posthog.identify(session.user.id);
     }
-  }, [session?.user?.email]);
+  }, [session?.user?.id]);
 
   return null; // This component doesn't render anything
 }
-// It just ensures PostHog is initialized with the user's email
+// It just ensures PostHog is initialized with the user's id (never the email)
