@@ -8,6 +8,7 @@ import { after } from "next/server";
 import { UseFormReturn } from "react-hook-form";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { Prisma } from "@/generated/prisma/client";
+import { parseProposedData } from "@/lib/proposed-data";
 
 // Large sessions outlast Prisma's default 5s interactive transaction timeout.
 const TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
@@ -44,11 +45,10 @@ export async function createSessionEditRequest(
     return { error: "Invalid session data. Please review the form." };
 
   try {
-    const json = JSON.stringify(
-      { proposedData: parsed.data, dirtyFields: dirtyFields },
-      null,
-      2,
-    );
+    // Store the object itself (Dates become ISO strings, as before).
+    const json = JSON.parse(
+      JSON.stringify({ proposedData: parsed.data, dirtyFields: dirtyFields }),
+    ) as Prisma.InputJsonObject;
     const res = await handlePrismaOperation((prisma) =>
       prisma.sessionEditRequest.create({
         data: {
@@ -333,7 +333,7 @@ export async function approveEditRequest(editId: number, note?: string) {
       });
       if (!session) throw new Error("Session not found");
 
-      const newJson = JSON.parse(edit.proposedData as string) as ProposedData;
+      const newJson = parseProposedData(edit.proposedData);
 
       await claimRequestForApproval(tx, editId, user, note);
       await createRevision(tx, session, user.user?.email ?? null);

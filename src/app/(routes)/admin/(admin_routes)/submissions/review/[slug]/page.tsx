@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { EditStatus, Player } from "@/generated/prisma/client";
 import { ProposedData } from "@/app/actions/editSession";
+import { parseProposedData } from "@/lib/proposed-data";
 import {
   DayWinnersChanges,
   SessionChangesWrapper,
@@ -55,7 +56,7 @@ async function ReviewContent({
               {editRequests.map((edit) => {
                 let parsedJson: ProposedData;
                 try {
-                  parsedJson = JSON.parse(edit.proposedData) as ProposedData;
+                  parsedJson = parseProposedData(edit.proposedData);
                 } catch {
                   return (
                     <div key={edit.id} className="space-y-2">
@@ -179,7 +180,7 @@ export type Session = {
 type EditRequest = {
   id: number;
   status: EditStatus;
-  proposedData: string;
+  proposedData: unknown;
   createdAt: Date;
   reviewedAt: Date | null;
   reviewNote: string | null;

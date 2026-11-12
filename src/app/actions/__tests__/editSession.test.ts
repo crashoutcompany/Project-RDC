@@ -4,6 +4,7 @@ import prisma from "prisma/db";
 import { signInAs, TEST_USERS } from "@/test/session";
 import { mk8Set, mk8SessionForm } from "@/test/fixtures";
 import type { FormValues } from "@/app/(routes)/admin/_utils/form-helpers";
+import type { ProposedData } from "../editSession";
 import {
   approveEditRequest,
   createSessionEditRequest,
@@ -27,7 +28,7 @@ describe("createSessionEditRequest", () => {
 
     const { data } = db.sessionEditRequest.create.mock.calls[0][0];
     expect(data).toMatchObject({ sessionId: 1, proposerId: TEST_USERS.admin.id });
-    expect(JSON.parse(data.proposedData as string)).toMatchObject({
+    expect(data.proposedData).toMatchObject({
       proposedData: { sessionName: "MK8 Night" },
       dirtyFields: { sessionName: true },
     });
@@ -50,7 +51,7 @@ describe("createSessionEditRequest", () => {
     ).toEqual({ error: null });
 
     const { data } = db.sessionEditRequest.create.mock.calls[0][0];
-    const stored = JSON.parse(data.proposedData as string);
+    const stored = data.proposedData as unknown as ProposedData;
     expect(
       stored.proposedData.sets[0].matches[0].playerSessions[0].playerStats[0]
         .statId,
