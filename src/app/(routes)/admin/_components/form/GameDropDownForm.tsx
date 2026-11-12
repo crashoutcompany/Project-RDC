@@ -29,7 +29,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useState, useEffect } from "react";
-import { getAllGames } from "prisma/lib/games";
+import { getAllGamesAction } from "@/app/actions/games";
 import { FormValues } from "../../_utils/form-helpers";
 import { useAdmin } from "@/lib/adminContext";
 import { toast } from "sonner";
@@ -52,7 +52,7 @@ const GameDropDownForm = ({
   // 1) Fetch games once on mount
   useEffect(() => {
     const fetchGames = async () => {
-      const games = await getAllGames();
+      const games = await getAllGamesAction();
       if (!games.success || !games.data) {
         toast.error("Failed to fetch games. Please try again.");
       } else {

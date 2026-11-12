@@ -1,4 +1,3 @@
-// import { EmailTemplate } from "@/components/email-template";
 import config from "@/lib/config";
 import { authorizeCronRequest } from "@/lib/cron/authorize";
 import { NextRequest } from "next/server";
@@ -70,7 +69,6 @@ export async function GET(req: NextRequest) {
       to: sendList,
       subject: "Project RDC Feedback Received",
       html: `<h1>Here is the feedback for the last 7 days.</h1><div>${feedback}</div>`,
-      // react: EmailTemplate(),
     });
     if (error) throw error;
     else {

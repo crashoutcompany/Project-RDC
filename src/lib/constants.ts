@@ -1,5 +1,4 @@
 import { StatName } from "@/lib/stat-names";
-import { getAllGames } from "prisma/lib/games";
 
 export enum MembersEnum {
   Mark = "mark",
@@ -12,31 +11,6 @@ export enum MembersEnum {
   Des = "des",
 }
 
-export const getGamesNav = async () => {
-  const games = await getAllGames();
-
-  if (!games.success || !games.data) return [];
-
-  const navGames: {
-    alt?: string;
-    name: string;
-    url: string;
-    src?: string;
-    desc?: string;
-  }[] = games.data.map((game) => {
-    const gameKey = game.gameName.replace(/\s/g, "").toLowerCase() as GamesEnum;
-    return {
-      alt: game.gameName,
-      desc: gamesNav.get(gameKey) || "",
-      name: game.gameName,
-      url: `/games/${gameKey}`,
-      src: `/images/${gameImages[gameKey]}`,
-    };
-  });
-  navGames.push({ name: "Browse all games", url: "/games" });
-  return navGames;
-};
-
 export enum GamesEnum {
   RocketLeague = "rocketleague",
   LethalCompany = "lethalcompany",
@@ -45,15 +19,6 @@ export enum GamesEnum {
   SpeedRunners = "speedrunners",
   MarvelRivals = "marvelrivals",
 }
-
-const gamesNav = new Map<GamesEnum, string>([
-  [GamesEnum.RocketLeague, "Stats from the most intense 3v3 battles."],
-  [GamesEnum.LethalCompany, "Stats that tell you who touches the most paper."],
-  [GamesEnum.CallOfDuty, "Stats for FFA's and who sells the most online."],
-  [GamesEnum.MarioKart8, "Stats that tell you who races the hardest."],
-  [GamesEnum.SpeedRunners, "Stats that tell you who races the hardest."],
-  [GamesEnum.MarvelRivals, "Stats that tell you who sells the most in ranked."],
-]);
 
 export const gameImages = {
   [GamesEnum.RocketLeague]: "rocketleague.png",

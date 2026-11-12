@@ -1,16 +1,16 @@
-import * as React from "react"
+import * as React from "react";
 
-const MOBILE_BREAKPOINT = 768
-const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
+const MOBILE_BREAKPOINT = 768;
+const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
 function subscribeToMobileQuery(onChange: () => void) {
-  const mediaQuery = window.matchMedia(MOBILE_QUERY)
-  mediaQuery.addEventListener("change", onChange)
-  return () => mediaQuery.removeEventListener("change", onChange)
+  const mediaQuery = window.matchMedia(MOBILE_QUERY);
+  mediaQuery.addEventListener("change", onChange);
+  return () => mediaQuery.removeEventListener("change", onChange);
 }
 
 function getMobileSnapshot() {
-  return window.matchMedia(MOBILE_QUERY).matches
+  return window.matchMedia(MOBILE_QUERY).matches;
 }
 
 export function useIsMobile() {
@@ -18,5 +18,5 @@ export function useIsMobile() {
     subscribeToMobileQuery,
     getMobileSnapshot,
     () => false,
-  )
+  );
 }

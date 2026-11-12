@@ -57,12 +57,14 @@ export async function handlePrismaOperation<T>(
     } catch {
       // ignore analytics failures outside the Next server runtime
     }
+    // Detail stays server-side; callers only get a generic message.
+    console.error("Database operation failed:", error);
     if (errorCode === "P1000")
       console.warn("Database connection error. Database may be expired.");
     if (error instanceof PrismaClientKnownRequestError) {
       return {
         success: false,
-        error: `Database error: ${error.message}`,
+        error: "A database error occurred.",
         code: error.code,
         data: null,
       };
@@ -77,13 +79,13 @@ export async function handlePrismaOperation<T>(
     if (error instanceof NeonDbError)
       return {
         success: false,
-        error: `Neon error: ${error.message}`,
+        error: "A database error occurred.",
         code: error.code,
         data: null,
       };
     return {
       success: false,
-      error: `An unexpected error occurred: ${error}`,
+      error: "An unexpected error occurred.",
       data: null,
     };
   }

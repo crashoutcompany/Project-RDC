@@ -16,7 +16,7 @@ posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
   // Session Replay configuration
   disable_session_recording: false,
   session_recording: {
-    maskAllInputs: false, // Set to true to mask all input fields
+    maskAllInputs: true, // inputs can hold emails and OTP codes
     maskTextSelector: "[data-mask]", // Mask elements with this attribute
   },
 });

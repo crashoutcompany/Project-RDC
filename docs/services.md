@@ -272,21 +272,6 @@ pnpm update-neon-branch
 
 ---
 
-### Azure Vision Image Analysis
-
-**Website**: [https://azure.microsoft.com/en-us/products/ai-services/computer-vision](https://azure.microsoft.com/en-us/products/ai-services/computer-vision)  
-**Documentation**: [https://learn.microsoft.com/en-us/azure/ai-services/computer-vision](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision)  
-**Portal**: [https://portal.azure.com](https://portal.azure.com)
-
-**Purpose**: Image analysis and computer vision capabilities.
-
-**Usage**:
-
-- Image analysis via `@azure-rest/ai-vision-image-analysis` package
-- Used alongside Document Intelligence for processing game session screenshots
-
----
-
 ## Email Services
 
 ### Resend
@@ -308,7 +293,6 @@ pnpm update-neon-branch
 - Feedback email notifications in `src/app/api/feedback/route.ts`
 - Weekly feedback summary emails sent via cron job
 - Email sign-in codes for allowlisted accounts (`src/lib/auth/email-otp.ts`)
-- Email template component in `src/components/email-template.tsx`
 
 ---
 

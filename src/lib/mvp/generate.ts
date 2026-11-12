@@ -67,7 +67,7 @@ export async function generateMvpForSession(
         sets,
       )}`,
       runtimeContext: {
-        distinctId: opts.userSession?.user?.email ?? "Unidentified User",
+        distinctId: opts.userSession?.user?.id ?? "Unidentified User",
         traceName: "analyze-mvp",
         properties: {
           [AiTelemetryProperty.ENVIRONMENT]: process.env.NODE_ENV,

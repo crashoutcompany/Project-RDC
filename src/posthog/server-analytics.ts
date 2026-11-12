@@ -29,7 +29,7 @@ export const logAuthError = async (
     const session = userSession ?? (await getSession());
     posthog.captureException(
       error,
-      session?.user?.email ?? "Unidentified Email",
+      session?.user?.id ?? "Unidentified User",
       {
         cause: error.cause,
         ...withSessionReplay(sessionReplayId),
@@ -48,7 +48,7 @@ export const logAuthEvent = async (
   const session = userSession ?? (await getSession());
   posthog.capture({
     event,
-    distinctId: session?.user?.email || v4(),
+    distinctId: session?.user?.id || v4(),
     properties: withSessionReplay(sessionReplayId),
   });
 };
@@ -61,7 +61,7 @@ export const logNAN = async (
   const session = userSession ?? (await getSession());
   posthog.captureException(
     new Error(`NaN encountered in ${fnName} for statId ${statId}`),
-    session?.user?.email || v4(),
+    session?.user?.id || v4(),
     { fnName, statId },
   );
 };
@@ -73,7 +73,7 @@ export const logFormError = async (
   sessionReplayId?: string,
 ) => {
   const authSession = userSession ?? (await getSession());
-  posthog.captureException(err, authSession?.user?.email || v4(), {
+  posthog.captureException(err, authSession?.user?.id || v4(), {
     session: JSON.stringify(session),
     ...withSessionReplay(sessionReplayId),
   });
@@ -94,7 +94,7 @@ export const logFormSuccess = async (
 
   posthog.capture({
     event: eventName,
-    distinctId: session?.user?.email || v4(),
+    distinctId: session?.user?.id || v4(),
     properties: {
       submittedAt: new Date().toISOString(),
       ...withSessionReplay(sessionReplayId),
@@ -110,7 +110,7 @@ export const logVisionError = async (
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
-  posthog.captureException(error, session?.user?.email || v4(), {
+  posthog.captureException(error, session?.user?.id || v4(), {
     ...(reader && { reader: reader.readerId, fallbacks: reader.fallbacks }),
     ...withSessionReplay(sessionReplayId),
   });
@@ -122,7 +122,7 @@ export const logMvpUpdateFailure = async (
   userSession?: Session | null,
 ) => {
   const session = userSession ?? (await getSession());
-  posthog.captureException(error, session?.user?.email || v4(), {
+  posthog.captureException(error, session?.user?.id || v4(), {
     sessionId,
   });
 };
@@ -138,7 +138,7 @@ export const logMvpUpdateSuccess = async (
 
   posthog.capture({
     event: PostHogEvents.MVP_UPDATE_SUCCESS,
-    distinctId: session?.user?.email || v4(),
+    distinctId: session?.user?.id || v4(),
     properties: {
       sessionId,
       mvp,
@@ -187,7 +187,7 @@ export const logAdminAction = async (
   const session = userSession ?? (await getSession());
   posthog.capture({
     event,
-    distinctId: session?.user?.email || v4(),
+    distinctId: session?.user?.id || v4(),
     properties: {
       ...details,
       ...withSessionReplay(sessionReplayId),
@@ -206,7 +206,7 @@ export const logVisionSuccess = async (
   const session = userSession ?? (await getSession());
   posthog.capture({
     event: PostHogEvents.VISION_ANALYSIS_SUCCESS,
-    distinctId: session?.user?.email || v4(),
+    distinctId: session?.user?.id || v4(),
     properties: {
       gameId,
       durationMs,
@@ -222,7 +222,7 @@ export const logDatabaseError = async (
   sessionReplayId?: string,
 ) => {
   const session = userSession ?? (await getSession());
-  posthog.captureException(error, session?.user?.email || v4(), {
+  posthog.captureException(error, session?.user?.id || v4(), {
     session: JSON.stringify(session),
     ...withSessionReplay(sessionReplayId),
   });
