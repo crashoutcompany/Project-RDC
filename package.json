@@ -130,7 +130,9 @@
       "@modelcontextprotocol/sdk": "^1.32.2",
       "deepmerge-ts": "^8.0.2",
       "dompurify": "^3.4.17",
-      "undici": "^7.30.1"
+      "undici": "^7.30.1",
+      "mysql2": "^3.22.0",
+      "vite": "^8.3.3"
     }
   }
 }
