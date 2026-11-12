@@ -285,7 +285,7 @@ pnpm update-neon-branch
 **Environment Variables**:
 
 - `RESEND_API_KEY` - Resend API key
-- `RESEND_JOB_SEND_LIST` - Semicolon-separated list of email recipients for cron jobs
+- `RESEND_JOB_SEND_LIST` - Comma-separated list (semicolons also accepted) of email recipients for cron jobs
 - `AUTH_EMAIL_FROM` - Sender for email sign-in codes; must use a verified domain
 
 **Usage**:

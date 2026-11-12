@@ -1,4 +1,5 @@
 import config from "@/lib/config";
+import { authorizeCronRequest } from "@/lib/cron/authorize";
 import { NextRequest } from "next/server";
 import { handlePrismaOperation } from "prisma/db";
 import { Resend } from "resend";
@@ -17,12 +18,11 @@ export async function GET(req: NextRequest) {
     // Ensure only authorized cron jobs can access this route
 
     const cronSecret = config.CRON_SECRET;
-    const authHeader = req.headers.get("authorization") ?? "";
 
     if (!cronSecret)
       return new Response("Missing cron secret", { status: 500 });
 
-    if (authHeader !== `Bearer ${cronSecret}`)
+    if (!authorizeCronRequest(req, cronSecret))
       return new Response("Unauthorized", { status: 401 });
 
     // Built per request: Resend throws on a missing key, which would fail the
@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
     const resend = new Resend(config.RESEND_API_KEY);
 
     const sendList =
-      config.RESEND_JOB_SEND_LIST?.split(";").filter(Boolean) || [];
+      config.RESEND_JOB_SEND_LIST?.split(/[,;]/)
+        .map((e) => e.trim())
+        .filter(Boolean) || [];
     if (sendList.length === 0)
       return new Response("No email recipients configured", { status: 500 });
 
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
     }
     return new Response("Emails sent successfully", { status: 200 });
   } catch (error) {
-    // console.error("Error sending feedback emails", { error });
+    console.error("Error sending feedback emails", error);
     return new Response("Failed to send emails", { status: 500 });
   }
 }

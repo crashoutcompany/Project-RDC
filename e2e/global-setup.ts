@@ -48,7 +48,11 @@ export function storageStateFromLoginCookie(
 export default async function globalSetup(config: FullConfig) {
   const secret = process.env.TEST_AUTH_SECRET;
   await rm(TESTER_STORAGE_STATE, { force: true });
-  if (!secret) return;
+  if (!secret) {
+    if (process.env.CI)
+      throw new Error("TEST_AUTH_SECRET is required to run e2e in CI");
+    return;
+  }
 
   const baseURL =
     config.projects[0]?.use.baseURL ??

@@ -160,7 +160,7 @@ move, not a rewrite.
 - **Toolchain**: Node.js 24 and pnpm 10
 - **Dev Server**: `pnpm dev` (uses Turbopack)
 - **Build**: `pnpm build` for production builds
-- **Post-install**: Automatically runs `prisma generate --sql` after `pnpm install`
+- **Post-install**: Runs `prisma generate` after `pnpm install`; run `pnpm generate:sql` for TypedSQL (also run by `pnpm build`)
 - **Testing**: Vitest unit tests (`pnpm test`) + Playwright e2e (`pnpm test:e2e`)
 
 ### Testing Strategy
