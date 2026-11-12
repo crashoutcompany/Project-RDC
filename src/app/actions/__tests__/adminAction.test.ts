@@ -35,7 +35,7 @@ describe("insertNewSessionFromAdmin", () => {
     db.gameSet.create.mockResolvedValue({ setId: 20 } as never);
     db.match.create.mockResolvedValue({ matchId: 30 } as never);
     db.playerSession.create.mockResolvedValue({ playerSessionId: 40, playerId: 1 } as never);
-    db.player.findUnique.mockResolvedValue({ playerId: 1, playerName: "Ben" } as never);
+    db.player.findMany.mockResolvedValue([{ playerId: 1 }] as never);
     db.gameStat.findMany.mockResolvedValue([
       { statId: 101, statName: "COD_SCORE" },
       { statId: 102, statName: "COD_POS" },
@@ -128,7 +128,7 @@ describe("insertNewSessionFromAdmin", () => {
   });
 
   it("returns a generic error and skips revalidation when the transaction fails", async () => {
-    db.player.findUnique.mockResolvedValue(null);
+    db.player.findMany.mockResolvedValue([]);
 
     expect(await insertNewSessionFromAdmin(codSessionForm())).toEqual({
       error: "Unknown error occurred. Please try again.",

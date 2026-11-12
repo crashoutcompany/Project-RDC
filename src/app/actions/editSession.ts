@@ -9,6 +9,9 @@ import { UseFormReturn } from "react-hook-form";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { Prisma } from "@/generated/prisma/client";
 
+// Large sessions outlast Prisma's default 5s interactive transaction timeout.
+const TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
+
 type CreateEditResult = { error: string | null };
 
 export type ProposedData = {
@@ -352,7 +355,7 @@ export async function approveEditRequest(editId: number, note?: string) {
       if (canUpdateSetsInPlace(session, proposedSets))
         await updateExistingSets(tx, editedSession, proposedSets);
       else await replaceAllSets(tx, editedSession, proposedSets);
-    });
+    }, TX_OPTIONS);
 
     revalidateSessionData();
     after(() => console.log(`Edit ${editId} approved by ${user.user?.id}`));
