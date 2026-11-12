@@ -1,5 +1,3 @@
-// import { ReactScan } from "@/components/ReactScan";
-
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Press_Start_2P, Sedgwick_Ave_Display, VT323 } from "next/font/google";
@@ -51,7 +49,6 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
     >
-      {/* <ReactScan /> */}
       <body className="flex min-h-screen flex-col">
         {process.env.NODE_ENV === "development" ? (
           <Script

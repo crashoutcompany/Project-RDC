@@ -272,21 +272,6 @@ pnpm update-neon-branch
 
 ---
 
-### Azure Vision Image Analysis
-
-**Website**: [https://azure.microsoft.com/en-us/products/ai-services/computer-vision](https://azure.microsoft.com/en-us/products/ai-services/computer-vision)  
-**Documentation**: [https://learn.microsoft.com/en-us/azure/ai-services/computer-vision](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision)  
-**Portal**: [https://portal.azure.com](https://portal.azure.com)
-
-**Purpose**: Image analysis and computer vision capabilities.
-
-**Usage**:
-
-- Image analysis via `@azure-rest/ai-vision-image-analysis` package
-- Used alongside Document Intelligence for processing game session screenshots
-
----
-
 ## Email Services
 
 ### Resend
