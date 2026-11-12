@@ -6,9 +6,17 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
+
+permissions: {}
+
 jobs:
   forward:
-    if: contains(github.event.comment.body || github.event.review.body || '', '@crashout-bot')
+    # Only forward mentions from repo owners, org members and collaborators.
+    # Comment events carry `comment.author_association`; review events carry
+    # `review.author_association`.
+    if: >-
+      contains(github.event.comment.body || github.event.review.body || '', '@crashout-bot')
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Forward to Grok Bot
