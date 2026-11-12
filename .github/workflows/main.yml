@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   ci:
-    uses: crashoutcompany/.github/.github/workflows/ci.yml@235f2a90b6c594065cdb96e656f2cd79a7e00476 # v1.5.0
+    uses: crashoutcompany/.github/.github/workflows/ci.yml@72b17a43589bb357f01c41bed231b8e2390912e2 # v1.6.0
     with:
       install-flags: --ignore-scripts
       needs-prisma: true
@@ -22,6 +22,8 @@ jobs:
       use-prisma-neon: true
       sync-prisma-neon: true
       e2e-better-auth-url: http://127.0.0.1:3000
+      e2e-branch-expires-minutes: 120
+      e2e-cleanup-stale: true
     secrets: inherit
 
   # Checks the committed migrations on a throwaway Postgres: a fresh database,
