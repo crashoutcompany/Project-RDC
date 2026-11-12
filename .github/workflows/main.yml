@@ -22,5 +22,4 @@ jobs:
       use-prisma-neon: true
       sync-prisma-neon: true
       e2e-better-auth-url: http://127.0.0.1:3000
-      e2e-secrets: NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_POSTHOG_KEY RESEND_API_KEY
     secrets: inherit
