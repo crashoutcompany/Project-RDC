@@ -1,7 +1,3 @@
-// import { cookies } from "next/headers";
-// import posthog from "./posthog/server-init";
-// import { v4 } from "uuid";
-
 /**
  * Registers Node.js-only OpenTelemetry exporters for AI SDK traces.
  * Skipped on the Edge runtime because `@opentelemetry/sdk-node` is Node-only.
@@ -46,19 +42,45 @@ export async function onRequestError(
     renderType: "dynamic" | "dynamic-resume"; // 'dynamic-resume' for PPR
   },
 ): Promise<void> {
-  let distinctId: string;
-  // const cookiesStore = await cookies();
-  // const cookieName =
-  //   "ph_phc_ymI76IccT0jIjAjaJVFse643ZsilQYyvwG2qnZ2w10H_posthog";
+  // posthog-node is Node-only; import it lazily so the Edge bundle never
+  // pulls it in. (`cookies()` is also unavailable here, so read the PostHog
+  // cookie from the request headers instead.)
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  try {
+    const { default: posthog } = await import("./posthog/server-init");
+    const cookieHeader = request.headers.cookie;
+    const raw = (
+      Array.isArray(cookieHeader)
+        ? cookieHeader.join("; ")
+        : (cookieHeader ?? "")
+    )
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => /^ph_.+_posthog=/.test(c));
+    let distinctId: string | undefined;
+    if (raw) {
+      try {
+        distinctId = JSON.parse(
+          decodeURIComponent(raw.slice(raw.indexOf("=") + 1)),
+        ).distinct_id;
+      } catch {
+        // malformed cookie, fall back to an anonymous id
+      }
+    }
 
-  // if (cookiesStore.has(cookieName)) {
-  //   distinctId = cookiesStore.get(cookieName)?.value || v4();
-  // } else distinctId = v4();
-
-  // posthog.captureException(error, distinctId, {
-  //   errorMsg: error.message,
-  //   requestMethod: request.method,
-  //   contextRoutePath: context.routePath,
-  //   contextRouteType: context.routeType,
-  // });
+    await posthog.captureExceptionImmediate(
+      error,
+      distinctId ?? crypto.randomUUID(),
+      {
+        errorMsg: error.message,
+        requestMethod: request.method,
+        requestPath: request.path,
+        contextRoutePath: context.routePath,
+        contextRouteType: context.routeType,
+      },
+    );
+  } catch (err) {
+    // Never let error reporting throw.
+    console.error("onRequestError reporting failed", err);
+  }
 }

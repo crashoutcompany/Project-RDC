@@ -3,6 +3,10 @@
     {
       "path": "/api/edit-sessions",
       "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/feedback",
+      "schedule": "0 10 * * 1"
     }
   ]
 }
