@@ -66,6 +66,7 @@ model GameStat {
 
   createdBy String @default("SYSTEM") @map("created_by")
 
+  @@index([gameId])
   @@map("game_stats")
 }
 
@@ -111,6 +112,7 @@ model GameSet {
   updatedAt       DateTime          @updatedAt
   GameSetToPlayer GameSetToPlayer[]
 
+  @@index([sessionId])
   @@map("sets")
 }
 
@@ -125,6 +127,7 @@ model Match {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([setId])
   @@map("matches")
 }
 
@@ -143,6 +146,10 @@ model PlayerSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([playerId])
+  @@index([sessionId])
+  @@index([matchId])
+  @@index([setId])
   @@map("player_sessions")
 }
 
@@ -160,6 +167,10 @@ model PlayerStat {
   value           String
   date            DateTime      @default(now()) // Date video posted
 
+  @@index([playerId])
+  @@index([gameId])
+  @@index([playerSessionId])
+  @@index([statId])
   @@map("player_stats")
 }
 
@@ -195,6 +206,8 @@ model UserSession {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
+
+  @@index([userId])
   @@map("user_session")
 }
 
@@ -215,6 +228,7 @@ model Account {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("account")
 }
 

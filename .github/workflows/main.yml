@@ -24,3 +24,45 @@ jobs:
       e2e-better-auth-url: http://127.0.0.1:3000
       e2e-secrets: NEXT_PUBLIC_POSTHOG_HOST NEXT_PUBLIC_POSTHOG_KEY RESEND_API_KEY
     secrets: inherit
+
+  # Checks the committed migrations on a throwaway Postgres: a fresh database,
+  # the db-push-baselined path (what the Neon parent and production look like),
+  # and that the migrations match prisma/schema.prisma.
+  migrations:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci?schema=public
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Migrate an empty database
+        run: pnpm db:migrate:ci
+      - name: Migrations match schema.prisma
+        run: pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      - name: Migrate a db-push-created database (no _prisma_migrations)
+        run: |
+          echo 'DROP TABLE "_prisma_migrations";' | pnpm exec prisma db execute --stdin
+          pnpm db:migrate:ci
+          pnpm exec prisma migrate status
