@@ -293,7 +293,6 @@ pnpm update-neon-branch
 - Feedback email notifications in `src/app/api/feedback/route.ts`
 - Weekly feedback summary emails sent via cron job
 - Email sign-in codes for allowlisted accounts (`src/lib/auth/email-otp.ts`)
-- Email template component in `src/components/email-template.tsx`
 
 ---
 

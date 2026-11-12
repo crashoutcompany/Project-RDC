@@ -1,1 +1,1 @@
-export { authClient, signIn, signOut, useSession } from "@/lib/auth/client";
+export { authClient } from "@/lib/auth/client";
