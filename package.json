@@ -66,7 +66,7 @@
     "@react-three/fiber": "^9.8.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@upstash/redis": "^1.39.0",
-    "ai": "^7.0.83",
+    "ai": "^7.0.170",
     "babel-plugin-react-compiler": "^1.0.0",
     "better-auth": "^1.7.17",
     "botid": "^1.5.11",
