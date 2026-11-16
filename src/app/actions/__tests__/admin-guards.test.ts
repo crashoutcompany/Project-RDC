@@ -24,6 +24,7 @@ import {
   rejectEditRequest,
 } from "../editSession";
 import { handleAnalyzeBtnClick } from "@/app/(routes)/admin/_utils/rdc-vision-helpers";
+import { analyzeMvp } from "@/app/ai/actions";
 import type { Player } from "@/generated/prisma/client";
 
 const formData = (entries: Record<string, string>) => {
@@ -52,6 +53,8 @@ const adminActions: [string, () => Promise<unknown>][] = [
   ["approveEditRequest", () => approveEditRequest(1)],
   ["rejectEditRequest", () => rejectEditRequest(1)],
   ["getRDCVideoDetails", () => getRDCVideoDetails("dQw4w9WgXcQ", "Call of Duty", "anon")],
+  // Throws instead of returning an error object.
+  ["analyzeMvp", () => analyzeMvp([], 1).catch((error: Error) => ({ error: error.message }))],
   [
     "handleAnalyzeBtnClick",
     () =>
