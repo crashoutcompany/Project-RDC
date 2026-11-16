@@ -3,7 +3,7 @@
 import { GameStat } from "@/generated/prisma/client";
 import prisma, { handlePrismaOperation } from "prisma/db";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import {
@@ -18,16 +18,10 @@ import { PostHogEvents } from "@/posthog/events";
 import { generateMvpForSession } from "@/lib/mvp/generate";
 import { MVP_GAMES } from "@/lib/mvp/process-sets";
 
-type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof getAuthoritativeSession>>
->["user"] & { role?: string };
-
 export async function approveSession(sessionId: number) {
   try {
-    const authUser = await getAuthoritativeSession();
-    const user = authUser?.user as AdminUser | undefined;
-    if (!authUser || user?.role !== "admin")
-      return { error: errorCodes.NotAuthenticated };
+    const authUser = await requireAdmin();
+    if (!authUser) return { error: errorCodes.NotAuthenticated };
 
     const query = await handlePrismaOperation((prisma) =>
       prisma.session.update({
@@ -68,10 +62,8 @@ export async function approveSession(sessionId: number) {
 export async function backfillMissingMvps({
   limit = 5,
 }: { limit?: number } = {}) {
-  const authUser = await getAuthoritativeSession();
-  const user = authUser?.user as AdminUser | undefined;
-  if (!authUser || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const authUser = await requireAdmin();
+  if (!authUser) return { error: errorCodes.NotAuthenticated };
 
   const missing = {
     isApproved: true,
@@ -122,10 +114,8 @@ export async function backfillMissingMvps({
 export async function getGameStats(
   gameName: string,
 ): Promise<GameStat[] | { error: string }> {
-  const authUser = await getAuthoritativeSession();
-  const user = authUser?.user as AdminUser | undefined;
-  if (!authUser || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const authUser = await requireAdmin();
+  if (!authUser) return { error: errorCodes.NotAuthenticated };
 
   console.log("Looking for gameStats for ", gameName);
   const game = await handlePrismaOperation((prisma) =>
@@ -154,14 +144,11 @@ export const insertNewSessionFromAdmin = async (
 ): Promise<{ error: null | string }> => {
   console.group("insertNewSessionFromAdmin");
 
-  const user = await getAuthoritativeSession();
+  const user = await requireAdmin();
   let error: null | string = null;
 
-  const adminUser = user?.user as AdminUser | undefined;
-
   try {
-    if (!user || adminUser?.role !== "admin")
-      return { error: errorCodes.NotAuthenticated };
+    if (!user) return { error: errorCodes.NotAuthenticated };
 
     const parsed = formSchema.safeParse(session);
     if (!parsed.success)
@@ -401,10 +388,8 @@ export const insertNewSessionFromAdmin = async (
 export async function addGame(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const gameName = formData.get("gameName") as string;
   if (!gameName) return { error: "Game name is required." };
@@ -424,10 +409,8 @@ export async function addGame(
 export async function addPlayer(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const playerName = formData.get("playerName") as string;
   if (!playerName) return { error: "Player name is required." };
@@ -449,10 +432,8 @@ export async function addPlayer(
 export async function addGameStat(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const statName = formData.get("statName") as string;
   const gameId = Number(formData.get("gameId"));

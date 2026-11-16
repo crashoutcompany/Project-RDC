@@ -4,12 +4,8 @@ import { VisionResultCodes, errorCodes } from "@/lib/constants";
 import { Player } from "@/generated/prisma/client";
 import { analyzeScreenShot } from "@/app/actions/visionAction";
 import { VisionResult } from "@/lib/visionTypes";
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import prisma from "prisma/db";
-
-type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof getAuthoritativeSession>>
->["user"] & { role?: string };
 
 export const handleAnalyzeBtnClick = async (
   base64FileContent: string,
@@ -17,9 +13,8 @@ export const handleAnalyzeBtnClick = async (
   gameName: string,
 ): Promise<FnReturnType> => {
   try {
-    const authUser = await getAuthoritativeSession();
-    const user = authUser?.user as AdminUser | undefined;
-    if (!authUser || user?.role !== "admin")
+    const authUser = await requireAdmin();
+    if (!authUser)
       return {
         status: VisionResultCodes.Failed,
         message: errorCodes.NotAuthenticated,

@@ -1,7 +1,7 @@
 "use server";
 
 import prisma, { handlePrismaOperation } from "prisma/db";
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { errorCodes } from "@/lib/constants";
 import { revalidateSessionData } from "@/lib/revalidate";
 import { after } from "next/server";
@@ -20,10 +20,6 @@ export type ProposedData = {
   dirtyFields: UseFormReturn<FormValues>["formState"]["dirtyFields"];
 };
 
-type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof getAuthoritativeSession>>
->["user"] & { role?: string };
-
 /**
  * Create a session edit request. Stores proposed changes in JSON and marks as PENDING.
  */
@@ -32,10 +28,8 @@ export async function createSessionEditRequest(
   proposedData: FormValues,
   dirtyFields: UseFormReturn<FormValues>["formState"]["dirtyFields"],
 ): Promise<CreateEditResult> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
   else if (Object.keys(dirtyFields).length === 0) {
     return { error: "No changes detected to submit." };
   }
@@ -71,10 +65,8 @@ export async function createSessionEditRequest(
 }
 
 export async function listPendingEdits() {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   // Only allow admins - this project doesn't have roles implemented here, so assume authenticated is fine
   const res = await handlePrismaOperation((prisma) =>
@@ -104,10 +96,8 @@ export async function approveEditRequest(editId: number, note?: string) {
     }[];
     gameId: number;
   };
-  const user = await getAuthoritativeSession();
-  const adminUser = user?.user as AdminUser | undefined;
-  if (!user || adminUser?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const user = await requireAdmin();
+  if (!user) return { error: errorCodes.NotAuthenticated };
 
   // Helper: create a revision snapshot
   async function createRevision(
@@ -367,10 +357,8 @@ export async function approveEditRequest(editId: number, note?: string) {
 }
 
 export async function rejectEditRequest(editId: number, note?: string) {
-  const user = await getAuthoritativeSession();
-  const adminUser = user?.user as AdminUser | undefined;
-  if (!user || adminUser?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const user = await requireAdmin();
+  if (!user) return { error: errorCodes.NotAuthenticated };
 
   try {
     // Only PENDING requests can be rejected; never flip an applied edit.

@@ -2,15 +2,11 @@
 
 import prisma from "prisma/db";
 import config from "@/lib/config";
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { errorCodes } from "@/lib/constants";
 import posthog from "@/posthog/server-init";
 import { PostHogEvents } from "@/posthog/events";
 import { buildYouTubeVideosListUrl } from "@/lib/youtube";
-
-type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof getAuthoritativeSession>>
->["user"] & { role?: string };
 
 const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
@@ -28,9 +24,8 @@ export const getRDCVideoDetails = async (
   distinctId: string,
 ): GetRdcVideoDetails => {
   try {
-    const authSession = await getAuthoritativeSession();
-    const user = authSession?.user as AdminUser | undefined;
-    if (!authSession || user?.role !== "admin") {
+    const authSession = await requireAdmin();
+    if (!authSession) {
       posthog.capture({
         event: PostHogEvents.VIDEO_FETCH_DENIED,
         distinctId,
