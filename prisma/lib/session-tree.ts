@@ -90,6 +90,10 @@ async function loadGameStats(
   return gameStats;
 }
 
+/**
+ * Creates a set's matches and player sessions, and returns their stat rows
+ * for the caller to insert in one batch.
+ */
 async function createMatches(
   tx: Prisma.TransactionClient,
   session: SessionRef,
@@ -97,6 +101,7 @@ async function createMatches(
   matches: MatchInput[],
   gameStats: GameStatRef[],
 ) {
+  const stats: Prisma.PlayerStatCreateManyInput[] = [];
   for (const match of matches) {
     const { matchId } = await tx.match.create({
       data: { setId, matchWinners: { connect: toRefs(match.matchWinners) } },
@@ -112,17 +117,18 @@ async function createMatches(
         },
       });
 
-      const stats = (ps.playerStats ?? []).map((stat) => ({
-        playerId: ps.playerId,
-        gameId: session.gameId,
-        playerSessionId,
-        statId: resolveStatId(gameStats, stat),
-        value: stat.statValue,
-        date: session.date,
-      }));
-      if (stats.length > 0) await tx.playerStat.createMany({ data: stats });
+      for (const stat of ps.playerStats ?? [])
+        stats.push({
+          playerId: ps.playerId,
+          gameId: session.gameId,
+          playerSessionId,
+          statId: resolveStatId(gameStats, stat),
+          value: stat.statValue,
+          date: session.date,
+        });
     }
   }
+  return stats;
 }
 
 /** True when the proposal maps 1:1 onto the session's existing sets. */
@@ -153,6 +159,19 @@ export async function writeSessionTree(
   { replacingSetIds }: { replacingSetIds?: number[] } = {},
 ) {
   const gameStats = await loadGameStats(tx, session, sets);
+  // Every stat of the session goes in with one insert at the end, instead of
+  // one round trip per player per match.
+  const stats: Prisma.PlayerStatCreateManyInput[] = [];
+  const createMatchesOf = async (set: SetInput, setId: number) =>
+    stats.push(
+      ...(await createMatches(
+        tx,
+        session,
+        setId,
+        set.matches ?? [],
+        gameStats,
+      )),
+    );
 
   if (replacingSetIds && matchesExistingSets(replacingSetIds, sets)) {
     for (const set of sets) {
@@ -161,24 +180,25 @@ export async function writeSessionTree(
         data: { setWinners: { set: toRefs(set.setWinners) } },
       });
       await tx.match.deleteMany({ where: { setId: set.setId } });
-      await createMatches(tx, session, set.setId, set.matches ?? [], gameStats);
+      await createMatchesOf(set, set.setId);
     }
-    return;
-  }
+  } else {
+    if (replacingSetIds)
+      await tx.gameSet.deleteMany({ where: { sessionId: session.sessionId } });
 
-  if (replacingSetIds)
-    await tx.gameSet.deleteMany({ where: { sessionId: session.sessionId } });
-
-  for (const set of sets) {
-    const { setId } = await tx.gameSet.create({
-      data: { sessionId: session.sessionId },
-    });
-    const setWinners = toRefs(set.setWinners);
-    if (setWinners.length > 0)
-      await tx.gameSet.update({
-        where: { setId },
-        data: { setWinners: { connect: setWinners } },
+    for (const set of sets) {
+      const { setId } = await tx.gameSet.create({
+        data: { sessionId: session.sessionId },
       });
-    await createMatches(tx, session, setId, set.matches ?? [], gameStats);
+      const setWinners = toRefs(set.setWinners);
+      if (setWinners.length > 0)
+        await tx.gameSet.update({
+          where: { setId },
+          data: { setWinners: { connect: setWinners } },
+        });
+      await createMatchesOf(set, setId);
+    }
   }
+
+  if (stats.length > 0) await tx.playerStat.createMany({ data: stats });
 }

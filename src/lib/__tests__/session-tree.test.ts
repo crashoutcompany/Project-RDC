@@ -113,11 +113,18 @@ describe("writeSessionTree", () => {
       value,
       date: SESSION.date,
     });
+    // Every stat of the session goes in with a single insert.
     expect(db.playerStat.createMany.mock.calls.map(([arg]) => arg?.data)).toEqual([
-      [stat(1, 40, 101, "3"), stat(1, 40, 102, "1")],
-      [stat(2, 41, 101, "1"), stat(2, 41, 102, "4")],
-      [stat(1, 42, 101, "3"), stat(1, 42, 102, "1")],
-      [stat(2, 43, 101, "1"), stat(2, 43, 102, "4")],
+      [
+        stat(1, 40, 101, "3"),
+        stat(1, 40, 102, "1"),
+        stat(2, 41, 101, "1"),
+        stat(2, 41, 102, "4"),
+        stat(1, 42, 101, "3"),
+        stat(1, 42, 102, "1"),
+        stat(2, 43, 101, "1"),
+        stat(2, 43, 102, "4"),
+      ],
     ]);
     expect(db.gameSet.deleteMany).not.toHaveBeenCalled();
     expect(db.match.deleteMany).not.toHaveBeenCalled();
@@ -190,7 +197,8 @@ describe("writeSessionTree", () => {
         [{ where: { setId: 6 } }],
       ]);
       expect(db.match.create.mock.calls.map(([arg]) => arg.data.setId)).toEqual([5, 6]);
-      expect(db.playerStat.createMany).toHaveBeenCalledTimes(4);
+      expect(db.playerStat.createMany).toHaveBeenCalledTimes(1);
+      expect(db.playerStat.createMany.mock.calls[0][0]?.data).toHaveLength(8);
     });
 
     it.each([
