@@ -90,6 +90,9 @@ describe("approveEditRequest", () => {
       status,
       proposedData: JSON.stringify({ proposedData, dirtyFields }),
     } as never);
+    // The shared writer checks stats and players against the database.
+    db.gameStat.findMany.mockResolvedValue([{ statId: 1, statName: "MK8_POS" }] as never);
+    db.player.findMany.mockResolvedValue([{ playerId: 1 }, { playerId: 2 }] as never);
   };
 
   it("snapshots the session, records the reviewer, and applies only dirty top-level fields", async () => {
