@@ -58,6 +58,16 @@ describe("createSessionEditRequest", () => {
     ).toBe(1);
   });
 
+  it("rejects a request whose fields are all reported as untouched", async () => {
+    // After a field-array operation the form sends the whole tree with false leaves.
+    const untouched = { sessionName: false, sets: [{ setId: false }] };
+
+    expect(await createSessionEditRequest(1, mk8SessionForm(), untouched as never)).toEqual({
+      error: "No changes detected to submit.",
+    });
+    expect(db.sessionEditRequest.create).not.toHaveBeenCalled();
+  });
+
   it("rejects a proposal that fails the form schema", async () => {
     // Mario Kart matches must have exactly one winner.
     const invalid = mk8SessionForm();
@@ -116,6 +126,63 @@ describe("approveEditRequest", () => {
       data: { sessionName: "Renamed" },
     });
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
+  });
+
+  it.each([
+    ["only a top-level field changed", { sessionName: true }],
+    ["the form reports the sets as untouched", { sessionName: true, sets: [{ setId: false, matches: [{ matchWinners: [{ playerId: false }] }] }] }],
+  ])("leaves the sets alone when %s", async (_label, dirtyFields) => {
+    // A stale rename must not undo a newer edit to the matches.
+    givenPendingEdit({ ...mk8SessionForm([mk8Set(1, DES)]), sessionName: "Renamed" }, dirtyFields);
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).toHaveBeenCalledWith({
+      where: { sessionId: 1 },
+      data: { sessionName: "Renamed" },
+    });
+    expect(db.gameSet.update).not.toHaveBeenCalled();
+    expect(db.gameSet.deleteMany).not.toHaveBeenCalled();
+    expect(db.match.deleteMany).not.toHaveBeenCalled();
+    expect(db.playerStat.createMany).not.toHaveBeenCalled();
+    expect(db.playerStat.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rewrites the sets when one stat deep inside them changed", async () => {
+    const oneStat = { sets: [{ setId: false, matches: [{ playerSessions: [{ playerStats: [{ statValue: true }] }] }] }] };
+    givenPendingEdit(mk8SessionForm([mk8Set(1, DES)]), oneStat);
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.match.deleteMany).toHaveBeenCalledWith({ where: { setId: 1 } });
+    expect(db.playerStat.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves the existing stats to an edited date without rewriting the sets", async () => {
+    const newDate = new Date("2025-06-15T00:00:00.000Z");
+    givenPendingEdit({ ...mk8SessionForm(), date: newDate }, { date: true });
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.playerStat.updateMany).toHaveBeenCalledWith({
+      where: { playerSession: { sessionId: 1 } },
+      data: { date: newDate },
+    });
+    expect(db.match.deleteMany).not.toHaveBeenCalled();
+    expect(db.playerStat.createMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves day winners alone when the form reports them as untouched", async () => {
+    givenPendingEdit(
+      { ...mk8SessionForm(), dayWinners: [DES] },
+      { sessionName: true, dayWinners: [{ playerId: false, playerName: false }] },
+    );
+
+    expect(await approveEditRequest(5)).toEqual({ error: null });
+
+    expect(db.session.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ dayWinners: expect.anything() }) }),
+    );
   });
 
   it("replaces the day winners with the proposed list", async () => {

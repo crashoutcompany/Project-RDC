@@ -8,7 +8,7 @@ import { revalidateSessionData } from "@/lib/revalidate";
 import { UseFormReturn } from "react-hook-form";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
 import { Prisma } from "@/generated/prisma/client";
-import { parseProposedData } from "@/lib/proposed-data";
+import { hasChanges, parseProposedData } from "@/lib/proposed-data";
 
 type CreateEditResult = { error: string | null };
 
@@ -27,7 +27,7 @@ export async function createSessionEditRequest(
 ): Promise<CreateEditResult> {
   const session = await requireAdmin();
   if (!session) return { error: errorCodes.NotAuthenticated };
-  else if (Object.keys(dirtyFields).length === 0) {
+  else if (!hasChanges(dirtyFields)) {
     return { error: "No changes detected to submit." };
   }
 
@@ -127,7 +127,10 @@ async function applyTopLevelUpdates(
 
   // Only replace winners this proposal changed, so a stale proposal can't
   // undo a newer edit. Older proposals may omit the key entirely.
-  if (dirtyFields.dayWinners && proposedData.dayWinners !== undefined)
+  if (
+    hasChanges(dirtyFields.dayWinners) &&
+    proposedData.dayWinners !== undefined
+  )
     await tx.session.update({
       where: { sessionId },
       data: {
@@ -170,19 +173,26 @@ export async function approveEditRequest(editId: number, note?: string) {
       });
       await applyTopLevelUpdates(tx, session.sessionId, proposal);
 
-      await writeSessionTree(
-        tx,
-        {
-          sessionId: session.sessionId,
-          gameId: session.gameId,
-          // Recreated player stats carry the session date, so use the edited one.
-          date: proposal.dirtyFields.date
-            ? new Date(proposal.proposedData.date)
-            : session.date,
-        },
-        proposal.proposedData.sets || [],
-        { replacingSetIds: session.sets.map((set) => set.setId) },
-      );
+      // Player stats carry the session date, so an edited date reaches them
+      // whether or not the sets are rewritten.
+      const date = proposal.dirtyFields.date
+        ? new Date(proposal.proposedData.date)
+        : session.date;
+
+      // Sets are only rewritten when this proposal changed them, so a stale
+      // proposal (say, a rename) can't undo a newer edit to the matches.
+      if (hasChanges(proposal.dirtyFields.sets))
+        await writeSessionTree(
+          tx,
+          { sessionId: session.sessionId, gameId: session.gameId, date },
+          proposal.proposedData.sets || [],
+          { replacingSetIds: session.sets.map((set) => set.setId) },
+        );
+      else if (proposal.dirtyFields.date)
+        await tx.playerStat.updateMany({
+          where: { playerSession: { sessionId: session.sessionId } },
+          data: { date },
+        });
     }, SESSION_TX_OPTIONS);
 
     revalidateSessionData();
