@@ -87,16 +87,13 @@ describe("Mario Kart 8", () => {
     expect(result.winners).toEqual(["Mark"]);
   });
 
-  it("drops rows that are not session players without asking for review", () => {
-    const result = run(MK8, solo(["Mark", { mk8_place: "1" }], ["Some Random", { mk8_place: "2" }]));
+  it.each([
+    ["someone who is not a member", "Some Random"],
+    ["a member who is not in this session", "Des"],
+  ])("drops %s and asks for review", (_label, name) => {
+    const result = run(MK8, solo(["Mark", { mk8_place: "1" }], [name, { mk8_place: "2" }]));
 
-    expect(result.status).toBe(SUCCESS);
-    expect(result.players.map((p) => p.name)).toEqual(["Mark"]);
-  });
-
-  it("drops a known member who is not in this session", () => {
-    const result = run(MK8, solo(["Mark", { mk8_place: "1" }], ["Des", { mk8_place: "2" }]));
-
+    expect(result.status).toBe(REVIEW);
     expect(result.players.map((p) => p.name)).toEqual(["Mark"]);
   });
 
@@ -163,17 +160,17 @@ describe("Call of Duty", () => {
     expect(result.winners).toEqual(["Dylan"]);
   });
 
-  it("does not ask for review when a stat was unreadable", () => {
+  it("asks for review when a stat was unreadable", () => {
     const result = run(COD, solo(["Mark", { cod_score: "Z", cod_kills: undefined }]));
 
-    expect(result.status).toBe(SUCCESS);
+    expect(result.status).toBe(REVIEW);
     expect(statsOf(result.players[0])).toMatchObject({ COD_SCORE: "0", COD_KILLS: "0" });
   });
 
-  it("drops rows that are not session players without asking for review", () => {
+  it("drops rows that are not session players and asks for review", () => {
     const result = run(COD, solo(["Mark", { cod_score: "100" }], ["xX_Sniper_Xx", { cod_score: "900" }]));
 
-    expect(result).toMatchObject({ status: SUCCESS, winners: ["Mark"] });
+    expect(result).toMatchObject({ status: REVIEW, winners: ["Mark"] });
     expect(result.players).toHaveLength(1);
   });
 
@@ -206,6 +203,42 @@ describe("Rocket League", () => {
       ["Lee", "OrangePlayers", { RL_SCORE: "90", RL_GOALS: "0" }],
     ]);
     expect(result.winners).toEqual(["Mark", "Dylan"]);
+  });
+
+  describe("when the reader saw a team marked as the winner", () => {
+    /** Blue scored 3, orange 2, with the WINNER label on `winner`. */
+    const labelled = (winner: string) =>
+      match().map((team) => ({ ...team, ...(team.teamName === winner && { winner: true }) }));
+
+    it("names that team", () => {
+      expect(run(RL, labelled("BluePlayers"))).toMatchObject({
+        status: SUCCESS,
+        winners: ["Mark", "Dylan"],
+      });
+    });
+
+    it("trusts the label over the goals, and asks for review when they disagree", () => {
+      expect(run(RL, labelled("OrangePlayers"))).toMatchObject({
+        status: REVIEW,
+        winners: ["Ben", "Lee"],
+      });
+    });
+
+    it("names nobody when no session player is on the winning team", () => {
+      const fields = teams({
+        BluePlayers: [["Rando", { Goals: "4" }]],
+        OrangePlayers: [["Mark", { Goals: "1" }]],
+      });
+      fields[0].winner = true;
+
+      expect(run(RL, fields)).toMatchObject({ status: REVIEW, winners: [] });
+    });
+
+    it("falls back to goals when more than one team is marked", () => {
+      const fields = match().map((team) => ({ ...team, winner: true }));
+
+      expect(run(RL, fields).winners).toEqual(["Mark", "Dylan"]);
+    });
   });
 
   it("gives a tie on goals to the team listed first", () => {

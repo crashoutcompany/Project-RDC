@@ -30,13 +30,15 @@ function readRows(
   const read: Read = { players: [], needsReview: false };
 
   for (const row of rows) {
+    // A stat that was missing, unreadable or out of range.
     const processed = processPlayer(row, teamName, statPrefix);
-    if (processed.reqCheckFlag && spec.review.unreadableStat)
-      read.needsReview = true;
+    if (processed.reqCheckFlag) read.needsReview = true;
 
+    // A row that isn't one of the session's players is dropped, and flagged
+    // so the admin can confirm nobody was left out.
     const player = validateProcessedPlayer(processed, sessionPlayers);
     if (player) read.players.push(player);
-    else if (spec.review.unknownPlayer) read.needsReview = true;
+    else read.needsReview = true;
   }
   return read;
 }
@@ -75,7 +77,7 @@ function readPlayers(
   if (isTeamData(fields)) return wrongLayout;
 
   const rows = fields[0]?.valueArray;
-  if (!rows?.length && spec.review.noRows)
+  if (!rows?.length && spec.reviewEmptyRead)
     return { players: [], needsReview: true };
   if (!rows)
     throw new Error(`No player rows in the ${spec.name} scoreboard read`);
@@ -85,10 +87,17 @@ function readPlayers(
 const statOf = (player: VisionPlayer, stat: StatName) =>
   Number(player.stats.find((s) => s.stat === stat)?.statValue);
 
+type Winners = {
+  winners: VisionPlayer[];
+  /** The reader's winner label and the stats point at different teams. */
+  disputed: boolean;
+};
+
 function pickWinners(
   rule: WinnerRule,
   players: VisionPlayer[],
-): VisionPlayer[] {
+  labelledTeam?: string,
+): Winners {
   if (rule.by === "team-total") {
     const teams = new Map<string, { players: VisionPlayer[]; total: number }>();
     for (const player of players) {
@@ -104,24 +113,36 @@ function pickWinners(
     // lets the reader chain fall back to the next reader.
     if (!first) throw new Error("No session players were found on either team");
     // The team listed first keeps a tie.
-    return rest.reduce(
+    const byTotal = rest.reduce(
       (best, team) => (team.total > best.total ? team : best),
       first,
-    ).players;
+    );
+    if (!labelledTeam) return { winners: byTotal.players, disputed: false };
+
+    // What the screen says beats arithmetic on stats that may be misread. A
+    // labelled team with none of the session's players means nobody here won.
+    const labelled = teams.get(labelledTeam);
+    return { winners: labelled?.players ?? [], disputed: labelled !== byTotal };
   }
 
-  if (players.length === 0) return [];
+  if (players.length === 0) return { winners: [], disputed: false };
   const beats = (value: number, best: number) =>
     rule.by === "lowest" ? value < best : value > best;
   // The first row keeps a tie (and wins if its own value is unreadable).
-  return [
-    players.reduce((winner, player) =>
-      beats(statOf(player, rule.stat), statOf(winner, rule.stat))
-        ? player
-        : winner,
-    ),
-  ];
+  const winner = players.reduce((winner, player) =>
+    beats(statOf(player, rule.stat), statOf(winner, rule.stat))
+      ? player
+      : winner,
+  );
+  return { winners: [winner], disputed: false };
 }
+
+/** The team the reader saw marked as the winner, when it marked exactly one. */
+const labelledWinner = (fields: ScoreboardFields) => {
+  if (!isTeamData(fields)) return undefined;
+  const marked = fields.filter((team) => team.winner);
+  return marked.length === 1 ? marked[0].teamName : undefined;
+};
 
 /**
  * Runs a game's spec over a scoreboard read (from any reader): maps rows to
@@ -152,8 +173,13 @@ export function processGameScoreboard(
       }),
     }));
 
-  const data = { players, winner: pickWinners(spec.winner, players) };
-  return needsReview
+  const { winners, disputed } = pickWinners(
+    spec.winner,
+    players,
+    labelledWinner(fields),
+  );
+  const data = { players, winner: winners };
+  return needsReview || disputed
     ? {
         status: VisionResultCodes.CheckRequest,
         data,

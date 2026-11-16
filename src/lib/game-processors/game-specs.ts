@@ -8,7 +8,10 @@ import type { StatCheck } from "./game-processor-utils";
 export type WinnerRule =
   /** One player: the best value of a stat. The first row wins a tie. */
   | { by: "highest" | "lowest"; stat: StatName }
-  /** Every player of the team whose stat adds up highest. */
+  /**
+   * Every player of the winning team: the one the reader saw marked as the
+   * winner, or failing that the one whose stat adds up highest.
+   */
   | { by: "team-total"; stat: StatName };
 
 /**
@@ -27,15 +30,11 @@ export interface GameProcessorSpec {
   input:
     | { layout: "solo" }
     | { layout: "teams"; teams: readonly string[]; statPrefix?: string };
-  /** Which problems send the import to the admin for review. */
-  review: {
-    /** A stat that was missing, unreadable or out of range. */
-    unreadableStat: boolean;
-    /** A row that isn't one of the session's players (the row is dropped). */
-    unknownPlayer: boolean;
-    /** A read with no player rows; when false such a read has no players. */
-    noRows: boolean;
-  };
+  /**
+   * What a read with no player rows means. By default it is a read with
+   * nobody in it; set this to send it to the admin for review instead.
+   */
+  reviewEmptyRead?: boolean;
   /**
    * Fixes this game's known OCR misreads. Only applied to readers that make
    * them (Azure), and always sends a corrected value to review.
@@ -88,7 +87,6 @@ export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = [
     gameId: 1,
     name: "Mario Kart 8",
     input: { layout: "solo" },
-    review: { unreadableStat: true, unknownPlayer: false, noRows: false },
     correctStat: correctMarioKartPlace,
     winner: { by: "lowest", stat: "MK8_POS" },
   },
@@ -100,14 +98,12 @@ export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = [
       teams: Object.keys(RL_TEAM_MAPPING),
       statPrefix: "rl",
     },
-    review: { unreadableStat: true, unknownPlayer: true, noRows: false },
     winner: { by: "team-total", stat: "RL_GOALS" },
   },
   {
     gameId: 3,
     name: "Call of Duty",
     input: { layout: "solo" },
-    review: { unreadableStat: false, unknownPlayer: false, noRows: false },
     finalize: rankByCodScore,
     winner: { by: "highest", stat: "COD_SCORE" },
   },
@@ -115,7 +111,7 @@ export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = [
     gameId: 6,
     name: "Marvel Rivals",
     input: { layout: "solo" },
-    review: { unreadableStat: true, unknownPlayer: true, noRows: true },
+    reviewEmptyRead: true,
     // The scoreboard doesn't show which side won, so the import proposes the
     // top fragger. The form allows no winner for this game, so an admin can
     // clear it (e.g. when the whole squad lost).
