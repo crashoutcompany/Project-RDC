@@ -1,13 +1,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
-import { StatName } from "@/lib/stat-names";
 import { getStatTotalsByGame as getStatTotalsByGameSql } from "@/generated/prisma/sql";
-import { approvedSession, inApprovedPlayerStat } from "./approved";
-
-export type StatEndsWith<
-  Suffix extends string,
-  Name extends StatName = StatName,
-> = Extract<Name, `${string}_${Suffix}`>;
+import { approvedSession } from "./approved";
 
 // Cache is used for deduping
 // unstable is used for time based caching
@@ -22,26 +16,10 @@ export const getAllGames = async () => {
   );
 };
 
-export const getGame = async (gameName: string) =>
-  await handlePrismaOperation((prisma) =>
-    prisma.game.findFirst({
-      where: { gameName },
-    }),
-  );
-
 /** Sum and average of every INT stat of a game, per player, in one query. */
 export const getStatTotalsByGame = async (gameId: number) =>
   await handlePrismaOperation((prisma) =>
     prisma.$queryRawTyped(getStatTotalsByGameSql(gameId)),
-  );
-
-/** @deprecated */
-export const getSetsPerPlayer = async (gameId: number) =>
-  await handlePrismaOperation((prisma) =>
-    prisma.session.findMany({
-      where: { gameId, ...approvedSession },
-      include: { sets: { select: { _count: true, matches: true } } },
-    }),
   );
 
 export const getWinsPerPlayer = async (gameId: number) =>
@@ -65,47 +43,6 @@ export const getWinsPerPlayer = async (gameId: number) =>
           },
         },
       },
-    }),
-  );
-
-export const getMatchesPerGame = async <T extends StatName = StatName>(
-  gameId: number,
-  statName: StatEndsWith<"POS", T>,
-) =>
-  await handlePrismaOperation((prisma) =>
-    prisma.session.findMany({
-      where: { gameId, ...approvedSession },
-      select: {
-        sets: {
-          select: {
-            setWinners: true,
-            matches: {
-              select: {
-                matchWinners: true,
-                date: true,
-                playerSessions: {
-                  select: {
-                    player: true,
-                    playerStats: {
-                      where: { gameStat: { statName } },
-                      select: { playerStatId: true, value: true },
-                      take: 1,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    }),
-  );
-
-export const getStatPerPlayer = async (gameId: number, statName: StatName) =>
-  await handlePrismaOperation((prisma) =>
-    prisma.playerStat.findMany({
-      where: { gameId, gameStat: { statName }, ...inApprovedPlayerStat },
-      select: { player: true, value: true, statId: true },
     }),
   );
 
