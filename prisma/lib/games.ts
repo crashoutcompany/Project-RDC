@@ -1,7 +1,7 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { handlePrismaOperation } from "../db";
 import { StatName } from "@/lib/stat-names";
-import { getSumOfStat } from "@/generated/prisma/sql";
+import { getStatTotalsByGame as getStatTotalsByGameSql } from "@/generated/prisma/sql";
 import { approvedSession, inApprovedPlayerStat } from "./approved";
 
 export type StatEndsWith<
@@ -29,9 +29,10 @@ export const getGame = async (gameName: string) =>
     }),
   );
 
-export const getSumPerStat = async (playerId: number, statName: StatName) =>
+/** Sum and average of every INT stat of a game, per player, in one query. */
+export const getStatTotalsByGame = async (gameId: number) =>
   await handlePrismaOperation((prisma) =>
-    prisma.$queryRawTyped(getSumOfStat(playerId, statName)),
+    prisma.$queryRawTyped(getStatTotalsByGameSql(gameId)),
   );
 
 /** @deprecated */

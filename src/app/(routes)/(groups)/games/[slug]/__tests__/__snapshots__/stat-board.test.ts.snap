@@ -114,71 +114,6 @@ exports[`game stat boards > callofduty > charts the same rows and labels 1`] = `
 }
 `;
 
-exports[`game stat boards > callofduty > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [
-    {
-      "dataKey": "kills.sum",
-      "description": "Kills all time",
-      "label": "Total Kills",
-      "title": "Kills Per Player",
-    },
-    {
-      "dataKey": "deaths.sum",
-      "description": "Deaths all time",
-      "label": "Total Deaths",
-      "title": "Deaths Per Player",
-    },
-    {
-      "dataKey": "score.avg",
-      "description": "Average Score",
-      "label": "Avg Score",
-      "title": "Average Score",
-    },
-    {
-      "dataKey": "pos.avg",
-      "description": "Average Position",
-      "label": "Avg Position",
-      "title": "Average Position",
-    },
-    {
-      "dataKey": "melees.sum",
-      "description": "Melees all time",
-      "label": "Total Melees",
-      "title": "Melees Per Player",
-    },
-  ],
-  "rows": [],
-  "text": [],
-  "wins": [
-    {
-      "chartConfig": {
-        "days": {
-          "label": "Days won",
-        },
-        "matchWins": {
-          "label": "Matches won",
-        },
-        "player": {
-          "label": "Player",
-        },
-        "setWins": {
-          "label": "Sets won",
-        },
-      },
-      "chartData": [
-        {
-          "matchWins": 3,
-          "player": "Mark",
-          "setWins": 1,
-        },
-      ],
-      "gameName": "Call of Duty",
-    },
-  ],
-}
-`;
-
 exports[`game stat boards > lethalcompany > charts the same rows and labels 1`] = `
 {
   "charts": [
@@ -237,47 +172,6 @@ exports[`game stat boards > lethalcompany > charts the same rows and labels 1`] 
 }
 `;
 
-exports[`game stat boards > lethalcompany > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [
-    {
-      "dataKey": "deaths.sum",
-      "description": "Deaths all time",
-      "label": "Total Deaths",
-      "title": "Deaths Per Player",
-    },
-  ],
-  "rows": [],
-  "text": [],
-  "wins": [
-    {
-      "chartConfig": {
-        "days": {
-          "label": "Days won",
-        },
-        "matchWins": {
-          "label": "Matches won",
-        },
-        "player": {
-          "label": "Player",
-        },
-        "setWins": {
-          "label": "Sets won",
-        },
-      },
-      "chartData": [
-        {
-          "matchWins": 3,
-          "player": "Mark",
-          "setWins": 1,
-        },
-      ],
-      "gameName": "Lethal Company",
-    },
-  ],
-}
-`;
-
 exports[`game stat boards > mariokart8 > charts the same rows and labels 1`] = `
 {
   "charts": [
@@ -290,10 +184,6 @@ exports[`game stat boards > mariokart8 > charts the same rows and labels 1`] = `
   ],
   "rows": [
     {
-      "day": {
-        "avg": 1,
-        "sum": 3,
-      },
       "playerId": 1,
       "playerName": "Mark",
       "pos": {
@@ -302,10 +192,6 @@ exports[`game stat boards > mariokart8 > charts the same rows and labels 1`] = `
       },
     },
     {
-      "day": {
-        "avg": 0,
-        "sum": 0,
-      },
       "playerId": 2,
       "playerName": "Dylan",
       "pos": {
@@ -314,47 +200,6 @@ exports[`game stat boards > mariokart8 > charts the same rows and labels 1`] = `
       },
     },
   ],
-  "text": [],
-  "wins": [
-    {
-      "chartConfig": {
-        "days": {
-          "label": "Days won",
-        },
-        "matchWins": {
-          "label": "Races won",
-        },
-        "player": {
-          "label": "Player",
-        },
-        "setWins": {
-          "label": "Sets won",
-        },
-      },
-      "chartData": [
-        {
-          "matchWins": 3,
-          "player": "Mark",
-          "setWins": 1,
-        },
-      ],
-      "gameName": "Mario Kart 8",
-    },
-  ],
-}
-`;
-
-exports[`game stat boards > mariokart8 > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [
-    {
-      "dataKey": "pos.avg",
-      "description": "Average race position all time",
-      "label": "Avg Position",
-      "title": "Average Position",
-    },
-  ],
-  "rows": [],
   "text": [],
   "wins": [
     {
@@ -533,17 +378,6 @@ exports[`game stat boards > marvelrivals > charts the same rows and labels 1`] =
 }
 `;
 
-exports[`game stat boards > marvelrivals > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [],
-  "rows": undefined,
-  "text": [
-    "No Marvel Rivals stats yet",
-  ],
-  "wins": [],
-}
-`;
-
 exports[`game stat boards > rocketleague > charts the same rows and labels 1`] = `
 {
   "charts": [
@@ -578,10 +412,6 @@ exports[`game stat boards > rocketleague > charts the same rows and labels 1`] =
         "avg": 1,
         "sum": 3,
       },
-      "day": {
-        "avg": 1,
-        "sum": 3,
-      },
       "goals": {
         "avg": 2,
         "sum": 6,
@@ -602,10 +432,6 @@ exports[`game stat boards > rocketleague > charts the same rows and labels 1`] =
         "avg": 3,
         "sum": 3,
       },
-      "day": {
-        "avg": 1,
-        "sum": 1,
-      },
       "goals": {
         "avg": 0,
         "sum": 0,
@@ -622,65 +448,6 @@ exports[`game stat boards > rocketleague > charts the same rows and labels 1`] =
       },
     },
   ],
-  "text": [],
-  "wins": [
-    {
-      "chartConfig": {
-        "days": {
-          "label": "Days won",
-        },
-        "matchWins": {
-          "label": "Matches won",
-        },
-        "player": {
-          "label": "Player",
-        },
-        "setWins": {
-          "label": "Sets won",
-        },
-      },
-      "chartData": [
-        {
-          "matchWins": 3,
-          "player": "Mark",
-          "setWins": 1,
-        },
-      ],
-      "gameName": "Rocket League",
-    },
-  ],
-}
-`;
-
-exports[`game stat boards > rocketleague > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [
-    {
-      "dataKey": "goals.sum",
-      "description": "Goals scored all time",
-      "label": "Total Goals",
-      "title": "Goals Per Player",
-    },
-    {
-      "dataKey": "saves.sum",
-      "description": "Shots saved all time",
-      "label": "Total Saves",
-      "title": "Saves Per Player",
-    },
-    {
-      "dataKey": "assists.sum",
-      "description": "All time Assists",
-      "label": "Total Assists",
-      "title": "Assists All Time",
-    },
-    {
-      "dataKey": "score.avg",
-      "description": "Average Score",
-      "label": "Avg Score",
-      "title": "Average Score",
-    },
-  ],
-  "rows": [],
   "text": [],
   "wins": [
     {
@@ -751,59 +518,6 @@ exports[`game stat boards > speedrunners > charts the same rows and labels 1`] =
       },
     },
   ],
-  "text": [],
-  "wins": [
-    {
-      "chartConfig": {
-        "days": {
-          "label": "Days won",
-        },
-        "matchWins": {
-          "label": "Races won",
-        },
-        "player": {
-          "label": "Player",
-        },
-        "setWins": {
-          "label": "Sets won",
-        },
-      },
-      "chartData": [
-        {
-          "matchWins": 3,
-          "player": "Mark",
-          "setWins": 1,
-        },
-      ],
-      "gameName": "Speedrunners",
-    },
-  ],
-}
-`;
-
-exports[`game stat boards > speedrunners > renders with no rows when the stat queries fail 1`] = `
-{
-  "charts": [
-    {
-      "dataKey": "wins.sum",
-      "description": "Wins all time",
-      "label": "Total Wins",
-      "title": "Wins Per Player",
-    },
-    {
-      "dataKey": "sets.sum",
-      "description": "Sets all time",
-      "label": "Total Sets",
-      "title": "Sets Per Player",
-    },
-    {
-      "dataKey": "pos.avg",
-      "description": "Average Position",
-      "label": "Avg Position",
-      "title": "Average Position",
-    },
-  ],
-  "rows": [],
   "text": [],
   "wins": [
     {

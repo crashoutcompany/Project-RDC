@@ -4,53 +4,9 @@ import {
   getMatchesPerGame,
   StatEndsWith,
   getStatPerPlayer,
-  getSumPerStat,
 } from "prisma/lib/games";
 import { QueryResponseData } from "prisma/db";
-import { Decimal } from "@prisma/client/runtime/client";
 import { logNAN } from "@/posthog/server-analytics";
-
-type Result = NonNullable<Awaited<ReturnType<typeof getSumPerStat>>>["data"] & {
-  avg: number;
-  sum: number;
-};
-
-type SumAndAvg<
-  T extends string[],
-  Y extends "RL" | "COD" | "MK8" | "LC" | "SR" | "MR",
-> = {
-  [K in T[number] as K extends `${Y}_${infer U}` ? Lowercase<`${U}`> : never]:
-    Result | { readonly avg: Decimal | number; readonly sum: bigint | number };
-};
-
-export const getAvgAndSum = async (
-  playerId: number,
-  stats: StatName[],
-): Promise<
-  SumAndAvg<typeof stats, "RL" | "COD" | "MK8" | "LC" | "SR" | "MR">
-> => {
-  return await Promise.all(
-    stats.map((stat) => getSumPerStat(Number(playerId), stat)),
-  ).then((results) =>
-    results.reduce(
-      (acc, result, index) => {
-        const i = stats[index].indexOf("_");
-        const statName = stats[index]
-          .slice(i + 1)
-          .toLowerCase() as keyof SumAndAvg<typeof stats, "RL">;
-
-        const res = {
-          avg: result.data?.at(0)?.avg ?? 0,
-          sum: result.data?.at(0)?.sum ?? 0,
-        };
-
-        acc[statName] = res;
-        return acc;
-      },
-      {} as SumAndAvg<typeof stats, "RL" | "COD" | "MK8" | "LC" | "SR" | "MR">,
-    ),
-  );
-};
 
 export const calcWinsPerPlayer = (
   game: QueryResponseData<Awaited<ReturnType<typeof getWinsPerPlayer>>>,

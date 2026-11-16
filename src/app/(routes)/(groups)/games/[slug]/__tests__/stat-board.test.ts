@@ -4,13 +4,9 @@ import { Decimal } from "@prisma/client/runtime/client";
 import type { Player } from "@/generated/prisma/client";
 import { GamesEnum } from "@/lib/constants";
 import type { StatName } from "@/lib/stat-names";
-import { getSumPerStat } from "prisma/lib/games";
-import CallOfDuty from "../_components/games/callofduty";
-import LethalCompany from "../_components/games/lethalcompany";
-import MarioKart from "../_components/games/mariokart";
-import MarvelRivals from "../_components/games/marvelrivals";
-import RocketLeague from "../_components/games/rocketleague";
-import Speedrunners from "../_components/games/speedrunners";
+import { getStatTotalsByGame } from "prisma/lib/games";
+import { StatBoard } from "../_components/stat-board";
+import { STAT_BOARDS } from "../_helpers/stat-board";
 
 // Client chart components are replaced by tags so the element tree the server
 // component returns can be read without rendering Recharts.
@@ -19,7 +15,7 @@ vi.mock("../_components/charts", () => ({
   CustomChart: "CustomChart",
 }));
 vi.mock("../_components/tabbed-chart", () => ({ TabbedChart: "TabbedChart" }));
-vi.mock("prisma/lib/games", () => ({ getSumPerStat: vi.fn() }));
+vi.mock("prisma/lib/games", () => ({ getStatTotalsByGame: vi.fn() }));
 
 const MEMBERS = [
   { playerId: 1, playerName: "Mark" },
@@ -100,14 +96,33 @@ const aggregate = (values: number[] | undefined) => {
   return { sum: BigInt(sum), avg: new Decimal(sum / values.length) };
 };
 
+const GAMES = {
+  [GamesEnum.CallOfDuty]: { gameId: 3, gameName: "Call of Duty", prefix: "COD_" },
+  [GamesEnum.RocketLeague]: { gameId: 2, gameName: "Rocket League", prefix: "RL_" },
+  [GamesEnum.MarioKart8]: { gameId: 1, gameName: "Mario Kart 8", prefix: "MK8_" },
+  [GamesEnum.LethalCompany]: { gameId: 4, gameName: "Lethal Company", prefix: "LC_" },
+  [GamesEnum.SpeedRunners]: { gameId: 5, gameName: "Speedrunners", prefix: "SR_" },
+  [GamesEnum.MarvelRivals]: { gameId: 6, gameName: "Marvel Rivals", prefix: "MR_" },
+};
+
+/** One grouped row per player and stat of the game, as the totals query returns. */
 const databaseIsUp = () =>
-  vi.mocked(getSumPerStat).mockImplementation(
-    async (playerId, statName) =>
-      ({ success: true, data: [aggregate(VALUES[playerId]?.[statName])] }) as never,
-  );
+  vi.mocked(getStatTotalsByGame).mockImplementation(async (gameId) => {
+    const { prefix } = Object.values(GAMES).find((g) => g.gameId === gameId)!;
+    const data = Object.entries(VALUES).flatMap(([playerId, stats]) =>
+      Object.entries(stats)
+        .filter(([statName]) => statName.startsWith(prefix))
+        .map(([statName, values]) => ({
+          playerId: Number(playerId),
+          statName,
+          ...aggregate(values),
+        })),
+    );
+    return { success: true, data } as never;
+  });
 
 const databaseIsDown = () =>
-  vi.mocked(getSumPerStat).mockResolvedValue({
+  vi.mocked(getStatTotalsByGame).mockResolvedValue({
     success: false,
     error: "A database error occurred.",
     data: null,
@@ -115,19 +130,11 @@ const databaseIsDown = () =>
 
 const WINS = [{ player: "Mark", matchWins: 3, setWins: 1 }];
 
-const BOARDS = {
-  [GamesEnum.CallOfDuty]: { component: CallOfDuty, gameId: 3, gameName: "Call of Duty" },
-  [GamesEnum.RocketLeague]: { component: RocketLeague, gameId: 2, gameName: "Rocket League" },
-  [GamesEnum.MarioKart8]: { component: MarioKart, gameId: 1, gameName: "Mario Kart 8" },
-  [GamesEnum.LethalCompany]: { component: LethalCompany, gameId: 4, gameName: "Lethal Company" },
-  [GamesEnum.SpeedRunners]: { component: Speedrunners, gameId: 5, gameName: "Speedrunners" },
-  [GamesEnum.MarvelRivals]: { component: MarvelRivals, gameId: 6, gameName: "Marvel Rivals" },
-};
-
 /** The only seam that changes with the implementation: slug in, element tree out. */
 const renderBoard = (slug: GamesEnum): Promise<ReactNode> => {
-  const { component, gameId, gameName } = BOARDS[slug];
-  return component({
+  const { gameId, gameName } = GAMES[slug];
+  return StatBoard({
+    board: STAT_BOARDS[slug],
     game: { gameId, gameName },
     members: MEMBERS,
     winsPerPlayer: WINS,
@@ -180,7 +187,7 @@ const board = async (slug: GamesEnum) => {
   };
 };
 
-const SLUGS = Object.keys(BOARDS) as GamesEnum[];
+const SLUGS = Object.keys(GAMES) as GamesEnum[];
 
 describe("game stat boards", () => {
   describe.each(SLUGS)("%s", (slug) => {
@@ -190,10 +197,38 @@ describe("game stat boards", () => {
       expect(await board(slug)).toMatchSnapshot();
     });
 
-    it("renders with no rows when the stat queries fail", async () => {
+    it("loads every stat with one query", async () => {
+      databaseIsUp();
+
+      await renderBoard(slug);
+
+      expect(getStatTotalsByGame).toHaveBeenCalledTimes(1);
+      expect(getStatTotalsByGame).toHaveBeenCalledWith(GAMES[slug].gameId);
+    });
+
+    it("shows empty charts, or the game's empty message, when nothing is recorded", async () => {
+      vi.mocked(getStatTotalsByGame).mockResolvedValue({ success: true, data: [] });
+
+      const { charts, rows, text } = await board(slug);
+
+      if (slug === GamesEnum.MarvelRivals) {
+        expect(text).toEqual(["No Marvel Rivals stats yet"]);
+        expect(charts).toEqual([]);
+      } else {
+        expect(text).toEqual([]);
+        expect(charts).toHaveLength(STAT_BOARDS[slug].charts.length);
+        expect(rows).toEqual([]);
+      }
+    });
+
+    it("says the stats are unavailable, and keeps the wins chart, when the query fails", async () => {
       databaseIsDown();
 
-      expect(await board(slug)).toMatchSnapshot();
+      const { charts, wins, text } = await board(slug);
+
+      expect(charts).toEqual([]);
+      expect(text).toContain("Stats unavailable");
+      expect(wins).toEqual([expect.objectContaining({ chartData: WINS })]);
     });
   });
 });
