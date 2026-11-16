@@ -33,6 +33,7 @@ export const getWinsPerPlayer = async (gameId: number) =>
             sessionId: true,
             sessionName: true,
             sessionUrl: true,
+            dayWinners: true,
             sets: {
               select: {
                 setId: true,

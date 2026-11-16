@@ -1,35 +1,35 @@
 import type { getWinsPerPlayer } from "prisma/lib/games";
 import type { QueryResponseData } from "prisma/db";
 
+type Wins = { matchWins: number; setWins: number; days: number };
+
+/**
+ * Counts each player's match, set and day wins across a game's sessions, in
+ * the row shape the wins chart reads (`days` is the chart's "Days won" tab).
+ */
 export const calcWinsPerPlayer = (
   game: QueryResponseData<Awaited<ReturnType<typeof getWinsPerPlayer>>>,
 ) => {
-  const members = new Map<string, { matchWins: number; setWins: number }>();
+  const members = new Map<string, Wins>();
+  const count = (winners: { playerName: string }[], kind: keyof Wins) => {
+    for (const { playerName } of winners) {
+      const wins = members.get(playerName) ?? {
+        matchWins: 0,
+        setWins: 0,
+        days: 0,
+      };
+      wins[kind] += 1;
+      members.set(playerName, wins);
+    }
+  };
 
   for (const session of game.sessions) {
     for (const set of session.sets) {
-      // Calculate Match Wins
-      for (const match of set.matches) {
-        for (const winner of match.matchWinners) {
-          const member = members.get(winner.playerName);
-          if (!member)
-            members.set(winner.playerName, { matchWins: 1, setWins: 0 });
-          else member.matchWins += 1;
-        }
-      }
-      // Calculate Set Wins
-      for (const winner of set.setWinners) {
-        const member = members.get(winner.playerName);
-        if (!member)
-          members.set(winner.playerName, { matchWins: 0, setWins: 1 });
-        else member.setWins += 1;
-      }
+      for (const match of set.matches) count(match.matchWinners, "matchWins");
+      count(set.setWinners, "setWins");
     }
+    count(session.dayWinners, "days");
   }
-  const data = Array.from(members, ([key, val]) => ({
-    player: key,
-    matchWins: val.matchWins,
-    setWins: val.setWins,
-  }));
-  return data;
+
+  return Array.from(members, ([player, wins]) => ({ player, ...wins }));
 };
