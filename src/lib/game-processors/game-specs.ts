@@ -9,9 +9,7 @@ export type WinnerRule =
   /** One player: the best value of a stat. The first row wins a tie. */
   | { by: "highest" | "lowest"; stat: StatName }
   /** Every player of the team whose stat adds up highest. */
-  | { by: "team-total"; stat: StatName }
-  /** The scoreboard doesn't settle it; the admin picks the winners. */
-  | { by: "none" };
+  | { by: "team-total"; stat: StatName };
 
 /**
  * Everything game-specific about turning a scoreboard read into a match.
@@ -118,7 +116,10 @@ export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = [
     name: "Marvel Rivals",
     input: { layout: "solo" },
     review: { unreadableStat: true, unknownPlayer: true, noRows: true },
-    winner: { by: "none" },
+    // The scoreboard doesn't show which side won, so the import proposes the
+    // top fragger. The form allows no winner for this game, so an admin can
+    // clear it (e.g. when the whole squad lost).
+    winner: { by: "highest", stat: "MR_KILLS" },
   },
 ];
 

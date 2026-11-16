@@ -89,8 +89,6 @@ function pickWinners(
   rule: WinnerRule,
   players: VisionPlayer[],
 ): VisionPlayer[] {
-  if (rule.by === "none") return [];
-
   if (rule.by === "team-total") {
     const teams = new Map<string, { players: VisionPlayer[]; total: number }>();
     for (const player of players) {

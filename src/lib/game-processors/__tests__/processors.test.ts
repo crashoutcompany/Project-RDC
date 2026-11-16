@@ -266,8 +266,20 @@ describe("Marvel Rivals", () => {
     ]);
   });
 
-  it("names no winner", () => {
-    expect(run(MR, match()).winners).toEqual([]);
+  it("names the player with the most kills as the winner", () => {
+    expect(run(MR, match()).winners).toEqual(["Dylan"]);
+  });
+
+  it("gives a tie on kills to the first row", () => {
+    const result = run(MR, solo(["Mark", { mr_kills: "9" }], ["Dylan", { mr_kills: "9" }]));
+
+    expect(result.winners).toEqual(["Mark"]);
+  });
+
+  it("only names session players", () => {
+    const result = run(MR, solo(["Mark", { mr_kills: "3" }], ["Rando", { mr_kills: "30" }]));
+
+    expect(result.winners).toEqual(["Mark"]);
   });
 
   it("asks for review when a row is not a session player", () => {
