@@ -77,16 +77,15 @@ async function EditSessionContent({
     return <div>Session not found</div>;
   }
 
-  type MemberName = FormValues["players"][number]["playerName"];
   // Collect players from every match so day winners who sat out the first
   // match still count as session players.
-  const playersById = new Map<number, Player & { playerName: MemberName }>();
+  const playersById = new Map<number, Player>();
   for (const set of session.data.sets)
     for (const match of set.matches)
       for (const { player } of match.playerSessions)
         playersById.set(player.playerId, {
           playerId: player.playerId,
-          playerName: player.playerName as MemberName,
+          playerName: player.playerName,
         });
   const players = Array.from(playersById.values());
 
@@ -110,7 +109,7 @@ async function EditSessionContent({
     players,
     dayWinners: sessionData.dayWinners.map((player) => ({
       playerId: player.playerId,
-      playerName: player.playerName as MemberName,
+      playerName: player.playerName,
     })),
     // @ts-expect-error Stat Name not conforming to player names
     sets: sessionData.sets.map((set) => ({

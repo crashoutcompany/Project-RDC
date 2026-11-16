@@ -57,18 +57,15 @@ const thumbnailSchema = z.string().trim().min(1).readonly();
 
 // ! End of Session Schema Definitions
 
+/**
+ * A reference to a player. Identity is the `playerId`; the name is carried
+ * for display. Whether a reference is allowed is decided against the
+ * session's own `players` (see `formSchema`), not a fixed list of members, so
+ * a player added from the admin page works as soon as they exist.
+ */
 export const playerSchema = z.object({
-  playerId: z.int(),
-  playerName: z.literal([
-    "Mark",
-    "Dylan",
-    "Ben",
-    "Lee",
-    "Des",
-    "John",
-    "Aff",
-    "Ipi",
-  ]),
+  playerId: z.int().positive(),
+  playerName: z.string().trim().min(1, "Player name is required"),
 });
 const playersSchema = z
   .array(playerSchema)
@@ -376,16 +373,47 @@ export const formSchema = z
     gameSessionSchema("Speedrunners"),
     gameSessionSchema("Marvel Rivals"),
   ])
+  // Everyone the session mentions must be one of its players, by playerId.
   .check((ctx) => {
-    const { players, dayWinners } = ctx.value;
-    dayWinners.forEach((winner, index) => {
-      if (!players.some((p) => p.playerId === winner.playerId))
-        ctx.issues.push({
-          code: "custom",
-          message: `${winner.playerName} is not a session player`,
-          input: winner,
-          path: ["dayWinners", index],
+    const { players, dayWinners, sets } = ctx.value;
+    const sessionPlayers = new Map(
+      players.map((player) => [player.playerId, player.playerName]),
+    );
+    const notASessionPlayer = (name: string, path: PropertyKey[]) =>
+      ctx.issues.push({
+        code: "custom",
+        message: `${name} is not a session player`,
+        input: ctx.value,
+        path,
+      });
+    // A winner must also carry the name the session knows that player by.
+    const checkWinners = (
+      winners: z.infer<typeof playerSchema>[],
+      path: PropertyKey[],
+    ) =>
+      winners.forEach((winner, index) => {
+        if (sessionPlayers.get(winner.playerId) !== winner.playerName)
+          notASessionPlayer(winner.playerName, [...path, index]);
+      });
+
+    checkWinners(dayWinners, ["dayWinners"]);
+    sets.forEach((set, setIndex) => {
+      const setPath = ["sets", setIndex];
+      checkWinners(set.setWinners, [...setPath, "setWinners"]);
+
+      set.matches.forEach((match, matchIndex) => {
+        const matchPath = [...setPath, "matches", matchIndex];
+        checkWinners(match.matchWinners, [...matchPath, "matchWinners"]);
+
+        match.playerSessions.forEach((playerSession, index) => {
+          if (!sessionPlayers.has(playerSession.playerId))
+            notASessionPlayer(playerSession.playerSessionName, [
+              ...matchPath,
+              "playerSessions",
+              index,
+            ]);
         });
+      });
     });
   });
 

@@ -109,6 +109,83 @@ describe("formSchema dayWinners", () => {
   });
 });
 
+describe("formSchema players", () => {
+  const url = `https://www.youtube.com/watch?v=${MIXED_CASE_VIDEO_ID}`;
+  // Not one of the eight original members: added later from the admin page.
+  const ZED = { playerId: 9, playerName: "Zed" };
+
+  /** The valid Call of Duty session, played and won by `player` alone. */
+  const sessionFor = (player: { playerId: number; playerName: string }) => {
+    const session = validSession(url);
+    const [set] = session.sets;
+    const [match] = set.matches;
+    return {
+      ...session,
+      players: [player],
+      dayWinners: [player],
+      sets: [
+        {
+          ...set,
+          setWinners: [player],
+          matches: [
+            {
+              matchWinners: [player],
+              playerSessions: [
+                { ...match.playerSessions[0], playerId: player.playerId, playerSessionName: player.playerName },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  const problems = (input: unknown) => {
+    const parsed = formSchema.safeParse(input);
+    return parsed.success ? [] : parsed.error.issues.map((issue) => [issue.message, issue.path]);
+  };
+
+  it("accepts a newly added player as session player, winner and stat holder", () => {
+    const parsed = formSchema.safeParse(sessionFor(ZED));
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.players).toEqual([ZED]);
+    expect(parsed.data.sets[0].matches[0].matchWinners).toEqual([ZED]);
+    expect(parsed.data.sets[0].matches[0].playerSessions[0].playerId).toBe(9);
+  });
+
+  it.each([
+    ["a missing id", { playerId: undefined, playerName: "Zed" }],
+    ["a zero id", { playerId: 0, playerName: "Zed" }],
+    ["a fractional id", { playerId: 1.5, playerName: "Zed" }],
+    ["a blank name", { playerId: 9, playerName: "  " }],
+  ])("rejects a session player with %s", (_label, player) => {
+    expect(formSchema.safeParse({ ...sessionFor(ZED), players: [player] }).success).toBe(false);
+  });
+
+  it("rejects set winners, match winners and player sessions that are not session players", () => {
+    const session = sessionFor(ZED);
+    session.players = [{ playerId: 1, playerName: "Ben" }];
+    session.dayWinners = [];
+
+    expect(problems(session)).toEqual([
+      ["Zed is not a session player", ["sets", 0, "setWinners", 0]],
+      ["Zed is not a session player", ["sets", 0, "matches", 0, "matchWinners", 0]],
+      ["Zed is not a session player", ["sets", 0, "matches", 0, "playerSessions", 0]],
+    ]);
+  });
+
+  it("matches winners to session players by id, not by name alone", () => {
+    const session = sessionFor(ZED);
+    session.sets[0].setWinners = [{ playerId: 4, playerName: "Zed" }];
+
+    expect(problems(session)).toEqual([
+      ["Zed is not a session player", ["sets", 0, "setWinners", 0]],
+    ]);
+  });
+});
+
 describe("formSchema statId", () => {
   const url = `https://www.youtube.com/watch?v=${MIXED_CASE_VIDEO_ID}`;
 
