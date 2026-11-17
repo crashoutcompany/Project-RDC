@@ -32,7 +32,11 @@ import {
   PLAYER_MAPPINGS,
   PlayerNotFoundError,
 } from "@/app/(routes)/admin/_utils/player-mappings";
-import { STAT_CONFIGS, getStatConfigByFieldKey } from "../stat-configs";
+import {
+  STAT_CONFIGS,
+  getStatConfigByFieldKey,
+  type StatConfig,
+} from "../stat-configs";
 
 type WinnerType = "TEAM" | "INDIVIDUAL";
 
@@ -329,6 +333,29 @@ export const calculateTeamWinners = (
   return [];
 };
 
+const scoreOf = (player: VisionPlayer, statName: string): number =>
+  Number(player.stats.find((s) => s.stat === statName)?.statValue);
+
+/**
+ * Unreadable vision stats are stored as `"0"`. For lowest-wins positions
+ * (MK8 place) that would crown the missing row over 1st, so drop values that
+ * are not a real finish before comparing.
+ */
+const eligibleForWinner = (
+  players: VisionPlayer[],
+  config: WinnerConfig,
+  statConfig: StatConfig | undefined,
+): VisionPlayer[] => {
+  const min = statConfig?.validationRules?.min;
+  return players.filter((player) => {
+    const n = scoreOf(player, config.winCondition.statName);
+    if (!Number.isFinite(n)) return false;
+    if (statConfig?.dataType === "position" && n <= 0) return false;
+    if (min !== undefined && n < min) return false;
+    return true;
+  });
+};
+
 // Winner calculation with stat config
 export const calculateIndividualWinner = (
   players: VisionPlayer[],
@@ -337,45 +364,32 @@ export const calculateIndividualWinner = (
   const statConfig = Object.values(STAT_CONFIGS).find(
     (s) => s.name === config.winCondition.statName,
   );
+  const eligible = eligibleForWinner(players, config, statConfig);
+  if (!eligible.length) return [];
 
-  if (players.length) {
-    if (config.winCondition.comparison === "highest") {
-      return [
-        players.reduce((winner, current) => {
-          const winnerScore = winner.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-          const currentScore = current.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
+  const statName = config.winCondition.statName;
+  if (config.winCondition.comparison === "highest") {
+    return [
+      eligible.reduce((winner, current) => {
+        const winnerScore = scoreOf(winner, statName);
+        const currentScore = scoreOf(current, statName);
+        // For position stats, lower number is better
+        if (statConfig?.dataType === "position")
+          return currentScore < winnerScore ? current : winner;
+        return currentScore > winnerScore ? current : winner;
+      }),
+    ];
+  }
 
-          // For position stats, lower number is better
-          if (statConfig?.dataType === "position") {
-            return Number(currentScore) < Number(winnerScore)
-              ? current
-              : winner;
-          }
-
-          return Number(currentScore) > Number(winnerScore) ? current : winner;
-        }),
-      ];
-    }
-
-    if (config.winCondition.comparison === "lowest") {
-      console.log("Calculating lowest winner");
-      return [
-        players.reduce((winner, current) => {
-          const winnerScore = winner.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-          const currentScore = current.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-
-          return Number(currentScore) < Number(winnerScore) ? current : winner;
-        }),
-      ];
-    }
+  if (config.winCondition.comparison === "lowest") {
+    console.log("Calculating lowest winner");
+    return [
+      eligible.reduce((winner, current) =>
+        scoreOf(current, statName) < scoreOf(winner, statName)
+          ? current
+          : winner,
+      ),
+    ];
   }
 
   return [];
