@@ -1,4 +1,3 @@
-import { PLAYER_MAPPINGS } from "@/app/(routes)/admin/_utils/player-mappings";
 import { VisionResultCodes } from "./constants";
 
 export interface VisionResult {
@@ -13,7 +12,8 @@ export type VisionTeam = {
 export interface VisionPlayer {
   playerId?: number;
   teamKey?: string;
-  name: keyof typeof PLAYER_MAPPINGS;
+  /** The session player's name; not every player has a member profile. */
+  name: string;
   // Stats captured and validated by vision processors, not DB shape
   stats: Stat[];
 }
