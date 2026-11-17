@@ -1,7 +1,6 @@
 import EntryCreatorForm from "../../../../_components/form/EntryCreatorForm";
-import { handlePrismaOperation } from "prisma/db";
-import { Player } from "@/generated/prisma/client";
-import { FormValues } from "../../../../_utils/form-helpers";
+import { getSessionById } from "prisma/lib/session";
+import { sessionToFormValues } from "../../../../_utils/session-to-form";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -32,115 +31,20 @@ async function EditSessionContent({
 }) {
   const sessionId = parseInt((await params).slug);
 
-  if (isNaN(sessionId))
-    return <div>Invalid session ID</div>;
+  if (isNaN(sessionId)) return <div>Invalid session ID</div>;
 
-  const session = await handlePrismaOperation((prisma) =>
-    prisma.session.findUnique({
-      where: { sessionId },
-      include: {
-        Game: { select: { gameName: true } },
-        sets: {
-          include: {
-            setWinners: true,
-            matches: {
-              include: {
-                matchWinners: true,
-                playerSessions: {
-                  include: {
-                    player: true,
-                    playerStats: {
-                      include: {
-                        player: true,
-                        gameStat: {
-                          select: {
-                            statName: true,
-                            statId: true,
-                            type: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        dayWinners: true,
-        mvp: true,
-      },
-    }),
-  );
+  const session = await getSessionById(sessionId);
 
   if (!session?.data) {
     return <div>Session not found</div>;
   }
 
-  // Collect players from every match so day winners who sat out the first
-  // match still count as session players.
-  const playersById = new Map<number, Player>();
-  for (const set of session.data.sets)
-    for (const match of set.matches)
-      for (const { player } of match.playerSessions)
-        playersById.set(player.playerId, {
-          playerId: player.playerId,
-          playerName: player.playerName,
-        });
-  const players = Array.from(playersById.values());
-
-  const sessionData = session.data;
-
-  const game = sessionData.Game.gameName as
-    | "Call of Duty"
-    | "Mario Kart 8"
-    | "Rocket League"
-    | "Lethal Company"
-    | "SpeedRunners"
-    | "Marvel Rivals";
-
-  const defaultValues: FormValues = {
-    game,
-    sessionId: sessionData.sessionId,
-    sessionName: sessionData.sessionName,
-    sessionUrl: sessionData.sessionUrl,
-    thumbnail: sessionData.thumbnail,
-    videoId: sessionData.videoId,
-    date: new Date(sessionData.date),
-    players,
-    dayWinners: sessionData.dayWinners.map((player) => ({
-      playerId: player.playerId,
-      playerName: player.playerName,
-    })),
-    // @ts-expect-error Stat Name not conforming to player names
-    sets: sessionData.sets.map((set) => ({
-      setId: set.setId,
-      matches: set.matches.map((match) => ({
-        matchWinners: match.matchWinners.map((player) => ({
-          playerId: player.playerId,
-          playerName: player.playerName,
-        })),
-        playerSessions: match.playerSessions.map((playerSession) => ({
-          playerId: playerSession.player.playerId,
-          playerSessionName: playerSession.player.playerName,
-          playerStats: playerSession.playerStats.map((ps) => ({
-            statId: ps.gameStat.statId,
-            stat: ps.gameStat.statName,
-            statValue: ps.value,
-          })),
-        })),
-      })),
-      setWinners: set.setWinners.map((player) => ({
-        playerId: player.playerId,
-        playerName: player.playerName,
-      })),
-    })),
-  };
+  const defaultValues = sessionToFormValues(session.data);
 
   return (
     <div data-testid="admin-edit-content">
       <EntryCreatorForm
-        rdcMembers={players}
+        rdcMembers={defaultValues.players}
         defaultValues={defaultValues}
         type="edit"
       />
