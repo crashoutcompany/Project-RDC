@@ -96,7 +96,8 @@ async function EditSessionContent({
     | "Mario Kart 8"
     | "Rocket League"
     | "Lethal Company"
-    | "Speedrunners";
+    | "SpeedRunners"
+    | "Marvel Rivals";
 
   const defaultValues: FormValues = {
     game,

@@ -8,7 +8,7 @@ const validSession = (sessionUrl: string): FormValues => ({
   game: "Call of Duty",
   sessionName: "Session Name",
   sessionUrl,
-  thumbnail: "https://example.com/thumbnail.jpg",
+  thumbnail: "https://i.ytimg.com/vi/video123456/hqdefault.jpg",
   date: new Date("2023-10-01"),
   videoId: MIXED_CASE_VIDEO_ID,
   players: [{ playerId: 1, playerName: "Ben" }],

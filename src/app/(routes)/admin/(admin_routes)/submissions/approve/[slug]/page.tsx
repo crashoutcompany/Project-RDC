@@ -58,7 +58,8 @@ const Component = async ({ params }: { params: Promise<{ slug: string }> }) => {
     | "Mario Kart 8"
     | "Rocket League"
     | "Lethal Company"
-    | "Speedrunners";
+    | "SpeedRunners"
+    | "Marvel Rivals";
 
   const defaultValues: FormValues = {
     game,

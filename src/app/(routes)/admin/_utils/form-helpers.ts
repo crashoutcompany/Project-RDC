@@ -1,4 +1,5 @@
 import { StatName } from "@/lib/stat-names";
+import { isYouTubeThumbnailUrl } from "@/lib/youtube";
 import { z } from "zod/v4";
 
 // Marvel Rivals optional stats (expandable stats that can be left empty)
@@ -53,7 +54,14 @@ const sessionUrlSchema = z
   });
 const videoIdSchema = z.string().trim().min(1).readonly();
 const dateSchema = z.date({ error: "Date is required" }).readonly();
-const thumbnailSchema = z.string().trim().min(1).readonly();
+// Pages render the thumbnail with next/image, which throws for any host that
+// isn't allowed in next.config.ts. Only YouTube's image host is.
+const thumbnailSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isYouTubeThumbnailUrl, "Thumbnail must be a YouTube image.")
+  .readonly();
 
 // ! End of Session Schema Definitions
 
@@ -85,6 +93,51 @@ const numericStatValueSchema = z
   .regex(/^\d+$/, "Stat value must be a number")
   .transform((val) => String(parseInt(val) || 0));
 
+/**
+ * The stats each game records. A session only accepts its own game's stats;
+ * the per-day counters (`*_DAY`) are never entered through the form.
+ */
+export const GAME_STATS = {
+  "Call of Duty": [
+    StatName.COD_KILLS,
+    StatName.COD_DEATHS,
+    StatName.COD_POS,
+    StatName.COD_SCORE,
+    StatName.COD_MELEES,
+  ],
+  "Rocket League": [
+    StatName.RL_GOALS,
+    StatName.RL_ASSISTS,
+    StatName.RL_SAVES,
+    StatName.RL_SHOTS,
+    StatName.RL_SCORE,
+  ],
+  "Mario Kart 8": [StatName.MK8_POS],
+  "Lethal Company": [StatName.LC_DEATHS],
+  SpeedRunners: [StatName.SR_WINS, StatName.SR_SETS, StatName.SR_POS],
+  "Marvel Rivals": [
+    StatName.MR_KILLS,
+    StatName.MR_DEATHS,
+    StatName.MR_ASSISTS,
+    StatName.MR_TRIPLE_KILL,
+    StatName.MR_QUADRA_KILL,
+    StatName.MR_PENTA_KILL,
+    StatName.MR_HEXA_KILL,
+    StatName.MR_MOST_KILLS,
+    StatName.MR_HIGHEST_DMG,
+    StatName.MR_HIGHEST_DMG_BLOCKED,
+    StatName.MR_MOST_HEALING,
+    StatName.MR_MOST_ASSISTS,
+    StatName.MR_FINAL_HITS,
+    StatName.MR_DMG,
+    StatName.MR_DMG_BLOCKED,
+    StatName.MR_HEALING,
+    StatName.MR_ACCURACY,
+  ],
+} as const satisfies Record<string, readonly [StatName, ...StatName[]]>;
+
+type GameName = keyof typeof GAME_STATS;
+
 /** A stat line for one of `stats`, with a whole-number value. */
 const numericStats = <const Stats extends readonly [StatName, ...StatName[]]>(
   stats: Stats,
@@ -95,46 +148,11 @@ const numericStats = <const Stats extends readonly [StatName, ...StatName[]]>(
     statValue: numericStatValueSchema,
   });
 
-const rocketLeagueStats = numericStats([
-  StatName.RL_GOALS,
-  StatName.RL_ASSISTS,
-  StatName.RL_SAVES,
-  StatName.RL_SHOTS,
-  StatName.RL_SCORE,
-]);
-
-const marioKart8Stats = numericStats([StatName.MK8_POS]);
-
-const codStats = numericStats([
-  StatName.COD_KILLS,
-  StatName.COD_DEATHS,
-  StatName.COD_POS,
-  StatName.COD_SCORE,
-  StatName.COD_MELEES,
-]);
-
+/** Like `numericStats`, but the medal stats may be left empty (stored as 0). */
 const marvelRivalsStats = z
   .object({
     statId: statIdSchema,
-    stat: z.literal([
-      StatName.MR_KILLS,
-      StatName.MR_DEATHS,
-      StatName.MR_ASSISTS,
-      StatName.MR_TRIPLE_KILL,
-      StatName.MR_QUADRA_KILL,
-      StatName.MR_PENTA_KILL,
-      StatName.MR_HEXA_KILL,
-      StatName.MR_MOST_KILLS,
-      StatName.MR_HIGHEST_DMG,
-      StatName.MR_HIGHEST_DMG_BLOCKED,
-      StatName.MR_MOST_HEALING,
-      StatName.MR_MOST_ASSISTS,
-      StatName.MR_FINAL_HITS,
-      StatName.MR_DMG,
-      StatName.MR_DMG_BLOCKED,
-      StatName.MR_HEALING,
-      StatName.MR_ACCURACY,
-    ]),
+    stat: z.literal(GAME_STATS["Marvel Rivals"]),
     statValue: z.string().trim(),
   })
   .superRefine((data, ctx) => {
@@ -171,11 +189,14 @@ const marvelRivalsStats = z
     statValue: String(parseInt(data.statValue) || 0),
   }));
 
-// Stat Schema Union
+// Every stat line the form knows. Which of them a session may use depends on
+// its game and is checked in `gameSessionSchema`.
 const statSchema = z.discriminatedUnion("stat", [
-  rocketLeagueStats,
-  marioKart8Stats,
-  codStats,
+  numericStats(GAME_STATS["Rocket League"]),
+  numericStats(GAME_STATS["Mario Kart 8"]),
+  numericStats(GAME_STATS["Call of Duty"]),
+  numericStats(GAME_STATS["Lethal Company"]),
+  numericStats(GAME_STATS.SpeedRunners),
   marvelRivalsStats,
 ]);
 
@@ -222,7 +243,7 @@ const baseSessionSchema = z.object({
 // Game specific rules
 
 type MatchValues = z.infer<typeof matchSchema>;
-type MatchIssue = { message: string; path?: string[] };
+type MatchIssue = { message: string; path?: PropertyKey[] };
 
 /** What is wrong with a match under one game's rules; empty when it is valid. */
 type MatchRule = (match: MatchValues) => MatchIssue[];
@@ -315,37 +336,57 @@ type GameRules = {
   matchWinnersOptional?: boolean;
 };
 
-/** Every game the form accepts, and what it requires of a match. */
-const GAME_RULES = {
+/**
+ * What each game requires of a match. Games are keyed by their name in the
+ * database, and every game in `GAME_STATS` needs an entry.
+ */
+const GAME_RULES: Record<GameName, GameRules> = {
   "Call of Duty": { matchRule: codMatchRule },
   "Rocket League": { matchRule: rocketLeagueMatchRule },
   "Mario Kart 8": { matchRule: marioKart8MatchRule },
   "Lethal Company": {},
-  Speedrunners: {},
+  SpeedRunners: {},
   "Marvel Rivals": { matchWinnersOptional: true },
-} satisfies Record<string, GameRules>;
+};
 
-type GameName = keyof typeof GAME_RULES;
+/** Flags every stat line that belongs to a different game. */
+const foreignStats = (game: GameName, match: MatchValues): MatchIssue[] => {
+  const allowed: readonly StatName[] = GAME_STATS[game];
+  return match.playerSessions.flatMap((ps, playerIndex) =>
+    ps.playerStats.flatMap(({ stat }, statIndex) =>
+      allowed.includes(stat)
+        ? []
+        : [
+            {
+              message: `${stat} is not a ${game} stat.`,
+              path: ["playerSessions", playerIndex, "playerStats", statIndex],
+            },
+          ],
+    ),
+  );
+};
 
 /** The session schema for one game: the base fields plus that game's rules. */
 const gameSessionSchema = <Game extends GameName>(game: Game) => {
-  const { matchRule, matchWinnersOptional }: GameRules = GAME_RULES[game];
+  const { matchRule, matchWinnersOptional } = GAME_RULES[game];
 
   const match = matchWinnersOptional
     ? matchSchema.extend({ matchWinners: z.array(playerSchema) })
     : matchSchema;
-  const checkedMatch = matchRule
-    ? match.check((ctx) => {
-        // Zod prepends the parent path in place, so each issue gets its own.
-        for (const { message, path } of matchRule(ctx.value))
-          ctx.issues.push({
-            code: "custom",
-            input: ctx.value,
-            message,
-            ...(path && { path: [...path] }),
-          });
-      })
-    : match;
+  const checkedMatch = match.check((ctx) => {
+    const issues = [
+      ...foreignStats(game, ctx.value),
+      ...(matchRule?.(ctx.value) ?? []),
+    ];
+    // Zod prepends the parent path in place, so each issue gets its own.
+    for (const { message, path } of issues)
+      ctx.issues.push({
+        code: "custom",
+        input: ctx.value,
+        message,
+        ...(path && { path: [...path] }),
+      });
+  });
 
   return baseSessionSchema.extend({
     game: z.literal(game),
@@ -370,7 +411,7 @@ export const formSchema = z
     gameSessionSchema("Rocket League"),
     gameSessionSchema("Mario Kart 8"),
     gameSessionSchema("Lethal Company"),
-    gameSessionSchema("Speedrunners"),
+    gameSessionSchema("SpeedRunners"),
     gameSessionSchema("Marvel Rivals"),
   ])
   // Everyone the session mentions must be one of its players, by playerId.

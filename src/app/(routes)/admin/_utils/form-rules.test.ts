@@ -1,4 +1,5 @@
-import { formSchema, type FormValues } from "./form-helpers";
+import { formSchema, GAME_STATS, type FormValues } from "./form-helpers";
+import { STAT_CONFIGS, statRollup } from "@/lib/stat-configs";
 import { StatName } from "@/lib/stat-names";
 
 const MARK = { playerId: 1, playerName: "Mark" } as const;
@@ -147,8 +148,11 @@ describe("Rocket League match rules", () => {
 });
 
 describe("games without match rules", () => {
-  it.each(["Lethal Company", "Speedrunners"])("%s accepts any winner but requires one", (game) => {
-    const match: Match = { matchWinners: [DYLAN], playerSessions: [plays(MARK, { COD_SCORE: "5" })] };
+  it.each([
+    ["Lethal Company", { LC_DEATHS: "2" }],
+    ["SpeedRunners", { SR_WINS: "3", SR_SETS: "1", SR_POS: "2" }],
+  ] as [string, StatLine][])("%s accepts its own stats and any winner, but requires one", (game, stats) => {
+    const match: Match = { matchWinners: [DYLAN], playerSessions: [plays(MARK, stats)] };
 
     expect(problems(session(game, match))).toEqual([]);
     expect(problems(session(game, { ...match, matchWinners: [] }))).toEqual([
@@ -162,39 +166,101 @@ describe("games without match rules", () => {
     expect(problems(session("Marvel Rivals", match))).toEqual([]);
   });
 
-  it("rejects a game the form does not know", () => {
-    const match: Match = { matchWinners: [MARK], playerSessions: [plays(MARK, { COD_SCORE: "5" })] };
+  it.each(["Golf With Friends", "Speedrunners"])("rejects %s, which is not a game's name in the database", (game) => {
+    const match: Match = { matchWinners: [MARK], playerSessions: [plays(MARK, { SR_WINS: "5" })] };
 
-    expect(problems(session("Golf With Friends", match))).not.toEqual([]);
+    expect(problems(session(game, match))).not.toEqual([]);
+  });
+});
+
+describe("a session only records its own game's stats", () => {
+  const PLAYER_PATH = [...MATCH_PATH, "playerSessions", 0, "playerStats"];
+  const check = (game: string, stats: StatLine) =>
+    problems(session(game, { matchWinners: [MARK], playerSessions: [plays(MARK, stats)] }));
+
+  it.each([
+    ["Call of Duty", "RL_GOALS"],
+    ["Rocket League", "MK8_POS"],
+    ["Mario Kart 8", "COD_KILLS"],
+    ["Lethal Company", "SR_WINS"],
+    ["SpeedRunners", "LC_DEATHS"],
+    ["Marvel Rivals", "COD_SCORE"],
+  ] as [string, StatName][])("%s rejects %s", (game, stat) => {
+    expect(check(game, { [stat]: "1" })).toContainEqual([
+      `${stat} is not a ${game} stat.`,
+      [...PLAYER_PATH, 0],
+    ]);
+  });
+
+  it("points at each stat line that does not belong", () => {
+    const stats = { MR_KILLS: "4", RL_SAVES: "1", MR_DEATHS: "2", COD_POS: "1" };
+
+    expect(check("Marvel Rivals", stats)).toEqual([
+      ["RL_SAVES is not a Marvel Rivals stat.", [...PLAYER_PATH, 1]],
+      ["COD_POS is not a Marvel Rivals stat.", [...PLAYER_PATH, 3]],
+    ]);
+  });
+
+  it("lists the same stats per game as the stat configs, without the per-day counters", () => {
+    const GAME_IDS: Record<keyof typeof GAME_STATS, number> = {
+      "Mario Kart 8": 1,
+      "Rocket League": 2,
+      "Call of Duty": 3,
+      "Lethal Company": 4,
+      SpeedRunners: 5,
+      "Marvel Rivals": 6,
+    };
+
+    for (const [game, gameId] of Object.entries(GAME_IDS)) {
+      const configured = Object.values(STAT_CONFIGS)
+        .filter((config) => config.gameId === gameId && statRollup(config) !== "skip")
+        .map((config) => config.name);
+
+      expect([...GAME_STATS[game as keyof typeof GAME_STATS]].sort(), game).toEqual(configured.sort());
+    }
   });
 });
 
 describe("stat values", () => {
   const STAT_PATH = [...MATCH_PATH, "playerSessions", 0, "playerStats", 0, "statValue"];
-  const check = (game: string, stats: StatLine) =>
-    problems(session(game, { matchWinners: [], playerSessions: [plays(MARK, stats)] }));
-  const parsedValue = (game: string, stats: StatLine) => {
-    const parsed = formSchema.parse(session(game, { matchWinners: [], playerSessions: [plays(MARK, stats)] }));
-    return parsed.sets[0].matches[0].playerSessions[0].playerStats[0].statValue;
+
+  /** A match that is valid for the stat's game whatever the stat under test holds. */
+  const CASES: Record<string, { game: string; rest: StatLine; winners: Player[] }> = {
+    RL_SAVES: { game: "Rocket League", rest: { RL_GOALS: "1" }, winners: [MARK] },
+    MK8_POS: { game: "Mario Kart 8", rest: {}, winners: [MARK] },
+    COD_KILLS: { game: "Call of Duty", rest: { COD_SCORE: "9", COD_POS: "1" }, winners: [MARK] },
+    LC_DEATHS: { game: "Lethal Company", rest: {}, winners: [MARK] },
+    SR_SETS: { game: "SpeedRunners", rest: {}, winners: [MARK] },
+    MR_KILLS: { game: "Marvel Rivals", rest: {}, winners: [] },
+    MR_TRIPLE_KILL: { game: "Marvel Rivals", rest: {}, winners: [] },
   };
+  const input = (stat: string, value: string) => {
+    const { game, rest, winners } = CASES[stat];
+    // The stat under test is listed first, so it is playerStats[0].
+    return session(game, {
+      matchWinners: winners,
+      playerSessions: [plays(MARK, { [stat]: value, ...rest } as StatLine)],
+    });
+  };
+  /** Problems reported on the stat's value, ignoring any match rule it trips. */
+  const valueProblems = (stat: string, value: string) =>
+    problems(input(stat, value)).filter(([, path]) => String(path) === String(STAT_PATH));
+  const parsedValue = (stat: string, value: string) =>
+    formSchema.parse(input(stat, value)).sets[0].matches[0].playerSessions[0].playerStats[0].statValue;
 
-  // Each stat goes in a Marvel Rivals session: that game has no match rules
-  // and stats are not tied to the session's game, so only the value is checked.
-  it.each([
-    ["Rocket League", StatName.RL_SAVES],
-    ["Mario Kart 8", StatName.MK8_POS],
-    ["Call of Duty", StatName.COD_KILLS],
-    ["Marvel Rivals", StatName.MR_KILLS],
-  ])("%s stats must be whole numbers", (_game, stat) => {
-    expect(check("Marvel Rivals", { [stat]: "1.5" })).toEqual([["Stat value must be a number", STAT_PATH]]);
-    expect(check("Marvel Rivals", { [stat]: "twelve" })).toEqual([["Stat value must be a number", STAT_PATH]]);
-    expect(parsedValue("Marvel Rivals", { [stat]: " 007 " })).toBe("7");
-  });
+  it.each(["RL_SAVES", "MK8_POS", "COD_KILLS", "LC_DEATHS", "SR_SETS", "MR_KILLS"])(
+    "%s must be a whole number",
+    (stat) => {
+      expect(valueProblems(stat, "1.5")).toEqual([["Stat value must be a number", STAT_PATH]]);
+      expect(valueProblems(stat, "twelve")).toEqual([["Stat value must be a number", STAT_PATH]]);
+      expect(parsedValue(stat, " 001 ")).toBe("1");
+    },
+  );
 
-  it.each([StatName.RL_SAVES, StatName.MK8_POS, StatName.COD_KILLS])(
+  it.each(["RL_SAVES", "MK8_POS", "COD_KILLS", "LC_DEATHS", "SR_SETS"])(
     "an empty %s is required (and also reported as not a number)",
     (stat) => {
-      expect(check("Marvel Rivals", { [stat]: "  " })).toEqual([
+      expect(valueProblems(stat, "  ")).toEqual([
         ["Required", STAT_PATH],
         ["Stat value must be a number", STAT_PATH],
       ]);
@@ -202,23 +268,53 @@ describe("stat values", () => {
   );
 
   it("an empty required Marvel Rivals stat is required", () => {
-    expect(check("Marvel Rivals", { MR_KILLS: "" })).toEqual([["Required", STAT_PATH]]);
+    expect(valueProblems("MR_KILLS", "")).toEqual([["Required", STAT_PATH]]);
   });
 
   it("lets a Marvel Rivals medal stat be left empty, stored as 0", () => {
-    expect(parsedValue("Marvel Rivals", { MR_TRIPLE_KILL: "" })).toBe("0");
-    expect(check("Marvel Rivals", { MR_TRIPLE_KILL: "many" })).toEqual([
+    expect(parsedValue("MR_TRIPLE_KILL", "")).toBe("0");
+    expect(valueProblems("MR_TRIPLE_KILL", "many")).toEqual([
       ["Stat value must be a number", STAT_PATH],
     ]);
   });
 
-  it("rejects a stat the form does not know", () => {
-    expect(check("Marvel Rivals", { RL_DAY: "1" } as StatLine)).not.toEqual([]);
+  it("rejects a per-day counter, which the form never records", () => {
+    const withDay = session("Rocket League", {
+      matchWinners: [MARK],
+      playerSessions: [plays(MARK, { RL_GOALS: "1", RL_DAY: "1" } as StatLine)],
+    });
+
+    expect(problems(withDay)).not.toEqual([]);
   });
 
   it("requires at least one stat per player", () => {
-    expect(check("Marvel Rivals", {})).toEqual([
+    const empty = session("Marvel Rivals", { matchWinners: [], playerSessions: [plays(MARK, {})] });
+
+    expect(problems(empty)).toEqual([
       ["At least one player stat is required", [...MATCH_PATH, "playerSessions", 0, "playerStats"]],
+    ]);
+  });
+});
+
+describe("thumbnail", () => {
+  const withThumbnail = (thumbnail: string) => ({
+    ...session("Marvel Rivals", { matchWinners: [], playerSessions: [plays(MARK, { MR_KILLS: "1" })] }),
+    thumbnail,
+  });
+
+  it("accepts a YouTube thumbnail", () => {
+    expect(problems(withThumbnail("https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"))).toEqual([]);
+  });
+
+  // next/image throws while rendering any host that next.config.ts doesn't allow.
+  it.each([
+    ["another host", "https://example.com/thumbnail.jpg"],
+    ["a lookalike host", "https://i.ytimg.com.evil.test/vi/x/hqdefault.jpg"],
+    ["plain http", "http://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"],
+    ["something that is not a URL", "thumbnail.jpg"],
+  ])("rejects %s", (_label, thumbnail) => {
+    expect(problems(withThumbnail(thumbnail))).toEqual([
+      ["Thumbnail must be a YouTube image.", ["thumbnail"]],
     ]);
   });
 });
