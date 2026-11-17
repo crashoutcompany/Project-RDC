@@ -23,7 +23,7 @@ import Image from "next/image";
 import { VisionResultCodes } from "@/lib/constants";
 import { toast } from "sonner";
 import { handleAnalyzeBtnClick } from "../../_utils/rdc-vision-helpers";
-import { VisionPlayer, VisionResult } from "@/lib/visionTypes";
+import { VisionResult } from "@/lib/visionTypes";
 import { z } from "zod/v4";
 import { ScrollArea } from "@/components/ui/scroll-area";
 

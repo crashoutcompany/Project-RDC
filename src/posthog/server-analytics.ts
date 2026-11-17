@@ -11,7 +11,7 @@ import { PostHogEvents } from "@/posthog/events";
 const getSession = async () => {
   try {
     return await getRscSession();
-  } catch (e) {
+  } catch {
     return null;
   }
 };
