@@ -58,7 +58,6 @@ const PlayerSessionManager = (props: Props) => {
     return field.playerSessionName ?? "";
   };
 
-  console.log("PlayerSessionManager Fields: ", fields);
 
   // TODO Continue working on responsive design
   return (
