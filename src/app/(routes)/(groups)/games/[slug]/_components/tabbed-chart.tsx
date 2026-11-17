@@ -50,7 +50,6 @@ export const TabbedChart = ({
   gameName: string;
 }) => {
   const [activeChart, setActiveChart] = useState("matchWins");
-  // TODO Set up days won
   return (
     <Card style={{ minWidth: "100%" }}>
       <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 sm:flex-row">

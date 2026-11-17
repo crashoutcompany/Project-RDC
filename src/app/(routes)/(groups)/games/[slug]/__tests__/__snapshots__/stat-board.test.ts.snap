@@ -1,0 +1,549 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`game stat boards > callofduty > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "kills.sum",
+      "description": "Kills all time",
+      "label": "Total Kills",
+      "title": "Kills Per Player",
+    },
+    {
+      "dataKey": "deaths.sum",
+      "description": "Deaths all time",
+      "label": "Total Deaths",
+      "title": "Deaths Per Player",
+    },
+    {
+      "dataKey": "score.avg",
+      "description": "Average Score",
+      "label": "Avg Score",
+      "title": "Average Score",
+    },
+    {
+      "dataKey": "pos.avg",
+      "description": "Average Position",
+      "label": "Avg Position",
+      "title": "Average Position",
+    },
+    {
+      "dataKey": "melees.sum",
+      "description": "Melees all time",
+      "label": "Total Melees",
+      "title": "Melees Per Player",
+    },
+  ],
+  "rows": [
+    {
+      "deaths": {
+        "avg": 6,
+        "sum": 12,
+      },
+      "kills": {
+        "avg": 15,
+        "sum": 30,
+      },
+      "melees": {
+        "avg": 1,
+        "sum": 2,
+      },
+      "playerId": 1,
+      "playerName": "Mark",
+      "pos": {
+        "avg": 2,
+        "sum": 4,
+      },
+      "score": {
+        "avg": 1500,
+        "sum": 3000,
+      },
+    },
+    {
+      "deaths": {
+        "avg": 9,
+        "sum": 9,
+      },
+      "kills": {
+        "avg": 7,
+        "sum": 7,
+      },
+      "melees": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "playerId": 2,
+      "playerName": "Dylan",
+      "pos": {
+        "avg": 2,
+        "sum": 2,
+      },
+      "score": {
+        "avg": 900,
+        "sum": 900,
+      },
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Matches won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Call of Duty",
+    },
+  ],
+}
+`;
+
+exports[`game stat boards > lethalcompany > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "deaths.sum",
+      "description": "Deaths all time",
+      "label": "Total Deaths",
+      "title": "Deaths Per Player",
+    },
+  ],
+  "rows": [
+    {
+      "deaths": {
+        "avg": 2.5,
+        "sum": 5,
+      },
+      "playerId": 1,
+      "playerName": "Mark",
+    },
+    {
+      "deaths": {
+        "avg": 1,
+        "sum": 1,
+      },
+      "playerId": 3,
+      "playerName": "Ben",
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Matches won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Lethal Company",
+    },
+  ],
+}
+`;
+
+exports[`game stat boards > mariokart8 > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "pos.avg",
+      "description": "Average race position all time",
+      "label": "Avg Position",
+      "title": "Average Position",
+    },
+  ],
+  "rows": [
+    {
+      "playerId": 1,
+      "playerName": "Mark",
+      "pos": {
+        "avg": 2.3333333333333335,
+        "sum": 7,
+      },
+    },
+    {
+      "playerId": 2,
+      "playerName": "Dylan",
+      "pos": {
+        "avg": 3,
+        "sum": 6,
+      },
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Races won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Mario Kart 8",
+    },
+  ],
+}
+`;
+
+exports[`game stat boards > marvelrivals > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "kills.sum",
+      "description": "Kills all time",
+      "label": "Total Kills",
+      "title": "Kills Per Player",
+    },
+    {
+      "dataKey": "deaths.sum",
+      "description": "Deaths all time",
+      "label": "Total Deaths",
+      "title": "Deaths Per Player",
+    },
+    {
+      "dataKey": "assists.sum",
+      "description": "Assists all time",
+      "label": "Total Assists",
+      "title": "Assists Per Player",
+    },
+    {
+      "dataKey": "kd",
+      "description": "Total kills divided by total deaths",
+      "label": "K/D",
+      "title": "K/D Ratio",
+    },
+    {
+      "dataKey": "dmg.sum",
+      "description": "Damage dealt all time",
+      "label": "Total Damage",
+      "title": "Damage Per Player",
+    },
+    {
+      "dataKey": "dmg_blocked.sum",
+      "description": "Damage blocked all time",
+      "label": "Total Damage Blocked",
+      "title": "Damage Blocked Per Player",
+    },
+    {
+      "dataKey": "healing.sum",
+      "description": "Healing done all time",
+      "label": "Total Healing",
+      "title": "Healing Per Player",
+    },
+    {
+      "dataKey": "multiKills.sum",
+      "description": "Triple, quadra, penta and hexa kills all time",
+      "label": "Multi-kills",
+      "title": "Multi-kills Per Player",
+    },
+  ],
+  "rows": [
+    {
+      "assists": {
+        "avg": 3,
+        "sum": 6,
+      },
+      "deaths": {
+        "avg": 5,
+        "sum": 10,
+      },
+      "dmg": {
+        "avg": 6000,
+        "sum": 12000,
+      },
+      "dmg_blocked": {
+        "avg": 100,
+        "sum": 100,
+      },
+      "healing": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "kd": 2.5,
+      "kills": {
+        "avg": 12.5,
+        "sum": 25,
+      },
+      "multiKills": {
+        "sum": 3,
+      },
+      "playerId": 1,
+      "playerName": "Mark",
+    },
+    {
+      "assists": {
+        "avg": 2,
+        "sum": 2,
+      },
+      "deaths": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "dmg": {
+        "avg": 300,
+        "sum": 300,
+      },
+      "dmg_blocked": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "healing": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "kd": 0,
+      "kills": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "multiKills": {
+        "sum": 0,
+      },
+      "playerId": 2,
+      "playerName": "Dylan",
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Matches won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Marvel Rivals",
+    },
+  ],
+}
+`;
+
+exports[`game stat boards > rocketleague > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "goals.sum",
+      "description": "Goals scored all time",
+      "label": "Total Goals",
+      "title": "Goals Per Player",
+    },
+    {
+      "dataKey": "saves.sum",
+      "description": "Shots saved all time",
+      "label": "Total Saves",
+      "title": "Saves Per Player",
+    },
+    {
+      "dataKey": "assists.sum",
+      "description": "All time Assists",
+      "label": "Total Assists",
+      "title": "Assists All Time",
+    },
+    {
+      "dataKey": "score.avg",
+      "description": "Average Score",
+      "label": "Avg Score",
+      "title": "Average Score",
+    },
+  ],
+  "rows": [
+    {
+      "assists": {
+        "avg": 1,
+        "sum": 3,
+      },
+      "goals": {
+        "avg": 2,
+        "sum": 6,
+      },
+      "playerId": 1,
+      "playerName": "Mark",
+      "saves": {
+        "avg": 3,
+        "sum": 9,
+      },
+      "score": {
+        "avg": 481,
+        "sum": 1443,
+      },
+    },
+    {
+      "assists": {
+        "avg": 3,
+        "sum": 3,
+      },
+      "goals": {
+        "avg": 0,
+        "sum": 0,
+      },
+      "playerId": 2,
+      "playerName": "Dylan",
+      "saves": {
+        "avg": 2,
+        "sum": 2,
+      },
+      "score": {
+        "avg": 250,
+        "sum": 250,
+      },
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Matches won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Rocket League",
+    },
+  ],
+}
+`;
+
+exports[`game stat boards > speedrunners > charts the same rows and labels 1`] = `
+{
+  "charts": [
+    {
+      "dataKey": "wins.sum",
+      "description": "Wins all time",
+      "label": "Total Wins",
+      "title": "Wins Per Player",
+    },
+    {
+      "dataKey": "sets.sum",
+      "description": "Sets all time",
+      "label": "Total Sets",
+      "title": "Sets Per Player",
+    },
+    {
+      "dataKey": "pos.avg",
+      "description": "Average Position",
+      "label": "Avg Position",
+      "title": "Average Position",
+    },
+  ],
+  "rows": [
+    {
+      "playerId": 1,
+      "playerName": "Mark",
+      "pos": {
+        "avg": 1.5,
+        "sum": 3,
+      },
+      "sets": {
+        "avg": 2,
+        "sum": 2,
+      },
+      "wins": {
+        "avg": 3,
+        "sum": 3,
+      },
+    },
+  ],
+  "text": [],
+  "wins": [
+    {
+      "chartConfig": {
+        "days": {
+          "label": "Days won",
+        },
+        "matchWins": {
+          "label": "Races won",
+        },
+        "player": {
+          "label": "Player",
+        },
+        "setWins": {
+          "label": "Sets won",
+        },
+      },
+      "chartData": [
+        {
+          "matchWins": 3,
+          "player": "Mark",
+          "setWins": 1,
+        },
+      ],
+      "gameName": "Speedrunners",
+    },
+  ],
+}
+`;
