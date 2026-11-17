@@ -1,4 +1,5 @@
 import { STAT_CONFIGS, type StatConfig } from "@/lib/stat-configs";
+import { GAME_REGISTRY, GamesEnum } from "@/lib/games";
 import type { StatName } from "@/lib/stat-names";
 
 /**
@@ -25,13 +26,17 @@ export interface GameSpec {
   finderQuestion: string;
 }
 
+/** The fields a reader spec shares with the game registry. */
+const identity = (slug: GamesEnum) => {
+  const { name, gameId, teams } = GAME_REGISTRY[slug];
+  return { displayName: name, gameId, teams };
+};
+
 export const GAMES: Record<string, GameSpec> = {
   "rocket-league": {
     id: "rocket-league",
-    displayName: "Rocket League",
-    gameId: 2,
+    ...identity(GamesEnum.RocketLeague),
     screenStats: ["rl_score", "rl_goals", "rl_assists", "rl_saves", "rl_shots"],
-    teams: true,
     teamFields: { BLUE: "BluePlayers", ORANGE: "OrangePlayers" },
     winner: { by: "team-label" },
     screen:
@@ -44,10 +49,8 @@ export const GAMES: Record<string, GameSpec> = {
   },
   "mario-kart-8": {
     id: "mario-kart-8",
-    displayName: "Mario Kart 8",
-    gameId: 1,
+    ...identity(GamesEnum.MarioKart8),
     screenStats: ["mk8_place"],
-    teams: false,
     winner: { by: "lowest", stat: "MK8_POS" },
     screen:
       "After each race a results panel (often in the top-right corner, over the course) lists every racer in finishing order. " +

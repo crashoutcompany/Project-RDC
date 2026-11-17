@@ -4,7 +4,7 @@ import DocumentIntelligence, {
   isUnexpected,
 } from "@azure-rest/ai-document-intelligence";
 import { Player } from "@/generated/prisma/client";
-import { GAME_CONFIGS } from "@/lib/constants";
+import { gameById } from "@/lib/games";
 import { getGameProcessorSpec } from "@/lib/game-processors/game-specs";
 import {
   processGameScoreboard,
@@ -33,12 +33,11 @@ export async function extractWithAzure(args: {
   gameId: number;
 }): Promise<ScoreboardFields | null> {
   const { client, base64Source, gameId } = args;
-  const gameConfig = GAME_CONFIGS[gameId];
-  if (!gameConfig)
-    throw new Error(`Game config not found for gameId: ${gameId}`);
+  const game = gameById(gameId);
+  if (!game) throw new Error(`Game config not found for gameId: ${gameId}`);
 
   const response = await client
-    .path("/documentModels/{modelId}:analyze", gameConfig.modelId)
+    .path("/documentModels/{modelId}:analyze", game.azureModelId)
     .post({
       contentType: "application/json",
       body: { base64Source },
@@ -57,7 +56,7 @@ export async function extractWithAzure(args: {
   if (!analyzedPlayers)
     throw new Error("Vision Analysis Player Results are undefined");
 
-  if (gameConfig.type === "TEAM")
+  if (game.teams)
     return Object.entries(analyzedPlayers).map(([teamName, teamData]) => ({
       teamName,
       players: teamData as unknown as AnalyzedPlayersObj,

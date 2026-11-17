@@ -1,3 +1,4 @@
+import { gameSlug } from "./games";
 import { STAT_CONFIGS, statRollup, type StatConfig } from "./stat-configs";
 
 export type SessionRef = {
@@ -52,8 +53,7 @@ const CONFIG_BY_NAME = new Map<string, StatConfig>(
   Object.values(STAT_CONFIGS).map((c) => [c.name, c]),
 );
 
-export const gameSlug = (gameName: string) =>
-  gameName.replace(/\s/g, "").toLowerCase();
+export { gameSlug };
 
 const toNumber = (value: string) => {
   const trimmed = value.trim();

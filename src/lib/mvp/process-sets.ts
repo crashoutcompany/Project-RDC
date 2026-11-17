@@ -3,6 +3,7 @@
  * the MVP model reads. Shared by the admin card (client) and the server-side
  * MVP generator, so this module must stay free of React and server-only imports.
  */
+import type { GameName } from "@/lib/games";
 
 type GameSet = {
   setWinners: { playerName: string }[];
@@ -187,4 +188,7 @@ export const getSetsData = (
 };
 
 /** Games `getSetsData` can summarise; MVPs are only generated for these. */
-export const MVP_GAMES = ["Rocket League", "Mario Kart 8"] as const;
+export const MVP_GAMES = [
+  "Rocket League",
+  "Mario Kart 8",
+] as const satisfies readonly GameName[];

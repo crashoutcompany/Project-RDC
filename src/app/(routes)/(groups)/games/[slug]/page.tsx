@@ -5,7 +5,7 @@ import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { StatBoard } from "./_components/stat-board";
 import { STAT_BOARDS } from "./_helpers/stat-board";
-import { gameImages, GamesEnum } from "@/lib/constants";
+import { gameImages, gameSlug, GamesEnum } from "@/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
 import { calcWinsPerPlayer } from "./_helpers/stats";
@@ -34,7 +34,7 @@ export async function generateMetadata({
     return { title: "Games | RDC Stats Tracker" };
 
   const game = games.data.find(
-    (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
+    (g) => gameSlug(g.gameName) === slug,
   );
   if (!game) return { title: "Game not found | RDC Stats Tracker" };
 
@@ -51,7 +51,7 @@ export async function generateStaticParams() {
     return [{ slug: "__placeholder__" }];
 
   return games.data.map((game) => ({
-    slug: game.gameName.replace(/\s/g, "").toLowerCase(),
+    slug: gameSlug(game.gameName),
   }));
 }
 
@@ -90,7 +90,7 @@ async function GameDetailContent({
     return <NoGames />;
 
   const game = games.data.find(
-    (g) => g.gameName.replace(/\s/g, "").toLowerCase() === slug,
+    (g) => gameSlug(g.gameName) === slug,
   );
   if (!game) notFound();
 

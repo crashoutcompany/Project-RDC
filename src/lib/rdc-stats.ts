@@ -4,7 +4,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { getAllGames } from "prisma/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { getAllSessionsByGame } from "prisma/lib/admin";
-import { gameImages, GamesEnum } from "@/lib/constants";
+import { GAME_LIST, gameImages, gameSlug, GamesEnum } from "@/lib/games";
 import { getFighterArt, ROSTER_ORDER, type FighterArt } from "@/lib/fighters";
 import { formatSessionDate } from "@/lib/utils";
 import { ARENAS_TAG } from "@/lib/revalidate";
@@ -57,19 +57,12 @@ export type SorryEntry = {
   fill: number;
 };
 
-const ARENA_ORDER = [
-  GamesEnum.MarioKart8,
-  GamesEnum.RocketLeague,
-  GamesEnum.CallOfDuty,
-  GamesEnum.LethalCompany,
-  GamesEnum.SpeedRunners,
-  GamesEnum.MarvelRivals,
-];
+const ARENA_ORDER = GAME_LIST.map((game) => game.slug);
 
 /** The arena that drives home-page HP bars and the "latest champion". */
 export const FEATURED_ARENA = GamesEnum.MarioKart8;
 
-export const toSlug = (name: string) => name.replace(/\s/g, "").toLowerCase();
+export const toSlug = gameSlug;
 
 export const formatDate = (date: Date) => formatSessionDate(date);
 

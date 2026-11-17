@@ -1,5 +1,5 @@
 import type { VisionPlayer } from "@/lib/visionTypes";
-import { RL_TEAM_MAPPING } from "../constants";
+import { GAME_REGISTRY, GamesEnum } from "../games";
 import { getStatConfigByFieldKey } from "../stat-configs";
 import type { StatName } from "../stat-names";
 import type { StatCheck } from "./game-processor-utils";
@@ -82,42 +82,52 @@ const rankByCodScore = (players: VisionPlayer[]): VisionPlayer[] => {
     });
 };
 
-export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = [
-  {
-    gameId: 1,
-    name: "Mario Kart 8",
-    input: { layout: "solo" },
+/** What a game adds to its registry entry; identity and layout come from there. */
+type GameProcessing = Omit<GameProcessorSpec, "gameId" | "name" | "input"> & {
+  /** For team games: the reader's field for each team. Other fields are ignored. */
+  teamFields?: readonly string[];
+};
+
+/** Games with no entry here have no processor, so their imports fail. */
+const PROCESSING: Partial<Record<GamesEnum, GameProcessing>> = {
+  [GamesEnum.MarioKart8]: {
     correctStat: correctMarioKartPlace,
     winner: { by: "lowest", stat: "MK8_POS" },
   },
-  {
-    gameId: 2,
-    name: "Rocket League",
-    input: {
-      layout: "teams",
-      teams: Object.keys(RL_TEAM_MAPPING),
-      statPrefix: "rl",
-    },
+  [GamesEnum.RocketLeague]: {
+    teamFields: ["BluePlayers", "OrangePlayers"],
     winner: { by: "team-total", stat: "RL_GOALS" },
   },
-  {
-    gameId: 3,
-    name: "Call of Duty",
-    input: { layout: "solo" },
+  [GamesEnum.CallOfDuty]: {
     finalize: rankByCodScore,
     winner: { by: "highest", stat: "COD_SCORE" },
   },
-  {
-    gameId: 6,
-    name: "Marvel Rivals",
-    input: { layout: "solo" },
+  [GamesEnum.MarvelRivals]: {
     reviewEmptyRead: true,
     // The scoreboard doesn't show which side won, so the import proposes the
     // top fragger. The form allows no winner for this game, so an admin can
     // clear it (e.g. when the whole squad lost).
     winner: { by: "highest", stat: "MR_KILLS" },
   },
-];
+};
+
+export const GAME_PROCESSOR_SPECS: GameProcessorSpec[] = Object.entries(
+  PROCESSING,
+).map(([slug, { teamFields, ...spec }]) => {
+  const game = GAME_REGISTRY[slug as GamesEnum];
+  return {
+    ...spec,
+    gameId: game.gameId,
+    name: game.name,
+    input: game.teams
+      ? {
+          layout: "teams",
+          teams: teamFields ?? [],
+          statPrefix: game.statPrefix.toLowerCase(),
+        }
+      : { layout: "solo" },
+  };
+});
 
 /** The spec for a games.game_id. Throws for a game with no processor. */
 export function getGameProcessorSpec(gameId: number): GameProcessorSpec {
