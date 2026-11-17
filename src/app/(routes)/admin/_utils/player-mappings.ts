@@ -1,6 +1,3 @@
-import z from "zod";
-import { playerSchema } from "./form-helpers";
-
 export class PlayerNotFoundError extends Error {
   constructor(playerName: string) {
     super(`Player not found: ${playerName}`);
@@ -8,8 +5,16 @@ export class PlayerNotFoundError extends Error {
   }
 }
 
+/**
+ * Members with a profile: avatar, gamertags for scoreboard imports, nav copy.
+ * This is not the list of valid players (that is the database); a player
+ * added from the admin page has no profile until they are listed here.
+ */
+export type MemberName =
+  "Mark" | "Dylan" | "Ben" | "Lee" | "Des" | "John" | "Aff" | "Ipi";
+
 type PlayerMapping = {
-  [key in z.infer<typeof playerSchema>["playerName"]]: {
+  [key in MemberName]: {
     playerId: number;
     playerName: string;
     aliases: string[];

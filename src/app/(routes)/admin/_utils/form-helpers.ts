@@ -1,4 +1,5 @@
 import { StatName } from "@/lib/stat-names";
+import { isYouTubeThumbnailUrl } from "@/lib/youtube";
 import { z } from "zod/v4";
 
 // Marvel Rivals optional stats (expandable stats that can be left empty)
@@ -15,17 +16,6 @@ const MARVEL_RIVALS_OPTIONAL_STATS = [
 
 // Session Schema Definitions
 const sessionIdSchema = z.number().optional();
-const gameSchema = z.union([
-  z.literal([
-    "Rocket League",
-    "Call of Duty",
-    "Mario Kart 8",
-    "Lethal Company",
-    "Speedrunners",
-    "Marvel Rivals",
-  ]),
-  z.string().min(1, "Game is required"),
-]);
 const sessionNameSchema = z
   .string()
   .trim()
@@ -48,10 +38,7 @@ const sessionUrlSchema = z
     try {
       const parsed = new URL(ctx.value);
       const host = parsed.hostname.toLowerCase();
-      if (
-        parsed.protocol !== "https:" ||
-        !YOUTUBE_WATCH_HOSTS.has(host)
-      )
+      if (parsed.protocol !== "https:" || !YOUTUBE_WATCH_HOSTS.has(host))
         ctx.issues.push({
           code: "custom",
           input: ctx.value,
@@ -67,22 +54,26 @@ const sessionUrlSchema = z
   });
 const videoIdSchema = z.string().trim().min(1).readonly();
 const dateSchema = z.date({ error: "Date is required" }).readonly();
-const thumbnailSchema = z.string().trim().min(1).readonly();
+// Pages render the thumbnail with next/image, which throws for any host that
+// isn't allowed in next.config.ts. Only YouTube's image host is.
+const thumbnailSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isYouTubeThumbnailUrl, "Thumbnail must be a YouTube image.")
+  .readonly();
 
 // ! End of Session Schema Definitions
 
+/**
+ * A reference to a player. Identity is the `playerId`; the name is carried
+ * for display. Whether a reference is allowed is decided against the
+ * session's own `players` (see `formSchema`), not a fixed list of members, so
+ * a player added from the admin page works as soon as they exist.
+ */
 export const playerSchema = z.object({
-  playerId: z.int(),
-  playerName: z.literal([
-    "Mark",
-    "Dylan",
-    "Ben",
-    "Lee",
-    "Des",
-    "John",
-    "Aff",
-    "Ipi",
-  ]),
+  playerId: z.int().positive(),
+  playerName: z.string().trim().min(1, "Player name is required"),
 });
 const playersSchema = z
   .array(playerSchema)
@@ -94,80 +85,74 @@ const playersSchema = z
 // historically stringified them. Coerce so neither path fails validation.
 const statIdSchema = z.coerce.number().int().min(1, "StatId is required");
 
-// ? Rocket League
-const rocketLeagueStats = z.object({
-  statId: statIdSchema,
-  stat: z.literal([
-    StatName.RL_GOALS,
-    StatName.RL_ASSISTS,
-    StatName.RL_SAVES,
-    StatName.RL_SHOTS,
-    StatName.RL_SCORE,
-  ]),
-  statValue: z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .regex(/^\d+$/, "Stat value must be a number")
-    .transform((val) => String(parseInt(val) || 0)),
-});
+/** A whole-number stat value, stored as its canonical string ("007" -> "7"). */
+const numericStatValueSchema = z
+  .string()
+  .trim()
+  .min(1, "Required")
+  .regex(/^\d+$/, "Stat value must be a number")
+  .transform((val) => String(parseInt(val) || 0));
 
-// ? Mario Kart 8
-
-const marioKart8Stats = z.object({
-  statId: statIdSchema,
-  stat: z.literal(StatName.MK8_POS),
-  statValue: z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .regex(/^\d+$/, "Stat value must be a number")
-    .transform((val) => String(parseInt(val) || 0)),
-});
-
-// ? COD Gun Game Stats
-
-const codStats = z.object({
-  statId: statIdSchema,
-  stat: z.literal([
+/**
+ * The stats each game records. A session only accepts its own game's stats;
+ * the per-day counters (`*_DAY`) are never entered through the form.
+ */
+export const GAME_STATS = {
+  "Call of Duty": [
     StatName.COD_KILLS,
     StatName.COD_DEATHS,
     StatName.COD_POS,
     StatName.COD_SCORE,
     StatName.COD_MELEES,
-  ]),
+  ],
+  "Rocket League": [
+    StatName.RL_GOALS,
+    StatName.RL_ASSISTS,
+    StatName.RL_SAVES,
+    StatName.RL_SHOTS,
+    StatName.RL_SCORE,
+  ],
+  "Mario Kart 8": [StatName.MK8_POS],
+  "Lethal Company": [StatName.LC_DEATHS],
+  SpeedRunners: [StatName.SR_WINS, StatName.SR_SETS, StatName.SR_POS],
+  "Marvel Rivals": [
+    StatName.MR_KILLS,
+    StatName.MR_DEATHS,
+    StatName.MR_ASSISTS,
+    StatName.MR_TRIPLE_KILL,
+    StatName.MR_QUADRA_KILL,
+    StatName.MR_PENTA_KILL,
+    StatName.MR_HEXA_KILL,
+    StatName.MR_MOST_KILLS,
+    StatName.MR_HIGHEST_DMG,
+    StatName.MR_HIGHEST_DMG_BLOCKED,
+    StatName.MR_MOST_HEALING,
+    StatName.MR_MOST_ASSISTS,
+    StatName.MR_FINAL_HITS,
+    StatName.MR_DMG,
+    StatName.MR_DMG_BLOCKED,
+    StatName.MR_HEALING,
+    StatName.MR_ACCURACY,
+  ],
+} as const satisfies Record<string, readonly [StatName, ...StatName[]]>;
 
-  // CoD
-  statValue: z
-    .string()
-    .trim()
-    .min(1, "Required")
-    .regex(/^\d+$/, "Stat value must be a number")
-    .transform((val) => String(parseInt(val) || 0)),
-});
+type GameName = keyof typeof GAME_STATS;
 
+/** A stat line for one of `stats`, with a whole-number value. */
+const numericStats = <const Stats extends readonly [StatName, ...StatName[]]>(
+  stats: Stats,
+) =>
+  z.object({
+    statId: statIdSchema,
+    stat: z.literal(stats),
+    statValue: numericStatValueSchema,
+  });
+
+/** Like `numericStats`, but the medal stats may be left empty (stored as 0). */
 const marvelRivalsStats = z
   .object({
     statId: statIdSchema,
-    stat: z.literal([
-      StatName.MR_KILLS,
-      StatName.MR_DEATHS,
-      StatName.MR_ASSISTS,
-      StatName.MR_TRIPLE_KILL,
-      StatName.MR_QUADRA_KILL,
-      StatName.MR_PENTA_KILL,
-      StatName.MR_HEXA_KILL,
-      StatName.MR_MOST_KILLS,
-      StatName.MR_HIGHEST_DMG,
-      StatName.MR_HIGHEST_DMG_BLOCKED,
-      StatName.MR_MOST_HEALING,
-      StatName.MR_MOST_ASSISTS,
-      StatName.MR_FINAL_HITS,
-      StatName.MR_DMG,
-      StatName.MR_DMG_BLOCKED,
-      StatName.MR_HEALING,
-      StatName.MR_ACCURACY,
-    ]),
+    stat: z.literal(GAME_STATS["Marvel Rivals"]),
     statValue: z.string().trim(),
   })
   .superRefine((data, ctx) => {
@@ -204,11 +189,14 @@ const marvelRivalsStats = z
     statValue: String(parseInt(data.statValue) || 0),
   }));
 
-// Stat Schema Union
+// Every stat line the form knows. Which of them a session may use depends on
+// its game and is checked in `gameSessionSchema`.
 const statSchema = z.discriminatedUnion("stat", [
-  rocketLeagueStats,
-  marioKart8Stats,
-  codStats,
+  numericStats(GAME_STATS["Rocket League"]),
+  numericStats(GAME_STATS["Mario Kart 8"]),
+  numericStats(GAME_STATS["Call of Duty"]),
+  numericStats(GAME_STATS["Lethal Company"]),
+  numericStats(GAME_STATS.SpeedRunners),
   marvelRivalsStats,
 ]);
 
@@ -231,24 +219,17 @@ const matchSchema = z.object({
     .nonempty("At least one player session is required"),
 });
 
-const matchesSchema = z
-  .array(matchSchema)
-  .nonempty("At least one match is required");
-
+// `matches` is added per game by `gameSessionSchema`.
 const setSchema = z.object({
   setId: z.int(),
   setWinners: z
     .array(playerSchema)
     .nonempty("At least one set winner is required"),
-  matches: matchesSchema,
 });
 
-const setsSchema = z.array(setSchema).nonempty("At least one set is required");
-
-// Base schema for common fields
+// Fields every game shares; `game` and `sets` come from `gameSessionSchema`.
 const baseSessionSchema = z.object({
   sessionId: sessionIdSchema,
-  game: gameSchema,
   sessionName: sessionNameSchema,
   sessionUrl: sessionUrlSchema,
   videoId: videoIdSchema,
@@ -257,213 +238,223 @@ const baseSessionSchema = z.object({
   players: playersSchema,
   // Entered manually by admins; may be empty (a day with no recorded winner).
   dayWinners: z.array(playerSchema),
-  sets: setsSchema,
 });
 
-const rocketLeagueSchema = baseSessionSchema.extend({
-  game: z.literal("Rocket League"),
-  sets: z
-    .array(
-      setSchema.extend({
-        matches: z.array(
-          matchSchema.check((ctx) => {
-            const match = ctx.value;
-            let winningTeam = 0;
-            let losingTeam = 0;
+// Game specific rules
 
-            match.playerSessions.forEach((ps) => {
-              const onWinningTeam = match.matchWinners.some(
-                (mw) => mw.playerId === ps.playerId,
-              );
-              ps.playerStats.forEach((stat) => {
-                if (stat.stat === StatName.RL_GOALS) {
-                  if (onWinningTeam) winningTeam += Number(stat.statValue) || 0;
-                  else losingTeam += Number(stat.statValue) || 0;
-                }
-              });
-            });
+type MatchValues = z.infer<typeof matchSchema>;
+type MatchIssue = { message: string; path?: PropertyKey[] };
 
-            // Rule: Winning team must have more goals than losing team
-            if (winningTeam <= losingTeam)
-              ctx.issues.push({
-                code: "custom",
-                input: ctx.value,
-                message: "Winning team must have more goals than losing team.",
-              });
-          }),
-        ).nonempty("At least one match is required"),
-      }),
-    )
-    .nonempty("At least one set is required"),
-});
+/** What is wrong with a match under one game's rules; empty when it is valid. */
+type MatchRule = (match: MatchValues) => MatchIssue[];
 
-const marioKart8MatchSchema = baseSessionSchema.extend({
-  game: z.literal("Mario Kart 8"),
-  sets: z.array(
-    setSchema.extend({
-      matches: z.array(
-        matchSchema.check((ctx) => {
-          const match = ctx.value;
-          // Rule 1: Check if exactly one winner is selected
-          if (match.matchWinners.length !== 1)
-            ctx.issues.push({
-              code: "custom",
-              message: "A match must have exactly one winner.",
-              input: ctx.value,
-            });
+/** Every value a match records for `stat`, with the player it belongs to. */
+const statValues = (match: MatchValues, stat: StatName) =>
+  match.playerSessions.flatMap((ps) =>
+    ps.playerStats
+      .filter((playerStat) => playerStat.stat === stat)
+      .map((playerStat) => ({
+        playerId: ps.playerId,
+        value: playerStat.statValue,
+      })),
+  );
 
-          const firstPlace: number[] = [];
+const rocketLeagueMatchRule: MatchRule = (match) => {
+  let winningTeam = 0;
+  let losingTeam = 0;
+  for (const { playerId, value } of statValues(match, StatName.RL_GOALS)) {
+    const goals = Number(value) || 0;
+    if (match.matchWinners.some((mw) => mw.playerId === playerId))
+      winningTeam += goals;
+    else losingTeam += goals;
+  }
 
-          const winnerId = match.matchWinners.at(0)?.playerId;
-          let highestPosition = [0, Infinity] as [number, number]; // playerId, position
-          match.playerSessions.forEach((ps) => {
-            ps.playerStats.forEach((stat) => {
-              if (stat.stat === StatName.MK8_POS) {
-                const position = parseInt(stat.statValue);
-                if (position === 1) firstPlace.push(ps.playerId);
-                if (position < highestPosition[1])
-                  highestPosition = [ps.playerId, position];
-              }
-            });
-          });
+  return winningTeam <= losingTeam
+    ? [{ message: "Winning team must have more goals than losing team." }]
+    : [];
+};
 
-          // Rule 2: Check if there is more than one first place player
-          if (firstPlace.length > 1) {
-            ctx.issues.push({
-              code: "custom",
-              message: "There can be only one 1st place player.",
-              input: ctx.value,
-            });
-          }
-          // Rule 3: Check if the winner has the highest position
-          if (highestPosition[0] !== winnerId)
-            ctx.issues.push({
-              code: "custom",
-              message:
-                "The 1st place player and match winner must have the highest position.",
-              input: ctx.value,
-            });
+const marioKart8MatchRule: MatchRule = (match) => {
+  const issues: MatchIssue[] = [];
+  if (match.matchWinners.length !== 1)
+    issues.push({ message: "A match must have exactly one winner." });
+
+  const positions = statValues(match, StatName.MK8_POS).map((stat) => ({
+    playerId: stat.playerId,
+    position: parseInt(stat.value),
+  }));
+  const firstPlace = positions.filter((p) => p.position === 1);
+  // The earliest player keeps a tie for the best position.
+  const best = positions.reduce(
+    (best, current) => (current.position < best.position ? current : best),
+    { playerId: 0, position: Infinity },
+  );
+
+  if (firstPlace.length > 1)
+    issues.push({ message: "There can be only one 1st place player." });
+  if (best.playerId !== match.matchWinners.at(0)?.playerId)
+    issues.push({
+      message:
+        "The 1st place player and match winner must have the highest position.",
+    });
+  return issues;
+};
+
+const codMatchRule: MatchRule = (match) => {
+  const issues: MatchIssue[] = [];
+  const path = ["matchWinners"];
+  if (match.matchWinners.length !== 1)
+    issues.push({ message: "A match must have exactly one winner.", path });
+
+  const winnerId = match.matchWinners.at(0)?.playerId;
+  const scores = statValues(match, StatName.COD_SCORE).map((stat) => ({
+    playerId: stat.playerId,
+    score: parseInt(stat.value) || 0,
+  }));
+  const highestScore = Math.max(0, ...scores.map((s) => s.score));
+  const winnerScore = scores.findLast((s) => s.playerId === winnerId)?.score;
+  const firstPlace = statValues(match, StatName.COD_POS)
+    .filter((stat) => parseInt(stat.value) === 1)
+    .map((stat) => stat.playerId);
+
+  if (firstPlace.length > 1)
+    issues.push({ message: "There can be only one 1st place player." });
+  if ((winnerScore ?? 0) < highestScore)
+    issues.push({
+      message: "The match winner must have the highest score.",
+      path,
+    });
+  if (!firstPlace.includes(winnerId || Infinity))
+    issues.push({ message: "The match winner must be in first place.", path });
+  return issues;
+};
+
+type GameRules = {
+  /** Checks each match once its fields are valid. */
+  matchRule?: MatchRule;
+  /** A match may be recorded with no winner. */
+  matchWinnersOptional?: boolean;
+};
+
+/**
+ * What each game requires of a match. Games are keyed by their name in the
+ * database, and every game in `GAME_STATS` needs an entry.
+ */
+const GAME_RULES: Record<GameName, GameRules> = {
+  "Call of Duty": { matchRule: codMatchRule },
+  "Rocket League": { matchRule: rocketLeagueMatchRule },
+  "Mario Kart 8": { matchRule: marioKart8MatchRule },
+  "Lethal Company": {},
+  SpeedRunners: {},
+  "Marvel Rivals": { matchWinnersOptional: true },
+};
+
+/** Flags every stat line that belongs to a different game. */
+const foreignStats = (game: GameName, match: MatchValues): MatchIssue[] => {
+  const allowed: readonly StatName[] = GAME_STATS[game];
+  return match.playerSessions.flatMap((ps, playerIndex) =>
+    ps.playerStats.flatMap(({ stat }, statIndex) =>
+      allowed.includes(stat)
+        ? []
+        : [
+            {
+              message: `${stat} is not a ${game} stat.`,
+              path: ["playerSessions", playerIndex, "playerStats", statIndex],
+            },
+          ],
+    ),
+  );
+};
+
+/** The session schema for one game: the base fields plus that game's rules. */
+const gameSessionSchema = <Game extends GameName>(game: Game) => {
+  const { matchRule, matchWinnersOptional } = GAME_RULES[game];
+
+  const match = matchWinnersOptional
+    ? matchSchema.extend({ matchWinners: z.array(playerSchema) })
+    : matchSchema;
+  const checkedMatch = match.check((ctx) => {
+    const issues = [
+      ...foreignStats(game, ctx.value),
+      ...(matchRule?.(ctx.value) ?? []),
+    ];
+    // Zod prepends the parent path in place, so each issue gets its own.
+    for (const { message, path } of issues)
+      ctx.issues.push({
+        code: "custom",
+        input: ctx.value,
+        message,
+        ...(path && { path: [...path] }),
+      });
+  });
+
+  return baseSessionSchema.extend({
+    game: z.literal(game),
+    sets: z
+      .array(
+        setSchema.extend({
+          matches: z
+            .array(checkedMatch)
+            .nonempty("At least one match is required"),
         }),
-      ).nonempty("At least one match is required"),
-    }),
-  ).nonempty("At least one set is required"),
-});
-
-const lethalCompanySchema = baseSessionSchema.extend({
-  game: z.literal("Lethal Company"),
-});
-
-const speedrunnersSchema = baseSessionSchema.extend({
-  game: z.literal("Speedrunners"),
-});
-
-const marvelRivalsSchema = baseSessionSchema.extend({
-  game: z.literal("Marvel Rivals"),
-  sets: z.array(
-    setSchema.extend({
-      matches: z.array(
-        matchSchema.extend({
-          matchWinners: z.array(playerSchema),
-        }),
-      ).nonempty("At least one match is required"),
-    }),
-  ).nonempty("At least one set is required"),
-});
-
-const codSchema = baseSessionSchema.extend({
-  game: z.literal("Call of Duty"),
-  sets: z.array(
-    setSchema.extend({
-      matches: z.array(
-        matchSchema.check((ctx) => {
-          const match = ctx.value;
-          // Rule 1: Check if exactly one winner is selected
-          if (match.matchWinners.length !== 1)
-            ctx.issues.push({
-              code: "custom",
-              message: "A match must have exactly one winner.",
-              path: ["matchWinners"],
-              input: ctx.value,
-            });
-
-          const firstPlace: number[] = [];
-
-          const winnerId = match.matchWinners.at(0)?.playerId;
-          const winner = { winnerId, score: 0, position: 0 };
-          let highestScoreOverall = 0;
-
-          match.playerSessions.forEach((ps) => {
-            ps.playerStats.forEach((stat) => {
-              if (stat.stat === StatName.COD_SCORE) {
-                const score = parseInt(stat.statValue) || 0;
-                highestScoreOverall = Math.max(highestScoreOverall, score);
-                if (ps.playerId === winnerId) {
-                  winner.score = score;
-                }
-              }
-              if (
-                stat.stat === StatName.COD_POS &&
-                parseInt(stat.statValue) === 1
-              ) {
-                winner.position = parseInt(stat.statValue) || 0;
-                firstPlace.push(ps.playerId);
-              }
-            });
-          });
-
-          // Rule 2: Ensure there's only one first place player
-          if (firstPlace.length > 1)
-            ctx.issues.push({
-              code: "custom",
-              message: "There can be only one 1st place player.",
-              input: ctx.value,
-            });
-
-          // Rule 3: Ensure the match winner has the highest score
-          if (winner.score < highestScoreOverall)
-            ctx.issues.push({
-              code: "custom",
-              message: "The match winner must have the highest score.",
-              path: ["matchWinners"],
-              input: ctx.value,
-            });
-
-          // Rule 4: Ensure the match winner is in first place
-          if (!firstPlace.includes(winnerId || Infinity))
-            ctx.issues.push({
-              code: "custom",
-              message: "The match winner must be in first place.",
-              path: ["matchWinners"],
-              input: ctx.value,
-            });
-        }),
-      ).nonempty("At least one match is required"),
-    }),
-  ).nonempty("At least one set is required"),
-});
+      )
+      .nonempty("At least one set is required"),
+  });
+};
 
 // ! End of Game specific schemas
 
 // Combined schema with discriminated union
 export const formSchema = z
   .discriminatedUnion("game", [
-    codSchema,
-    rocketLeagueSchema,
-    marioKart8MatchSchema,
-    lethalCompanySchema,
-    speedrunnersSchema,
-    marvelRivalsSchema,
+    gameSessionSchema("Call of Duty"),
+    gameSessionSchema("Rocket League"),
+    gameSessionSchema("Mario Kart 8"),
+    gameSessionSchema("Lethal Company"),
+    gameSessionSchema("SpeedRunners"),
+    gameSessionSchema("Marvel Rivals"),
   ])
+  // Everyone the session mentions must be one of its players, by playerId.
   .check((ctx) => {
-    const { players, dayWinners } = ctx.value;
-    dayWinners.forEach((winner, index) => {
-      if (!players.some((p) => p.playerId === winner.playerId))
-        ctx.issues.push({
-          code: "custom",
-          message: `${winner.playerName} is not a session player`,
-          input: winner,
-          path: ["dayWinners", index],
+    const { players, dayWinners, sets } = ctx.value;
+    const sessionPlayers = new Map(
+      players.map((player) => [player.playerId, player.playerName]),
+    );
+    const notASessionPlayer = (name: string, path: PropertyKey[]) =>
+      ctx.issues.push({
+        code: "custom",
+        message: `${name} is not a session player`,
+        input: ctx.value,
+        path,
+      });
+    // A winner must also carry the name the session knows that player by.
+    const checkWinners = (
+      winners: z.infer<typeof playerSchema>[],
+      path: PropertyKey[],
+    ) =>
+      winners.forEach((winner, index) => {
+        if (sessionPlayers.get(winner.playerId) !== winner.playerName)
+          notASessionPlayer(winner.playerName, [...path, index]);
+      });
+
+    checkWinners(dayWinners, ["dayWinners"]);
+    sets.forEach((set, setIndex) => {
+      const setPath = ["sets", setIndex];
+      checkWinners(set.setWinners, [...setPath, "setWinners"]);
+
+      set.matches.forEach((match, matchIndex) => {
+        const matchPath = [...setPath, "matches", matchIndex];
+        checkWinners(match.matchWinners, [...matchPath, "matchWinners"]);
+
+        match.playerSessions.forEach((playerSession, index) => {
+          if (!sessionPlayers.has(playerSession.playerId))
+            notASessionPlayer(playerSession.playerSessionName, [
+              ...matchPath,
+              "playerSessions",
+              index,
+            ]);
         });
+      });
     });
   });
 

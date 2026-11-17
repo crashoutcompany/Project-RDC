@@ -176,8 +176,11 @@ export const Changes = ({
   return (
     <>
       {players.map((p, idx) => {
-        const player = findPlayer(p.player);
-        if (!player) return null;
+        // A player without a member profile still has changes to review.
+        const player = findPlayer(p.player) ?? {
+          playerId: 0,
+          playerName: p.player,
+        };
         return (
           <div key={idx} className="flex items-center gap-4 pl-4">
             <PlayerAvatar player={player} />
@@ -210,7 +213,7 @@ const PlayerAndName = ({
 }) => {
   return (
     <div key={winner.playerId} className="flex items-center gap-4 pl-4">
-      <PlayerAvatar player={findPlayer(winner.playerName)!} />
+      <PlayerAvatar player={winner} />
       <span
         className={`text-sm font-medium ${newWinner ? "text-green-500" : "text-red-500"}`}
       >

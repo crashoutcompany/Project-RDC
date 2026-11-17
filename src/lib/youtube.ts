@@ -20,3 +20,21 @@ export function buildYouTubeVideosListUrl(
   apiUrl.searchParams.set("key", apiKey);
   return apiUrl.toString();
 }
+
+/**
+ * The host YouTube serves video thumbnails from, and the only remote image
+ * host for thumbnails allowed in next.config.ts.
+ */
+export const YOUTUBE_THUMBNAIL_HOST = "i.ytimg.com";
+
+/** Whether `url` is an https image on YouTube's thumbnail host. */
+export function isYouTubeThumbnailUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" && parsed.hostname === YOUTUBE_THUMBNAIL_HOST
+    );
+  } catch {
+    return false;
+  }
+}
