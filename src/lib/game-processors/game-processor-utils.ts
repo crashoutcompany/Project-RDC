@@ -1,158 +1,17 @@
-import { VisionResultCodes } from "../constants";
-
-// Shared validateResults function for all GameProcessors
-export const validateResults = (
-  visionPlayers: VisionPlayer[],
-  visionWinners: VisionPlayer[],
-  requiresCheck: boolean,
-) => {
-  return requiresCheck
-    ? {
-        status: VisionResultCodes.CheckRequest,
-        data: { players: visionPlayers, winner: visionWinners },
-        message:
-          "There was some trouble processing some stats. They have been assigned the most probable value but please check to ensure all stats are correct before submitting.",
-      }
-    : {
-        status: VisionResultCodes.Success,
-        data: { players: visionPlayers, winner: visionWinners },
-        message: "Results have been successfully imported.",
-      };
-};
-import {
-  AnalyzedPlayer,
-  AnalyzedPlayersObj,
-  AnalyzedTeamData,
-  Stat,
-  VisionPlayer,
-} from "@/lib/visionTypes";
-import { Player } from "@/generated/prisma/client";
+import type { AnalyzedPlayer, Stat, VisionPlayer } from "@/lib/visionTypes";
+import type { Player } from "@/generated/prisma/client";
 import {
   findPlayer,
   PLAYER_MAPPINGS,
-  PlayerNotFoundError,
 } from "@/app/(routes)/admin/_utils/player-mappings";
-import { STAT_CONFIGS, getStatConfigByFieldKey } from "../stat-configs";
+import { getStatConfigByFieldKey, type StatConfig } from "../stat-configs";
 
-type WinnerType = "TEAM" | "INDIVIDUAL";
-
-export interface WinnerConfig {
-  type: WinnerType;
-  winCondition: {
-    statName: string;
-    comparison: "highest" | "lowest" | "sum";
-  };
-}
-
-export type GameProcessor = {
-  processPlayers: (
-    playerData: AnalyzedTeamData[] | AnalyzedPlayersObj[], // Use a union type here
-    sessionPlayers: Player[],
-  ) => { processedPlayers: VisionPlayer[]; reqCheckFlag: boolean };
-  calculateWinners: (players: VisionPlayer[]) => VisionPlayer[];
-  validateStats: (
-    statValue: string | undefined,
-    numPlayers?: number,
-  ) => {
-    statValue: string;
-    reqCheck: boolean;
-  };
-  validateResults: (
-    visionPlayers: VisionPlayer[],
-    winners: VisionPlayer[],
-    requiresCheck: boolean,
-  ) => {
-    status: VisionResultCodes;
-
-    data: { players: VisionPlayer[]; winner: VisionPlayer[] };
-    message: string;
-  };
-};
-
-export const processTeam = (
-  teamData: AnalyzedTeamData,
-  sessionPlayers: Player[],
-  statPrefix?: string,
-): { processedPlayers: VisionPlayer[]; reqCheckFlag: boolean } => {
-  console.log("Processing Team: ", teamData.players);
-  let reqCheckFlag = false;
-
-  // Process Players
-  try {
-    const processedPlayers: VisionPlayer[] = [];
-    for (const player of teamData.players.valueArray ?? []) {
-      console.log(
-        `Processing Player: ${player.valueObject?.PlayerName?.content} for ${teamData.teamName}`,
-      );
-      const processedPlayer = processPlayer(
-        player,
-        teamData.teamName,
-        statPrefix,
-      );
-      console.log("Processed Player: ", processedPlayer);
-      const validatedPlayerData = validateProcessedPlayer(
-        processedPlayer,
-        sessionPlayers,
-      );
-      console.log("Validated Player: ", validatedPlayerData);
-
-      reqCheckFlag = reqCheckFlag || processedPlayer.reqCheckFlag;
-      // An unrecognized row (a random, or a card subtitle like "HAPPY CAMPER"
-      // read as a name) is dropped and flagged rather than returned as an
-      // empty player, which crashed stat validation downstream.
-      if (!validatedPlayerData) {
-        console.error("Player validation failed: ", processedPlayer);
-        reqCheckFlag = true;
-        continue;
-      }
-      processedPlayers.push(validatedPlayerData);
-    }
-    return { processedPlayers, reqCheckFlag };
-  } catch (error) {
-    console.error("Error processing team: ", error);
-    return { processedPlayers: [], reqCheckFlag: true }; // Changed from processedTeam
-  }
-};
-
-export const validateProcessedPlayer = (
-  processedPlayer: ProcessedPlayer,
-  sessionPlayers: Player[],
-): VisionPlayer | undefined => {
-  try {
-    const foundPlayer: Player | undefined = findPlayer(
-      processedPlayer.playerData.name,
-    );
-    const foundSessionPlayer = sessionPlayers.find(
-      (p) => p.playerName === foundPlayer?.playerName,
-    );
-    if (!foundPlayer || !foundSessionPlayer) {
-      console.error(`Player not found: ${processedPlayer.playerData.name}`);
-      throw new PlayerNotFoundError(
-        `Player not found: ${processedPlayer.playerData.name}`,
-      );
-    } else {
-      return {
-        playerId: foundSessionPlayer?.playerId,
-        name: foundSessionPlayer.playerName as keyof typeof PLAYER_MAPPINGS,
-        stats: [...processedPlayer.playerData.stats],
-        teamKey: processedPlayer.teamKey,
-      };
-    }
-  } catch (error) {
-    if (error instanceof PlayerNotFoundError) {
-      console.error("Vision validation failed:", error.message);
-    }
-    console.error("Unexpected error:", error);
-    return undefined;
-  }
-};
+/** A stat value after validation; `reqCheck` asks the admin to review it. */
+export type StatCheck = { statValue: string; reqCheck: boolean };
 
 type ProcessedPlayer = {
   reqCheckFlag: boolean;
-  playerData: {
-    name: string;
-    stats: Stat[];
-  };
+  playerData: { name: string; stats: Stat[] };
   teamKey?: string;
 };
 
@@ -168,64 +27,74 @@ const resolveFieldKey = (fieldName: string, statPrefix?: string): string => {
   return getStatConfigByFieldKey(prefixed) ? prefixed : fieldKey;
 };
 
+/** Reads one scoreboard row: the name as written, and every stat validated. */
 export const processPlayer = (
   player: AnalyzedPlayer,
   teamName?: string,
   statPrefix?: string,
 ): ProcessedPlayer => {
-  console.log("Processing Player: ", player);
+  let reqCheckFlag = false;
+  const stats = new Map<string, Stat>();
 
-  const statValidations = Object.entries(player.valueObject).reduce(
-    (acc, [fieldName, field]) => {
-      if (fieldName !== "PlayerName") {
-        console.log("Processing field: ", fieldName);
-        const fieldKey = resolveFieldKey(fieldName, statPrefix);
-        const statConfig = getStatConfigByFieldKey(fieldKey);
+  for (const [fieldName, field] of Object.entries(player.valueObject)) {
+    if (fieldName === "PlayerName") continue;
 
-        if (statConfig) {
-          acc[fieldKey] = validateVisionStatValue(
-            field.content,
-            statConfig.validationRules,
-            fieldKey,
-          );
-        } else {
-          console.warn(`No stat config found for field: ${fieldKey}`);
-          acc[fieldKey] = validateVisionStatValue(field.content);
-        }
-      }
-      return acc;
-    },
-    {} as Record<string, { statValue: string; reqCheck: boolean }>,
-  );
+    const fieldKey = resolveFieldKey(fieldName, statPrefix);
+    const statConfig = getStatConfigByFieldKey(fieldKey);
+    // A field the model returns that stat-configs doesn't know about.
+    if (!statConfig)
+      console.warn(`No stat config found for field: ${fieldKey}`);
 
-  const reqCheckFlag = Object.values(statValidations).some((v) => v.reqCheck);
+    const { statValue, reqCheck } = validateVisionStatValue(
+      field.content,
+      statConfig?.validationRules,
+      statConfig && fieldKey,
+    );
+    reqCheckFlag ||= reqCheck;
+    stats.set(fieldKey, {
+      statId: statConfig?.id || 0,
+      stat: statConfig?.name || "UNKNOWN_STAT",
+      statValue,
+    });
+  }
 
   return {
     reqCheckFlag,
     playerData: {
       name: player.valueObject?.PlayerName?.content || "Unknown",
-      stats: Object.entries(statValidations).map(([statKey, validation]) => {
-        const statConfig = getStatConfigByFieldKey(statKey);
-        return {
-          statId: statConfig?.id || 0,
-          stat: statConfig?.name || "UNKNOWN_STAT",
-          statValue: validation.statValue,
-        };
-      }),
+      stats: [...stats.values()],
     },
     teamKey: teamName,
   };
 };
 
+/**
+ * Maps a row's name (gamertag, alias or member name) to a player of this
+ * session. Undefined for anyone else: randoms in the lobby, a card subtitle
+ * read as a name, or a member who isn't playing.
+ */
+export const validateProcessedPlayer = (
+  processedPlayer: ProcessedPlayer,
+  sessionPlayers: Player[],
+): VisionPlayer | undefined => {
+  const member = findPlayer(processedPlayer.playerData.name);
+  const sessionPlayer =
+    member && sessionPlayers.find((p) => p.playerName === member.playerName);
+  if (!sessionPlayer) return undefined;
+
+  return {
+    playerId: sessionPlayer.playerId,
+    name: sessionPlayer.playerName as keyof typeof PLAYER_MAPPINGS,
+    stats: [...processedPlayer.playerData.stats],
+    teamKey: processedPlayer.teamKey,
+  };
+};
+
 export const validateVisionStatValue = (
   statValue: string | undefined,
-  validationRules?: {
-    min?: number;
-    max?: number;
-    allowZero?: boolean;
-  },
+  validationRules?: StatConfig["validationRules"],
   fieldKey?: string,
-): { statValue: string; reqCheck: boolean } => {
+): StatCheck => {
   // Handle common OCR errors
   if (statValue === "Z" || statValue === "Ø") {
     return { statValue: "0", reqCheck: true };
@@ -272,117 +141,3 @@ export const validateVisionStatValue = (
 
   return { statValue: cleanedValue, reqCheck: false };
 };
-
-export const calculateTeamWinners = (
-  players: VisionPlayer[],
-  teamKey: string,
-  config: WinnerConfig,
-): VisionPlayer[] => {
-  console.log("Calculating Team Winners: ", players);
-
-  // Group players by team and calculate team scores
-  const teams = players.reduce(
-    (acc, player) => {
-      const team = player.teamKey;
-      if (team) {
-        if (!acc[team]) {
-          acc[team] = {
-            players: [],
-            score: 0,
-          };
-        }
-
-        // Add player to team
-        acc[team].players.push(player);
-
-        // Add player's score to team total
-        const playerScore = player.stats.find(
-          (s) => s.stat === config.winCondition.statName,
-        )?.statValue;
-        acc[team].score += Number(playerScore || 0);
-      }
-      return acc;
-    },
-    {} as Record<string, { players: VisionPlayer[]; score: number }>,
-  );
-
-  console.log("Teams in calculateWinners: ", teams);
-
-  if (config.winCondition.comparison === "sum") {
-    const teamScores = Object.entries(teams).map(([teamName, teamPlayers]) => {
-      const score = teamPlayers.players.reduce((sum, player) => {
-        const statValue = player.stats.find(
-          (s) => s.stat === config.winCondition.statName,
-        )?.statValue;
-        return sum + (Number(statValue) || 0);
-      }, 0);
-      return { teamName, score, players: teamPlayers };
-    });
-
-    const winningTeam = teamScores.reduce(
-      (winner, current) => (current.score > winner.score ? current : winner),
-      teamScores[0],
-    );
-
-    return winningTeam.players.players;
-  }
-  return [];
-};
-
-// Winner calculation with stat config
-export const calculateIndividualWinner = (
-  players: VisionPlayer[],
-  config: WinnerConfig,
-): VisionPlayer[] => {
-  const statConfig = Object.values(STAT_CONFIGS).find(
-    (s) => s.name === config.winCondition.statName,
-  );
-
-  if (players.length) {
-    if (config.winCondition.comparison === "highest") {
-      return [
-        players.reduce((winner, current) => {
-          const winnerScore = winner.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-          const currentScore = current.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-
-          // For position stats, lower number is better
-          if (statConfig?.dataType === "position") {
-            return Number(currentScore) < Number(winnerScore)
-              ? current
-              : winner;
-          }
-
-          return Number(currentScore) > Number(winnerScore) ? current : winner;
-        }),
-      ];
-    }
-
-    if (config.winCondition.comparison === "lowest") {
-      console.log("Calculating lowest winner");
-      return [
-        players.reduce((winner, current) => {
-          const winnerScore = winner.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-          const currentScore = current.stats.find(
-            (s) => s.stat === config.winCondition.statName,
-          )?.statValue;
-
-          return Number(currentScore) < Number(winnerScore) ? current : winner;
-        }),
-      ];
-    }
-  }
-
-  return [];
-};
-
-export function isAnalyzedTeamDataArray(
-  data: AnalyzedTeamData[] | AnalyzedPlayersObj[],
-): data is AnalyzedTeamData[] {
-  return (data as AnalyzedTeamData[])[0]?.teamName !== undefined;
-}
