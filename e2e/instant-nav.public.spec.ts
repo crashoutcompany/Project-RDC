@@ -57,9 +57,13 @@ test.describe("instant nav: public soft navigations", () => {
   });
 
   test("Games shell commits under instant()", async ({ page }) => {
+    // instant() only commits from prefetched data; viewport entry starts it.
+    const prefetched = waitForSegmentPrefetch(page, "/games");
     await page.goto("/");
     const trigger = page.getByTestId("home-games-link");
     await expect(trigger).toBeVisible({ timeout: 20000 });
+    await trigger.scrollIntoViewIfNeeded();
+    await prefetched;
 
     await instant(page, async () => {
       await trigger.click();
@@ -70,9 +74,13 @@ test.describe("instant nav: public soft navigations", () => {
   });
 
   test("Members shell commits under instant()", async ({ page }) => {
+    // instant() only commits from prefetched data; viewport entry starts it.
+    const prefetched = waitForSegmentPrefetch(page, "/members");
     await page.goto("/");
     const trigger = page.getByTestId("home-members-link");
     await expect(trigger).toBeVisible({ timeout: 20000 });
+    await trigger.scrollIntoViewIfNeeded();
+    await prefetched;
 
     await instant(page, async () => {
       await trigger.click();
