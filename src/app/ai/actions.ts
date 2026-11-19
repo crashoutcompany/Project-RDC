@@ -1,6 +1,6 @@
 "use server";
 
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { after } from "next/server";
 import { errorCodes } from "@/lib/constants";
 import { generateMvpForSession } from "@/lib/mvp/generate";
@@ -14,11 +14,8 @@ export const analyzeMvp = async (
   sessionId: number,
 ): Promise<MvpOutput> => {
   try {
-    const authSession = await getAuthoritativeSession();
-    const user = authSession?.user as
-      (NonNullable<typeof authSession>["user"] & { role?: string }) | undefined;
-    if (!authSession || user?.role !== "admin")
-      throw new Error(errorCodes.NotAuthenticated);
+    const authSession = await requireAdmin();
+    if (!authSession) throw new Error(errorCodes.NotAuthenticated);
 
     if (!sessionId || sessionId <= 0) throw new Error("Invalid session ID");
 
