@@ -1,3 +1,3 @@
 import { vi } from "vitest";
 
-export const getSumOfStat = vi.fn();
+export const getStatTotalsByGame = vi.fn();
