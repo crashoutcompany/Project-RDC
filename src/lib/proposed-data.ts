@@ -7,3 +7,14 @@ import type { ProposedData } from "@/app/actions/editSession";
 export function parseProposedData(raw: unknown): ProposedData {
   return (typeof raw === "string" ? JSON.parse(raw) : raw) as ProposedData;
 }
+
+/**
+ * Whether a react-hook-form `dirtyFields` value marks a real change. After any
+ * field-array operation the form reports the whole tree with `false` leaves,
+ * so an untouched `sets` is a truthy array; only a `true` leaf is a change.
+ */
+export function hasChanges(dirty: unknown): boolean {
+  if (dirty === true) return true;
+  if (typeof dirty !== "object" || dirty === null) return false;
+  return Object.values(dirty).some(hasChanges);
+}
