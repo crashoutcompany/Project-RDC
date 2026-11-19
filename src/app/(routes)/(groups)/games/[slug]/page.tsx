@@ -3,12 +3,8 @@ import { H1 } from "@/components/headings";
 import { Breadcrumbs } from "@/components/arcade/ui";
 import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
 import { getAllSessionsByGame } from "prisma/lib/admin";
-import Mariokart from "./_components/games/mariokart";
-import CallOfDuty from "./_components/games/callofduty";
-import RocketLeague from "./_components/games/rocketleague";
-import Speedrunners from "./_components/games/speedrunners";
-import LethalCompany from "./_components/games/lethalcompany";
-import MarvelRivals from "./_components/games/marvelrivals";
+import { StatBoard } from "./_components/stat-board";
+import { STAT_BOARDS } from "./_helpers/stat-board";
 import { gameImages, GamesEnum } from "@/lib/constants";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
@@ -123,64 +119,16 @@ async function GameDetailContent({
     gameImage,
   );
 
-  let gameComponent: React.ReactNode;
-
-  switch (gameName) {
-    case GamesEnum.MarioKart8:
-      gameComponent = (
-        <Mariokart
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-    case GamesEnum.CallOfDuty:
-      gameComponent = (
-        <CallOfDuty
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-    case GamesEnum.RocketLeague:
-      gameComponent = (
-        <RocketLeague
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-    case GamesEnum.SpeedRunners:
-      gameComponent = (
-        <Speedrunners
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-    case GamesEnum.LethalCompany:
-      gameComponent = (
-        <LethalCompany
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-    case GamesEnum.MarvelRivals:
-      gameComponent = (
-        <MarvelRivals
-          game={game}
-          members={membersResult.data}
-          winsPerPlayer={winsPerPlayer}
-        />
-      );
-      break;
-  }
+  // Games without a stat board (e.g. one just added by an admin) show none.
+  const statBoard = STAT_BOARDS[gameName];
+  const gameComponent = statBoard && (
+    <StatBoard
+      board={statBoard}
+      game={game}
+      members={membersResult.data}
+      winsPerPlayer={winsPerPlayer}
+    />
+  );
 
   return (
     <div data-testid="game-detail-content">

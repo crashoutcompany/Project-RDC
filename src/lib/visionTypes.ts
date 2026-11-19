@@ -51,6 +51,8 @@ export type AnalyzedPlayer = {
 export type AnalyzedTeamData = {
   teamName: string;
   players: AnalyzedPlayersObj;
+  /** The reader saw this team marked as the winner on screen. */
+  winner?: boolean;
 };
 
 export type AnalyzedPlayersObj = {

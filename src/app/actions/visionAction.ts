@@ -6,7 +6,6 @@ import { AnalysisResults } from "@/lib/visionTypes";
 import config from "@/lib/config";
 import { createReaders, readerChain, readWithFallback } from "@/lib/vision/readers";
 
-export { getGameProcessor } from "@/lib/vision/analyze-scoreboard";
 export type {
   AnalyzedPlayer,
   AnalyzedTeamData,

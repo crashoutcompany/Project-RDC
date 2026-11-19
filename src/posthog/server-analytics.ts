@@ -53,19 +53,6 @@ export const logAuthEvent = async (
   });
 };
 
-export const logNAN = async (
-  fnName: string,
-  statId: number,
-  userSession?: Session | null,
-) => {
-  const session = userSession ?? (await getSession());
-  posthog.captureException(
-    new Error(`NaN encountered in ${fnName} for statId ${statId}`),
-    session?.user?.id || v4(),
-    { fnName, statId },
-  );
-};
-
 export const logFormError = async (
   err: unknown,
   session: FormValues,
