@@ -1,9 +1,10 @@
 "use server";
 
-import { GameStat } from "@/generated/prisma/client";
+import type { GameStat } from "@/generated/prisma/client";
 import prisma, { handlePrismaOperation } from "prisma/db";
+import { SESSION_TX_OPTIONS, writeSessionTree } from "prisma/lib/session-tree";
 import { FormValues, formSchema } from "../(routes)/admin/_utils/form-helpers";
-import { getAuthoritativeSession } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { errorCodes } from "@/lib/constants";
 import { revalidateTag } from "next/cache";
 import {
@@ -18,16 +19,10 @@ import { PostHogEvents } from "@/posthog/events";
 import { generateMvpForSession } from "@/lib/mvp/generate";
 import { MVP_GAMES } from "@/lib/mvp/process-sets";
 
-type AdminUser = NonNullable<
-  Awaited<ReturnType<typeof getAuthoritativeSession>>
->["user"] & { role?: string };
-
 export async function approveSession(sessionId: number) {
   try {
-    const authUser = await getAuthoritativeSession();
-    const user = authUser?.user as AdminUser | undefined;
-    if (!authUser || user?.role !== "admin")
-      return { error: errorCodes.NotAuthenticated };
+    const authUser = await requireAdmin();
+    if (!authUser) return { error: errorCodes.NotAuthenticated };
 
     const query = await handlePrismaOperation((prisma) =>
       prisma.session.update({
@@ -68,10 +63,8 @@ export async function approveSession(sessionId: number) {
 export async function backfillMissingMvps({
   limit = 5,
 }: { limit?: number } = {}) {
-  const authUser = await getAuthoritativeSession();
-  const user = authUser?.user as AdminUser | undefined;
-  if (!authUser || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const authUser = await requireAdmin();
+  if (!authUser) return { error: errorCodes.NotAuthenticated };
 
   const missing = {
     isApproved: true,
@@ -122,12 +115,9 @@ export async function backfillMissingMvps({
 export async function getGameStats(
   gameName: string,
 ): Promise<GameStat[] | { error: string }> {
-  const authUser = await getAuthoritativeSession();
-  const user = authUser?.user as AdminUser | undefined;
-  if (!authUser || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const authUser = await requireAdmin();
+  if (!authUser) return { error: errorCodes.NotAuthenticated };
 
-  console.log("Looking for gameStats for ", gameName);
   const game = await handlePrismaOperation((prisma) =>
     prisma.game.findFirst({ where: { gameName } }),
   );
@@ -152,17 +142,10 @@ export async function getGameStats(
 export const insertNewSessionFromAdmin = async (
   session: FormValues,
 ): Promise<{ error: null | string }> => {
-  console.group("insertNewSessionFromAdmin");
-
-  const user = await getAuthoritativeSession();
-  let error: null | string = null;
-
-  const adminUser = user?.user as AdminUser | undefined;
+  const user = await requireAdmin();
+  if (!user) return { error: errorCodes.NotAuthenticated };
 
   try {
-    if (!user || adminUser?.role !== "admin")
-      return { error: errorCodes.NotAuthenticated };
-
     const parsed = formSchema.safeParse(session);
     if (!parsed.success)
       return { error: "Invalid session data. Please review the form." };
@@ -172,239 +155,59 @@ export const insertNewSessionFromAdmin = async (
     const sessionGame = await prisma.game.findFirst({
       where: { gameName: validatedSession.game },
     });
-
     if (!sessionGame) return { error: "Game not found." };
 
-    // Parallelize independent queries - both only depend on sessionGame.gameId
-    const [videoAlreadyExists, allGameStats] = await Promise.all([
-      prisma.session.findFirst({
-        where: {
-          gameId: sessionGame.gameId,
-          AND: { videoId: validatedSession.videoId },
-        },
-      }),
-      prisma.gameStat.findMany({
-        where: { gameId: sessionGame.gameId },
-      }),
-    ]);
-
-    console.log(videoAlreadyExists);
-
+    const videoAlreadyExists = await prisma.session.findFirst({
+      where: {
+        gameId: sessionGame.gameId,
+        AND: { videoId: validatedSession.videoId },
+      },
+    });
     if (videoAlreadyExists) return { error: "Video already exists." };
 
-    // Build a lookup map for gameStats
-    const gameStatMap = new Map(allGameStats.map((gs) => [gs.statName, gs]));
-
-    // Preload every referenced player once instead of a findUnique per
-    // player session inside the transaction.
-    const referencedPlayerIds = [
-      ...new Set(
-        validatedSession.sets.flatMap((set) =>
-          set.matches.flatMap((match) =>
-            match.playerSessions.map((ps) => ps.playerId),
-          ),
-        ),
-      ),
-    ];
-    const knownPlayerIds = new Set(
-      (
-        await prisma.player.findMany({
-          where: { playerId: { in: referencedPlayerIds } },
-          select: { playerId: true },
-        })
-      ).map((p) => p.playerId),
-    );
-
-    await prisma.$transaction(
-      async (prismaTx) => {
-        const newSession = await prismaTx.session.create({
-          data: {
-            gameId: sessionGame.gameId,
-            sessionName: validatedSession.sessionName,
-            sessionUrl: validatedSession.sessionUrl,
-            thumbnail: validatedSession.thumbnail,
-            date: validatedSession.date,
-            videoId: validatedSession.videoId,
-            createdBy: user.user?.email || "SYSTEM",
-            dayWinners: {
-              connect: validatedSession.dayWinners.map((p) => ({
-                playerId: p.playerId,
-              })),
-            },
+    await prisma.$transaction(async (tx) => {
+      const { sessionId } = await tx.session.create({
+        data: {
+          gameId: sessionGame.gameId,
+          sessionName: validatedSession.sessionName,
+          sessionUrl: validatedSession.sessionUrl,
+          thumbnail: validatedSession.thumbnail,
+          date: validatedSession.date,
+          videoId: validatedSession.videoId,
+          createdBy: user.user?.email || "SYSTEM",
+          dayWinners: {
+            connect: validatedSession.dayWinners.map((p) => ({
+              playerId: p.playerId,
+            })),
           },
-        });
-        const newSessionId = newSession.sessionId;
-        console.log("New session ID: ", newSessionId);
+        },
+      });
 
-        // For each set in the session assign to parent session
-        await Promise.all(
-          validatedSession.sets.map(async (set, i) => {
-            console.log(
-              "\n-- Creating Set From Admin Form Submission:  -- \n",
-              set,
-            );
+      await writeSessionTree(
+        tx,
+        {
+          sessionId,
+          gameId: sessionGame.gameId,
+          date: new Date(validatedSession.date),
+        },
+        validatedSession.sets,
+      );
+    }, SESSION_TX_OPTIONS);
 
-            const setWinnerConnect = (set?.setWinners ?? []).map((winner) => ({
-              playerId: winner.playerId,
-            }));
-
-            console.log(`Set Winners for set ${i + 1}: `, setWinnerConnect);
-
-            const newSet = await prismaTx.gameSet.create({
-              data: { sessionId: newSessionId },
-            });
-
-            console.log("New Set ID: ", newSet.setId);
-
-            await prismaTx.gameSet.update({
-              where: { setId: newSet.setId },
-              data: { setWinners: { connect: setWinnerConnect } },
-            });
-
-            // For each match in set assign to parent set
-            await Promise.all(
-              set.matches.map(async (match) => {
-                console.log("\n - Creating Match  - \n", match);
-
-                const matchWinnerConnect =
-                  match?.matchWinners?.map((winner) => ({
-                    playerId: winner.playerId,
-                  })) ?? [];
-
-                console.log("Match Winners: ", matchWinnerConnect);
-                console.log("Set: ", set);
-
-                const newMatch = await prismaTx.match.create({
-                  data: {
-                    setId: newSet.setId,
-                    matchWinners: {
-                      connect: matchWinnerConnect,
-                    },
-                  },
-                });
-
-                console.log("New Match Created: ", newMatch);
-
-                // For each PlayerSession in match assign to parent match`
-                await Promise.all(
-                  match.playerSessions.map(async (playerSession) => {
-                    console.log(
-                      "\n  --- Creating PlayerSession  ---\n",
-                      playerSession,
-                    );
-
-                    if (!knownPlayerIds.has(playerSession.playerId))
-                      throw new Error(
-                        `Player not found: ${playerSession.playerId}`,
-                      );
-
-                    console.log(
-                      `Values to be inserted into newPlayerSession: PlayerId: ${playerSession.playerId}, SessionId: ${newSessionId}, MatchId: ${newMatch.matchId}, SetId: ${newSet.setId}`,
-                    );
-
-                    const newPlayerSession =
-                      await prismaTx.playerSession.create({
-                        data: {
-                          playerId: playerSession.playerId,
-                          sessionId: newSessionId,
-                          matchId: newMatch.matchId,
-                          setId: newSet.setId,
-                        },
-                      });
-
-                    console.log(
-                      "New PlayerSession Created: ",
-                      newPlayerSession,
-                    );
-
-                    // For each playerStat in playerSession assign to parent playerSession
-                    // Collect all playerStats to bulk insert
-                    const playerStatsToCreate = await Promise.all(
-                      playerSession.playerStats.map(async (playerStat) => {
-                        console.log(
-                          "Creating PlayerStat From Admin Form Submission: ",
-                          playerStat,
-                        );
-
-                        let gameStat: GameStat | undefined = gameStatMap.get(
-                          playerStat.stat,
-                        );
-                        if (!gameStat) {
-                          // fallback to DB lookup if not found (shouldn't happen)
-                          gameStat =
-                            (await prismaTx.gameStat.findFirst({
-                              where: {
-                                statName: playerStat.stat,
-                                gameId: sessionGame.gameId,
-                                type: "INT", // Default to INT
-                              },
-                            })) || undefined;
-                          if (gameStat)
-                            gameStatMap.set(playerStat.stat, gameStat);
-                        }
-
-                        // If gameStat is still not found, throw an error
-                        // If gameStat is still not found, throw an error
-                        if (!gameStat)
-                          throw new Error(
-                            `GameStat not found: ${playerStat.stat}`,
-                          );
-                        console.log(
-                          "PlayerSessionId: ",
-                          newPlayerSession.playerSessionId,
-                        );
-                        console.log("Value: ", playerStat.statValue);
-                        console.log("PlayerId: ", newPlayerSession.playerId);
-                        console.log("GameId: ", sessionGame!.gameId);
-                        console.log("StatId: ", gameStat!.statId);
-                        console.log("Date: ", session.date);
-
-                        const sessionDate = new Date(validatedSession.date);
-                        console.log("Session Date: ", sessionDate);
-
-                        return {
-                          playerId: newPlayerSession.playerId,
-                          gameId: sessionGame!.gameId,
-                          playerSessionId: newPlayerSession.playerSessionId,
-                          statId: gameStat!.statId,
-                          value: playerStat.statValue,
-                          date: sessionDate,
-                        };
-                      }),
-                    );
-                    // Bulk insert all playerStats for this playerSession
-                    if (playerStatsToCreate.length > 0)
-                      await prismaTx.playerStat.createMany({
-                        data: playerStatsToCreate,
-                      });
-                  }),
-                );
-              }),
-            );
-          }),
-        );
-      },
-      { timeout: 30_000, maxWait: 10_000 },
-    );
     after(() => logFormSuccess("ADMIN_FORM", user));
     revalidateSessionData();
     return { error: null };
   } catch (err) {
     after(() => logFormError(err, session));
-    error = "Unknown error occurred. Please try again.";
-    return { error };
-  } finally {
-    console.groupEnd();
+    return { error: "Unknown error occurred. Please try again." };
   }
 };
 
 export async function addGame(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const gameName = formData.get("gameName") as string;
   if (!gameName) return { error: "Game name is required." };
@@ -424,10 +227,8 @@ export async function addGame(
 export async function addPlayer(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const playerName = formData.get("playerName") as string;
   if (!playerName) return { error: "Player name is required." };
@@ -449,10 +250,8 @@ export async function addPlayer(
 export async function addGameStat(
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const session = await getAuthoritativeSession();
-  const user = session?.user as AdminUser | undefined;
-  if (!session || user?.role !== "admin")
-    return { error: errorCodes.NotAuthenticated };
+  const session = await requireAdmin();
+  if (!session) return { error: errorCodes.NotAuthenticated };
 
   const statName = formData.get("statName") as string;
   const gameId = Number(formData.get("gameId"));
