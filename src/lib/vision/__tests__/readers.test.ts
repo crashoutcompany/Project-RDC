@@ -135,6 +135,30 @@ describe("Gemini output through the game processors", () => {
     expect(result.data.players[0].stats.find((s) => s.stat === "RL_GOALS")?.statValue).toBe("3");
   });
 
+  it("carries Rocket League's WINNER label to the processor, which trusts it over goals", () => {
+    quiet();
+    const row = (member: "Mark" | "Dylan", team: string, goals: number) => ({
+      gamertag: member,
+      member,
+      team,
+      stats: { rl_score: 300, rl_goals: goals, rl_assists: 0, rl_saves: 0, rl_shots: 1 },
+    });
+    // A misread goal count: orange is marked the winner but shows fewer goals.
+    const fields = geminiOutputToFields(GAMES["rocket-league"], {
+      players: [row("Mark", "Blue", 3), row("Dylan", "orange ", 2)],
+      winning_team: "ORANGE",
+    });
+
+    expect(fields.map((team) => ("teamName" in team ? [team.teamName, team.winner] : team))).toEqual([
+      ["BluePlayers", undefined],
+      ["OrangePlayers", true],
+    ]);
+    const result = processScoreboard({ fields, gameId: 2, sessionPlayers: players, ocrCorrections: false });
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+    expect(result.status).toBe(VisionResultCodes.CheckRequest);
+    expect(result.data.winner?.map((p) => p.name)).toEqual(["Dylan"]);
+  });
+
   it("keeps a real 7th place in Mario Kart (Azure's 7→1 fix is off for Gemini)", () => {
     quiet();
     const fields = parseGeminiText(

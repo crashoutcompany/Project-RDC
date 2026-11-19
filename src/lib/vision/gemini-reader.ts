@@ -114,11 +114,19 @@ export function geminiOutputToFields(spec: GameSpec, output: ScoreboardOutput): 
   });
 
   if (!spec.teams) return [array(output.players)];
+  const teamNameOf = (shown: string | null) => {
+    const label = shown?.trim().toUpperCase() ?? "";
+    return spec.teamFields?.[label] ?? label;
+  };
   const teams = new Map<string, ScoreboardOutput["players"]>();
   for (const row of output.players) {
-    const label = row.team?.trim().toUpperCase() ?? "";
-    const teamName = spec.teamFields?.[label] ?? label;
+    const teamName = teamNameOf(row.team);
     teams.set(teamName, [...(teams.get(teamName) ?? []), row]);
   }
-  return [...teams].map(([teamName, rows]) => ({ teamName, players: array(rows) }));
+  const winningTeam = output.winning_team && teamNameOf(output.winning_team);
+  return [...teams].map(([teamName, rows]) => ({
+    teamName,
+    players: array(rows),
+    ...(teamName === winningTeam && { winner: true }),
+  }));
 }
