@@ -3,12 +3,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { codSessionForm } from "@/test/fixtures";
+import { codSessionForm, mk8SessionForm } from "@/test/fixtures";
 import type { FormValues } from "../../_utils/form-helpers";
 import { useFormSteps, type FormStep } from "./use-form-steps";
 import { useSessionDraft } from "./use-session-draft";
 
-vi.mock("sonner", () => ({ toast: vi.fn() }));
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn() }),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,7 +86,10 @@ describe("useSessionDraft", () => {
   });
 
   it("restores a saved draft as unsaved changes, and clears it", () => {
-    localStorage.setItem("entryCreatorForm", JSON.stringify(codSessionForm()));
+    localStorage.setItem(
+      "entryCreatorForm",
+      JSON.stringify({ values: codSessionForm(), base: BLANK }),
+    );
     const { result } = setup("entryCreatorForm");
     expect(toast).toHaveBeenCalledTimes(1);
 
@@ -115,7 +120,50 @@ describe("useSessionDraft", () => {
 
     expect(leaving.defaultPrevented).toBe(true);
     expect(JSON.parse(localStorage.getItem("entryCreatorForm")!)).toMatchObject({
-      sessionName: "Half typed",
+      values: { sessionName: "Half typed" },
+      // What the form held before the change, so a later restore can tell
+      // the admin's edits from what was already there.
+      base: { sessionName: "" },
+    });
+  });
+
+  describe("restoring an edit draft after the session changed", () => {
+    const KEY = "entryCreatorForm:edit:1";
+    // The page now loads the session as a newer approved edit left it.
+    const current = { ...mk8SessionForm(), sessionName: "Renamed by newer edit" };
+    const setupEdit = () =>
+      renderHook(() => {
+        const form = useForm<FormValues>({ defaultValues: current });
+        useSessionDraft(form, KEY);
+        return form;
+      });
+
+    it("proposes only the draft's own change, not a revert of the newer edit", () => {
+      // Saved against the older session: the admin changed only the URL.
+      const base = mk8SessionForm();
+      const values = { ...base, sessionUrl: "https://www.youtube.com/watch?v=changed" };
+      localStorage.setItem(KEY, JSON.stringify({ values, base }));
+      const { result } = setupEdit();
+
+      restore();
+
+      expect(result.current.getValues("sessionName")).toBe("Renamed by newer edit");
+      expect(result.current.getValues("sessionUrl")).toBe(values.sessionUrl);
+      expect(result.current.formState.dirtyFields.sessionUrl).toBe(true);
+      expect(result.current.formState.dirtyFields.sessionName).toBeUndefined();
+      expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("refuses a draft with no base rather than guess what changed", () => {
+      localStorage.setItem(KEY, JSON.stringify(mk8SessionForm()));
+      const { result } = setupEdit();
+
+      restore();
+
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("older version"));
+      expect(result.current.getValues("sessionName")).toBe("Renamed by newer edit");
+      expect(result.current.formState.isDirty).toBe(false);
+      expect(localStorage.getItem(KEY)).toBeNull();
     });
   });
 

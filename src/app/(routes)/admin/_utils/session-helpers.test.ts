@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 import { insertNewSessionFromAdmin } from "@/app/actions/adminAction";
 import { createSessionEditRequest } from "@/app/actions/editSession";
-import { codSessionForm, mk8SessionForm } from "@/test/fixtures";
+import { codSessionForm, mk8Set, mk8SessionForm } from "@/test/fixtures";
 import { formSchema } from "./form-helpers";
-import { draftKey, readDraft, saveDraft } from "./session-draft";
+import { applyDraft, draftKey, readDraft, saveDraft } from "./session-draft";
 import { sessionToFormValues } from "./session-to-form";
 import { submitSession } from "./submit-session";
 import { visionResultToMatch } from "./vision-to-match";
@@ -118,14 +118,23 @@ describe("session drafts", () => {
     expect(draftKey("edit", 8)).not.toBe(draftKey("edit", 7));
   });
 
-  it("round-trips a form, reviving the date", () => {
+  it("round-trips a form and its base, reviving the dates", () => {
     const storage = fakeStorage();
     const form = codSessionForm();
+    const base = { ...codSessionForm(), sessionName: "Before" };
 
-    saveDraft(storage, "draft", form);
+    saveDraft(storage, "draft", form, base);
 
-    expect(readDraft(storage, "draft")).toEqual(form);
-    expect(readDraft(storage, "draft")?.date).toBeInstanceOf(Date);
+    expect(readDraft(storage, "draft")).toEqual({ values: form, base });
+    expect(readDraft(storage, "draft")?.values.date).toBeInstanceOf(Date);
+    expect(readDraft(storage, "draft")?.base?.date).toBeInstanceOf(Date);
+  });
+
+  it("reads a draft saved as bare form values, with no base", () => {
+    const storage = fakeStorage();
+    storage.setItem("draft", JSON.stringify(codSessionForm()));
+
+    expect(readDraft(storage, "draft")).toEqual({ values: codSessionForm(), base: null });
   });
 
   it("gives a draft saved before day winners existed an empty list", () => {
@@ -134,7 +143,7 @@ describe("session drafts", () => {
     delete legacy.dayWinners;
     storage.setItem("draft", JSON.stringify(legacy));
 
-    expect(readDraft(storage, "draft")?.dayWinners).toEqual([]);
+    expect(readDraft(storage, "draft")?.values.dayWinners).toEqual([]);
   });
 
   it.each([
@@ -145,6 +154,101 @@ describe("session drafts", () => {
     if (saved) storage.setItem("draft", saved);
 
     expect(readDraft(storage, "draft")).toBeNull();
+  });
+});
+
+describe("applyDraft", () => {
+  const MARK_P = { playerId: 1, playerName: "Mark" };
+  const DES_P = { playerId: 2, playerName: "Des" };
+  const [set1, set2] = [mk8Set(1, MARK_P), mk8Set(2, MARK_P)];
+  const base = () => mk8SessionForm([structuredClone(set1), structuredClone(set2)]);
+  const draftOf = (edit: (form: ReturnType<typeof base>) => void) => {
+    const values = base();
+    edit(values);
+    return { values, base: base() };
+  };
+
+  it("applies only what the admin changed, so a newer edit is not reverted", () => {
+    // The session was renamed and set 2 re-scored by a newer approved edit.
+    const current = base();
+    current.sessionName = "Renamed by someone else";
+    current.sets[1] = mk8Set(2, DES_P);
+    // The draft changed only the session URL.
+    const draft = draftOf((f) => (f.sessionUrl = "https://www.youtube.com/watch?v=new"));
+
+    const result = applyDraft(current, draft);
+
+    expect(result?.dropped).toBe(0);
+    expect(result?.values).toEqual({
+      ...current,
+      sessionUrl: "https://www.youtube.com/watch?v=new",
+    });
+  });
+
+  it("changes only the set the admin edited", () => {
+    const current = base();
+    current.sets[0] = mk8Set(1, DES_P); // newer edit to set 1
+    const draft = draftOf((f) => (f.sets[1] = mk8Set(2, DES_P)));
+
+    const result = applyDraft(current, draft);
+
+    expect(result?.values.sets).toEqual([mk8Set(1, DES_P), mk8Set(2, DES_P)]);
+  });
+
+  it("lets the draft win where the admin and a newer edit changed the same field", () => {
+    const current = { ...base(), sessionName: "Newer name" };
+    const draft = draftOf((f) => (f.sessionName = "Admin name"));
+
+    expect(applyDraft(current, draft)?.values.sessionName).toBe("Admin name");
+  });
+
+  it("does not treat key order or an untouched date as a change", () => {
+    const current = { ...base(), sessionName: "Newer name" };
+    const values = base();
+    // Same content, keys in another order.
+    const reordered = Object.fromEntries(Object.entries(values).reverse()) as typeof values;
+
+    expect(applyDraft(current, { values: reordered, base: base() })?.values).toEqual(current);
+  });
+
+  it("removes a set the admin deleted, and keeps the rest", () => {
+    const draft = draftOf((f) => f.sets.splice(0, 1));
+
+    expect(applyDraft(base(), draft)?.values.sets).toEqual([set2]);
+  });
+
+  it("adds a set the admin created, renumbering it if its id is now taken", () => {
+    const current = base();
+    current.sets.push(mk8Set(3, MARK_P)); // a newer edit already used id 3
+    const draft = draftOf((f) => f.sets.push(mk8Set(3, DES_P)));
+
+    const sets = applyDraft(current, draft)?.values.sets;
+
+    expect(sets).toHaveLength(4);
+    expect(sets?.[2]).toEqual(mk8Set(3, MARK_P));
+    expect(sets?.[3]).toEqual(mk8Set(4, DES_P));
+  });
+
+  it("counts edits to a set that no longer exists instead of resurrecting it", () => {
+    const current = base();
+    current.sets = [mk8Set(10, MARK_P), mk8Set(11, MARK_P)]; // sets were replaced
+    const draft = draftOf((f) => (f.sets[0] = mk8Set(1, DES_P)));
+
+    const result = applyDraft(current, draft);
+
+    expect(result?.dropped).toBe(1);
+    expect(result?.values.sets).toEqual(current.sets);
+  });
+
+  it("restores a draft with no base as-is for a new session", () => {
+    const values = codSessionForm();
+    const blank = { ...codSessionForm(), sessionId: undefined };
+
+    expect(applyDraft(blank, { values, base: null })).toEqual({ values, dropped: 0 });
+  });
+
+  it("refuses a base-less draft for an existing session", () => {
+    expect(applyDraft(base(), { values: base(), base: null })).toBeNull();
   });
 });
 
