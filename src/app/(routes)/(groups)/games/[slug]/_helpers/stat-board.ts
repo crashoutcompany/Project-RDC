@@ -169,6 +169,16 @@ function resolveChart(
   };
 }
 
+/**
+ * The stat board for a game slug, or undefined for a game without one.
+ * `hasOwn` keeps slugs like `constructor` or `__proto__` from resolving to
+ * inherited Object members.
+ */
+export const statBoardFor = (slug: string): StatBoardConfig | undefined =>
+  Object.hasOwn(STAT_BOARDS, slug)
+    ? STAT_BOARDS[slug as GamesEnum]
+    : undefined;
+
 /** One row of the grouped totals query (`getStatTotalsByGame`). */
 export type StatTotal = {
   playerId: number;

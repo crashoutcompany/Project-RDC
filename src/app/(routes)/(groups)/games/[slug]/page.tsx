@@ -4,7 +4,7 @@ import { Breadcrumbs } from "@/components/arcade/ui";
 import { getAllGames, getWinsPerPlayer } from "prisma/lib/games";
 import { getAllSessionsByGame } from "prisma/lib/admin";
 import { StatBoard } from "./_components/stat-board";
-import { STAT_BOARDS } from "./_helpers/stat-board";
+import { statBoardFor } from "./_helpers/stat-board";
 import { gameImages, gameSlug, GamesEnum } from "@/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
@@ -94,8 +94,9 @@ async function GameDetailContent({
   );
   if (!game) notFound();
 
-  const gameName = slug as GamesEnum;
-  const gameImagePath = gameImages[gameName];
+  const gameImagePath = Object.hasOwn(gameImages, slug)
+    ? gameImages[slug as GamesEnum]
+    : undefined;
   const gameImage = gameImagePath ? `/images/${gameImagePath}` : "";
 
   const [sessionsResult, membersResult, winsResult] = await Promise.all([
@@ -120,7 +121,7 @@ async function GameDetailContent({
   );
 
   // Games without a stat board (e.g. one just added by an admin) show none.
-  const statBoard = STAT_BOARDS[gameName];
+  const statBoard = statBoardFor(slug);
   const gameComponent = statBoard && (
     <StatBoard
       board={statBoard}
