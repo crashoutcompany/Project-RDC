@@ -18,12 +18,10 @@ import {
   Eyebrow,
   Heading,
 } from "@/components/arcade/ui";
+import { gameSlug } from "@/lib/games";
 import { capitalizeFirst, formatSessionDate } from "@/lib/utils";
 
 type Params = Promise<{ id: string }>;
-
-const gameSlug = (gameName: string) =>
-  gameName.replace(/\s/g, "").toLowerCase();
 
 export async function generateStaticParams() {
   const sessions = await getApprovedSessionIds();

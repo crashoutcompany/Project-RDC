@@ -1,9 +1,6 @@
 import type { AnalyzedPlayer, Stat, VisionPlayer } from "@/lib/visionTypes";
 import type { Player } from "@/generated/prisma/client";
-import {
-  findPlayer,
-  PLAYER_MAPPINGS,
-} from "@/app/(routes)/admin/_utils/player-mappings";
+import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";
 import { getStatConfigByFieldKey, type StatConfig } from "../stat-configs";
 
 /** A stat value after validation; `reqCheck` asks the admin to review it. */
@@ -69,22 +66,26 @@ export const processPlayer = (
 };
 
 /**
- * Maps a row's name (gamertag, alias or member name) to a player of this
- * session. Undefined for anyone else: randoms in the lobby, a card subtitle
- * read as a name, or a member who isn't playing.
+ * Maps a row's name to a player of this session. A member's gamertags and
+ * aliases come from their profile; a player with no profile (one added from
+ * the admin page) is matched on their own name. Undefined for anyone else:
+ * randoms in the lobby, a card subtitle read as a name, or a member who isn't
+ * playing.
  */
 export const validateProcessedPlayer = (
   processedPlayer: ProcessedPlayer,
   sessionPlayers: Player[],
 ): VisionPlayer | undefined => {
-  const member = findPlayer(processedPlayer.playerData.name);
-  const sessionPlayer =
-    member && sessionPlayers.find((p) => p.playerName === member.playerName);
+  const shown = processedPlayer.playerData.name;
+  const name = (findPlayer(shown)?.playerName ?? shown).trim().toLowerCase();
+  const sessionPlayer = sessionPlayers.find(
+    (p) => p.playerName.toLowerCase() === name,
+  );
   if (!sessionPlayer) return undefined;
 
   return {
     playerId: sessionPlayer.playerId,
-    name: sessionPlayer.playerName as keyof typeof PLAYER_MAPPINGS,
+    name: sessionPlayer.playerName,
     stats: [...processedPlayer.playerData.stats],
     teamKey: processedPlayer.teamKey,
   };

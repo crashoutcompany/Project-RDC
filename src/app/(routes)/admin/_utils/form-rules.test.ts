@@ -1,5 +1,4 @@
-import { formSchema, GAME_STATS, type FormValues } from "./form-helpers";
-import { STAT_CONFIGS, statRollup } from "@/lib/stat-configs";
+import { formSchema, type FormValues } from "./form-helpers";
 import { StatName } from "@/lib/stat-names";
 
 const MARK = { playerId: 1, playerName: "Mark" } as const;
@@ -199,25 +198,6 @@ describe("a session only records its own game's stats", () => {
       ["RL_SAVES is not a Marvel Rivals stat.", [...PLAYER_PATH, 1]],
       ["COD_POS is not a Marvel Rivals stat.", [...PLAYER_PATH, 3]],
     ]);
-  });
-
-  it("lists the same stats per game as the stat configs, without the per-day counters", () => {
-    const GAME_IDS: Record<keyof typeof GAME_STATS, number> = {
-      "Mario Kart 8": 1,
-      "Rocket League": 2,
-      "Call of Duty": 3,
-      "Lethal Company": 4,
-      SpeedRunners: 5,
-      "Marvel Rivals": 6,
-    };
-
-    for (const [game, gameId] of Object.entries(GAME_IDS)) {
-      const configured = Object.values(STAT_CONFIGS)
-        .filter((config) => config.gameId === gameId && statRollup(config) !== "skip")
-        .map((config) => config.name);
-
-      expect([...GAME_STATS[game as keyof typeof GAME_STATS]].sort(), game).toEqual(configured.sort());
-    }
   });
 });
 

@@ -1,3 +1,5 @@
+import { GAME_LIST, GAME_NAMES, type GameName } from "@/lib/games";
+import { recordedStatNames } from "@/lib/stat-configs";
 import { StatName } from "@/lib/stat-names";
 import { isYouTubeThumbnailUrl } from "@/lib/youtube";
 import { z } from "zod/v4";
@@ -94,65 +96,34 @@ const numericStatValueSchema = z
   .transform((val) => String(parseInt(val) || 0));
 
 /**
- * The stats each game records. A session only accepts its own game's stats;
- * the per-day counters (`*_DAY`) are never entered through the form.
+ * The stats each game's sessions record, by game name. Derived from the stat
+ * configs, so a stat added there is accepted here; a session only accepts its
+ * own game's stats (see `gameSessionSchema`).
  */
-export const GAME_STATS = {
-  "Call of Duty": [
-    StatName.COD_KILLS,
-    StatName.COD_DEATHS,
-    StatName.COD_POS,
-    StatName.COD_SCORE,
-    StatName.COD_MELEES,
-  ],
-  "Rocket League": [
-    StatName.RL_GOALS,
-    StatName.RL_ASSISTS,
-    StatName.RL_SAVES,
-    StatName.RL_SHOTS,
-    StatName.RL_SCORE,
-  ],
-  "Mario Kart 8": [StatName.MK8_POS],
-  "Lethal Company": [StatName.LC_DEATHS],
-  SpeedRunners: [StatName.SR_WINS, StatName.SR_SETS, StatName.SR_POS],
-  "Marvel Rivals": [
-    StatName.MR_KILLS,
-    StatName.MR_DEATHS,
-    StatName.MR_ASSISTS,
-    StatName.MR_TRIPLE_KILL,
-    StatName.MR_QUADRA_KILL,
-    StatName.MR_PENTA_KILL,
-    StatName.MR_HEXA_KILL,
-    StatName.MR_MOST_KILLS,
-    StatName.MR_HIGHEST_DMG,
-    StatName.MR_HIGHEST_DMG_BLOCKED,
-    StatName.MR_MOST_HEALING,
-    StatName.MR_MOST_ASSISTS,
-    StatName.MR_FINAL_HITS,
-    StatName.MR_DMG,
-    StatName.MR_DMG_BLOCKED,
-    StatName.MR_HEALING,
-    StatName.MR_ACCURACY,
-  ],
-} as const satisfies Record<string, readonly [StatName, ...StatName[]]>;
+export const GAME_STATS = Object.fromEntries(
+  GAME_LIST.map((game) => [game.name, recordedStatNames(game.gameId)]),
+) as Record<GameName, StatName[]>;
 
-type GameName = keyof typeof GAME_STATS;
+/** Narrows a stat list to the non-empty tuple `z.literal` asks for. */
+const literalOf = (stats: StatName[]) =>
+  z.literal(stats as [StatName, ...StatName[]]);
 
-/** A stat line for one of `stats`, with a whole-number value. */
-const numericStats = <const Stats extends readonly [StatName, ...StatName[]]>(
-  stats: Stats,
-) =>
-  z.object({
-    statId: statIdSchema,
-    stat: z.literal(stats),
-    statValue: numericStatValueSchema,
-  });
+/** A stat line with a whole-number value: every game's except Marvel Rivals'. */
+const numericStats = z.object({
+  statId: statIdSchema,
+  stat: literalOf(
+    GAME_NAMES.filter((game) => game !== "Marvel Rivals").flatMap(
+      (game) => GAME_STATS[game],
+    ),
+  ),
+  statValue: numericStatValueSchema,
+});
 
 /** Like `numericStats`, but the medal stats may be left empty (stored as 0). */
 const marvelRivalsStats = z
   .object({
     statId: statIdSchema,
-    stat: z.literal(GAME_STATS["Marvel Rivals"]),
+    stat: literalOf(GAME_STATS["Marvel Rivals"]),
     statValue: z.string().trim(),
   })
   .superRefine((data, ctx) => {
@@ -192,11 +163,7 @@ const marvelRivalsStats = z
 // Every stat line the form knows. Which of them a session may use depends on
 // its game and is checked in `gameSessionSchema`.
 const statSchema = z.discriminatedUnion("stat", [
-  numericStats(GAME_STATS["Rocket League"]),
-  numericStats(GAME_STATS["Mario Kart 8"]),
-  numericStats(GAME_STATS["Call of Duty"]),
-  numericStats(GAME_STATS["Lethal Company"]),
-  numericStats(GAME_STATS.SpeedRunners),
+  numericStats,
   marvelRivalsStats,
 ]);
 
@@ -338,7 +305,7 @@ type GameRules = {
 
 /**
  * What each game requires of a match. Games are keyed by their name in the
- * database, and every game in `GAME_STATS` needs an entry.
+ * database (see the game registry), and every game needs an entry.
  */
 const GAME_RULES: Record<GameName, GameRules> = {
   "Call of Duty": { matchRule: codMatchRule },
@@ -351,7 +318,7 @@ const GAME_RULES: Record<GameName, GameRules> = {
 
 /** Flags every stat line that belongs to a different game. */
 const foreignStats = (game: GameName, match: MatchValues): MatchIssue[] => {
-  const allowed: readonly StatName[] = GAME_STATS[game];
+  const allowed = GAME_STATS[game];
   return match.playerSessions.flatMap((ps, playerIndex) =>
     ps.playerStats.flatMap(({ stat }, statIndex) =>
       allowed.includes(stat)
@@ -405,15 +372,11 @@ const gameSessionSchema = <Game extends GameName>(game: Game) => {
 // ! End of Game specific schemas
 
 // Combined schema with discriminated union
+// One schema per game in the registry, told apart by `game`.
+const [firstGame, ...otherGames] = GAME_NAMES.map(gameSessionSchema);
+
 export const formSchema = z
-  .discriminatedUnion("game", [
-    gameSessionSchema("Call of Duty"),
-    gameSessionSchema("Rocket League"),
-    gameSessionSchema("Mario Kart 8"),
-    gameSessionSchema("Lethal Company"),
-    gameSessionSchema("SpeedRunners"),
-    gameSessionSchema("Marvel Rivals"),
-  ])
+  .discriminatedUnion("game", [firstGame, ...otherGames])
   // Everyone the session mentions must be one of its players, by playerId.
   .check((ctx) => {
     const { players, dayWinners, sets } = ctx.value;
@@ -461,11 +424,4 @@ export const formSchema = z
 // Define types based on the Zod schema
 export type FormValues = z.infer<typeof formSchema>;
 
-// Extract from a specific schema to avoid union indexing issues
-type BaseGameForm = Extract<FormValues, { game: "Call of Duty" }>;
-
-// Derive specific types from the base schema
-export type Match = BaseGameForm["sets"][number]["matches"][number];
-export type MatchWinners = Match["matchWinners"];
-export type PlayerSessions = Match["playerSessions"];
-export type SetWinners = BaseGameForm["sets"][number]["setWinners"];
+export type Match = FormValues["sets"][number]["matches"][number];

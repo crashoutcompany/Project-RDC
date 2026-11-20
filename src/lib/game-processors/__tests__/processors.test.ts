@@ -330,6 +330,28 @@ describe("Marvel Rivals", () => {
   });
 });
 
+describe("a session player without a member profile", () => {
+  // Added from the admin page: in the database, but with no gamertags on file.
+  const ZED = { playerId: 9, playerName: "Zed" } as Player;
+  const sessionPlayers = [...SESSION, ZED];
+
+  it("is recognised by their own name, whatever its case", () => {
+    const result = run(MK8, solo(["Mark", { mk8_place: "2" }], [" ZED ", { mk8_place: "1" }]), {
+      sessionPlayers,
+    });
+
+    expect(result.status).toBe(SUCCESS);
+    expect(result.players[1]).toMatchObject({ playerId: 9, name: "Zed" });
+    expect(result.winners).toEqual(["Zed"]);
+  });
+
+  it("is still dropped when they are not in the session", () => {
+    const result = run(MK8, solo(["Mark", { mk8_place: "2" }], ["Zed", { mk8_place: "1" }]));
+
+    expect(result.players.map((p) => p.name)).toEqual(["Mark"]);
+  });
+});
+
 describe("games without a processor", () => {
   it.each([4, 5, 999])("rejects game %d", (gameId) => {
     expect(() => run(gameId, solo(["Mark", {}]))).toThrow(`Invalid game id: ${gameId}`);

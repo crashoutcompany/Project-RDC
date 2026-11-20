@@ -1,4 +1,5 @@
 import { MetadataRoute } from "next";
+import { gameSlug } from "@/lib/games";
 import { getAllGames } from "prisma/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { getApprovedSessionIds } from "prisma/lib/public-session";
@@ -23,7 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const gamesMeta: MetadataRoute.Sitemap = games.data.map((game) => ({
-    url: `${BASE_URL}/games/${game.gameName.replace(/\s/g, "").toLowerCase()}`,
+    url: `${BASE_URL}/games/${gameSlug(game.gameName)}`,
     lastModified: new Date(),
     changeFrequency: "weekly",
     priority: 1,

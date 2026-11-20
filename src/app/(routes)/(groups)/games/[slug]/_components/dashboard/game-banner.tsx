@@ -1,8 +1,9 @@
 import Image from "next/image";
 import { Tag } from "@/components/arcade/ui";
+import type { GameName } from "@/lib/games";
 import type { DashboardBannerStats } from "../../_helpers/dashboard";
 
-const BANNER_TAGS: Record<string, string> = {
+const BANNER_TAGS: Record<GameName, string> = {
   "Mario Kart 8": "full send!!",
   "Rocket League": "boost!!",
   "Call of Duty": "no scope!!",
@@ -33,7 +34,7 @@ export function GameBanner({ gameName, gameImage, stats }: GameBannerProps) {
       ) : null}
       <div className="from-ac-ink via-ac-ink/70 absolute inset-0 bg-linear-to-r to-transparent" />
       <Tag tone="green" className="absolute top-5 right-6 z-10">
-        {BANNER_TAGS[gameName] ?? "game on!!"}
+        {BANNER_TAGS[gameName as GameName] ?? "game on!!"}
       </Tag>
       <div className="relative px-6 pt-16 pb-6 sm:px-8">
         <h1 className="ac-title text-ac-cream text-2xl sm:text-3xl md:text-4xl">
