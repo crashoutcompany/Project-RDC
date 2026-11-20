@@ -27,7 +27,6 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
   // ! Can we fetch all game stats at once and then serve the values from state?
   const getGameStatsFromDb = useCallback(
     async (gameName: string): Promise<GameStat[]> => {
-      console.log("Getting game stats from db for game: ", gameName);
       try {
         const result = await getGameStats(gameName);
         if (!Array.isArray(result)) {

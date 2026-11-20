@@ -92,14 +92,13 @@ export const MVP = ({
                 setIsSubmitting(true);
                 try {
                   const stats = getSetsData(session);
-                  console.log({ stats });
                   const mvp = await analyzeMvp(
                     stats as ProcessedSet[],
                     session.sessionId,
                   );
                   setMvp(mvp);
                 } catch (error) {
-                  console.log("Unexpected error", error);
+                  console.error("Unexpected error", error);
                 } finally {
                   setIsSubmitting(false);
                 }

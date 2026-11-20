@@ -158,6 +158,89 @@ describe("approveEditRequest", () => {
     expect(db.playerStat.createMany).toHaveBeenCalledTimes(1);
   });
 
+  describe("a proposal that changed one of several sets", () => {
+    const twoSets = [
+      { ...existingSet, setId: 1 },
+      { ...existingSet, setId: 2 },
+    ];
+    const oneStat = { statValue: true };
+    // Set 2 (index 1) is the only one with a real change; set 1 is reported with false leaves.
+    const onlySecondSet = {
+      sets: [
+        { setId: false, matches: [{ playerSessions: [{ playerStats: [{ statValue: false }] }] }] },
+        { setId: false, matches: [{ playerSessions: [{ playerStats: [oneStat] }] }] },
+      ],
+    };
+
+    beforeEach(() => {
+      db.session.findUnique.mockResolvedValue({
+        sessionId: 1,
+        gameId: 1,
+        date: new Date("2025-01-01"),
+        sets: twoSets,
+      } as never);
+      db.gameStat.findMany.mockResolvedValue([{ statId: 1, statName: "MK8_POS" }] as never);
+      db.player.findMany.mockResolvedValue([{ playerId: 1 }, { playerId: 2 }] as never);
+    });
+
+    const givenProposal = (dirtyFields: Record<string, unknown>) => {
+      db.sessionEditRequest.findUnique.mockResolvedValue({
+        id: 5,
+        sessionId: 1,
+        status: "PENDING",
+        proposedData: {
+          // Set 1 carries stale values; only set 2 was edited.
+          proposedData: mk8SessionForm([mk8Set(1, MARK), mk8Set(2, DES)]),
+          dirtyFields,
+        },
+      } as never);
+    };
+
+    it("rewrites only that set and leaves newer edits to the others alone", async () => {
+      givenProposal(onlySecondSet);
+
+      expect(await approveEditRequest(5)).toEqual({ error: null });
+
+      expect(db.gameSet.deleteMany).not.toHaveBeenCalled();
+      expect(db.gameSet.update.mock.calls).toEqual([
+        [{ where: { setId: 2 }, data: { setWinners: { set: [{ playerId: 2 }] } } }],
+      ]);
+      expect(db.match.deleteMany.mock.calls).toEqual([[{ where: { setId: 2 } }]]);
+      expect(db.playerStat.createMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("rewrites every set the proposal changed", async () => {
+      givenProposal({ sets: [{ setWinners: [{ playerId: true }] }, { setWinners: [{ playerId: true }] }] });
+
+      expect(await approveEditRequest(5)).toEqual({ error: null });
+
+      expect(db.match.deleteMany.mock.calls).toEqual([
+        [{ where: { setId: 1 } }],
+        [{ where: { setId: 2 } }],
+      ]);
+    });
+
+    it("rewrites every set when the form flagged the whole array as changed", async () => {
+      givenProposal({ sets: true });
+
+      expect(await approveEditRequest(5)).toEqual({ error: null });
+
+      expect(db.match.deleteMany).toHaveBeenCalledTimes(2);
+    });
+
+    it("stamps an edited date on the sets it does not rewrite", async () => {
+      givenProposal({ date: true, ...onlySecondSet });
+
+      expect(await approveEditRequest(5)).toEqual({ error: null });
+
+      expect(db.playerStat.updateMany).toHaveBeenCalledWith({
+        where: { playerSession: { sessionId: 1 } },
+        data: { date: expect.any(Date) },
+      });
+      expect(db.match.deleteMany.mock.calls).toEqual([[{ where: { setId: 2 } }]]);
+    });
+  });
+
   it("moves the existing stats to an edited date without rewriting the sets", async () => {
     const newDate = new Date("2025-06-15T00:00:00.000Z");
     givenPendingEdit({ ...mk8SessionForm(), date: newDate }, { date: true });

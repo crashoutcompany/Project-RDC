@@ -3,6 +3,7 @@ import { STAT_CONFIGS, statRollup } from "@/lib/stat-configs";
 import {
   buildStatBoard,
   STAT_BOARDS,
+  statBoardFor,
   type StatBoardConfig,
 } from "../_helpers/stat-board";
 
@@ -145,4 +146,17 @@ describe("STAT_BOARDS", () => {
 
     expect(gameIds.size).toBe(1);
   });
+});
+
+describe("statBoardFor", () => {
+  it("returns the board of a game that has one", () => {
+    expect(statBoardFor(GamesEnum.CallOfDuty)).toBe(STAT_BOARDS[GamesEnum.CallOfDuty]);
+  });
+
+  it.each(["newgame", "constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"])(
+    "has no board for %s, so the page shows none",
+    (slug) => {
+      expect(statBoardFor(slug)).toBeUndefined();
+    },
+  );
 });

@@ -151,14 +151,27 @@ function matchesExistingSets(existingSetIds: number[], sets: SetInput[]) {
  * onto them keeps the sets and rebuilds their winners and matches; anything
  * else (sets added, removed or swapped) deletes every set and recreates them,
  * so no proposed set is silently skipped.
+ *
+ * `onlySetIds` narrows the in-place case to the sets an edit actually
+ * changed; the rest are left untouched, so a stale proposal for one set can't
+ * overwrite newer edits to the others. It is ignored when sets are replaced.
  */
 export async function writeSessionTree(
   tx: Prisma.TransactionClient,
   session: SessionRef,
   sets: SetInput[],
-  { replacingSetIds }: { replacingSetIds?: number[] } = {},
+  {
+    replacingSetIds,
+    onlySetIds,
+  }: { replacingSetIds?: number[]; onlySetIds?: number[] } = {},
 ) {
-  const gameStats = await loadGameStats(tx, session, sets);
+  const inPlace =
+    !!replacingSetIds && matchesExistingSets(replacingSetIds, sets);
+  const toWrite =
+    inPlace && onlySetIds
+      ? sets.filter((set) => onlySetIds.includes(set.setId))
+      : sets;
+  const gameStats = await loadGameStats(tx, session, toWrite);
   // Every stat of the session goes in with one insert at the end, instead of
   // one round trip per player per match.
   const stats: Prisma.PlayerStatCreateManyInput[] = [];
@@ -173,8 +186,8 @@ export async function writeSessionTree(
       )),
     );
 
-  if (replacingSetIds && matchesExistingSets(replacingSetIds, sets)) {
-    for (const set of sets) {
+  if (inPlace) {
+    for (const set of toWrite) {
       await tx.gameSet.update({
         where: { setId: set.setId },
         data: { setWinners: { set: toRefs(set.setWinners) } },

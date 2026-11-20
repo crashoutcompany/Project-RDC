@@ -21,7 +21,7 @@ export function BackfillMvpButton() {
             try {
               setResult(await backfillMissingMvps());
             } catch (error) {
-              console.log("Unexpected error", error);
+              console.error("Unexpected error", error);
               setResult({ error: "Backfill failed" });
             }
           })

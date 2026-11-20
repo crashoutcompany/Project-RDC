@@ -141,6 +141,21 @@ async function applyTopLevelUpdates(
     });
 }
 
+/**
+ * Ids of the sets whose own dirty fields changed. `dirtyFields.sets` is
+ * indexed like `proposedData.sets`. Returns undefined (rewrite every set)
+ * when the form reported the array as a bare flag instead of per-set fields.
+ */
+function changedSetIds(
+  dirtySets: unknown,
+  sets: { setId: number }[],
+): number[] | undefined {
+  if (!Array.isArray(dirtySets)) return undefined;
+  return sets
+    .filter((_, index) => hasChanges(dirtySets[index]))
+    .map((set) => set.setId);
+}
+
 /** Approve an edit: create a SessionRevision snapshot, apply changes to Session, mark request APPROVED */
 export async function approveEditRequest(editId: number, note?: string) {
   const user = await requireAdmin();
@@ -173,26 +188,31 @@ export async function approveEditRequest(editId: number, note?: string) {
       });
       await applyTopLevelUpdates(tx, session.sessionId, proposal);
 
-      // Player stats carry the session date, so an edited date reaches them
-      // whether or not the sets are rewritten.
+      // Player stats carry the session date, so an edited date reaches every
+      // set's stats, including the sets that are not rewritten below.
       const date = proposal.dirtyFields.date
         ? new Date(proposal.proposedData.date)
         : session.date;
-
-      // Sets are only rewritten when this proposal changed them, so a stale
-      // proposal (say, a rename) can't undo a newer edit to the matches.
-      if (hasChanges(proposal.dirtyFields.sets))
-        await writeSessionTree(
-          tx,
-          { sessionId: session.sessionId, gameId: session.gameId, date },
-          proposal.proposedData.sets || [],
-          { replacingSetIds: session.sets.map((set) => set.setId) },
-        );
-      else if (proposal.dirtyFields.date)
+      if (proposal.dirtyFields.date)
         await tx.playerStat.updateMany({
           where: { playerSession: { sessionId: session.sessionId } },
           data: { date },
         });
+
+      // Only the sets this proposal changed are rewritten, so a stale proposal
+      // (a rename, or an edit to one set) can't undo newer edits to the rest.
+      if (hasChanges(proposal.dirtyFields.sets)) {
+        const sets = proposal.proposedData.sets || [];
+        await writeSessionTree(
+          tx,
+          { sessionId: session.sessionId, gameId: session.gameId, date },
+          sets,
+          {
+            replacingSetIds: session.sets.map((set) => set.setId),
+            onlySetIds: changedSetIds(proposal.dirtyFields.sets, sets),
+          },
+        );
+      }
     }, SESSION_TX_OPTIONS);
 
     revalidateSessionData();

@@ -40,7 +40,6 @@ export const ApproveButton = ({ editId }: { editId: number }) => {
         <Button
           type="button"
           onClick={async () => {
-            console.log(note.length);
             if (note.length > maxLength) {
               toast.error(`Note must be less than ${maxLength} characters`, {
                 richColors: true,

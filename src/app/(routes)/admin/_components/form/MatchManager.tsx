@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import RDCVisionModal from "./RDCVisionModal";
 import { FormValues } from "../../_utils/form-helpers";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { Stat, VisionPlayer } from "@/lib/visionTypes";
+import { VisionPlayer } from "@/lib/visionTypes";
+import { visionResultToMatch } from "../../_utils/vision-to-match";
 
 interface Props {
   setIndex: number;
@@ -30,67 +31,20 @@ const MatchManager = (props: Props) => {
   const players = getValues(`players`);
   const gameName = getValues(`game`);
 
-  const handleNewMatchClick = () => {
-    console.log("Handling New Match click", players);
-    // Explicitly type the playerSessions constant.
-    const playerSessions = players.map((player: Player) => ({
-      playerId: player.playerId,
-      playerSessionName: player.playerName,
-      playerStats: [],
-    }));
-    console.log("Player Sessions: ", playerSessions);
+  const handleNewMatchClick = () =>
     append({
       matchWinners: [],
-      playerSessions: playerSessions,
+      playerSessions: players.map((player: Player) => ({
+        playerId: player.playerId,
+        playerSessionName: player.playerName,
+        playerStats: [],
+      })),
     });
-  };
 
-  const processTeamPlayers = (teamPlayers: VisionPlayer[]) => {
-    console.log("Processing Team Players: ", teamPlayers);
-
-    return teamPlayers.map((player) => {
-      // Map over the stats from the vision player to format them for the form
-      const formattedStats = player.stats.map((stat: Stat) => ({
-        statId: stat.statId,
-        stat: stat.stat,
-        statValue: stat.statValue,
-      })) as FormValues["sets"][number]["matches"][number]["playerSessions"][number]["playerStats"];
-
-      return {
-        playerId: player?.playerId || 0,
-        playerSessionName: player?.name || "Unknown Player",
-        playerStats: formattedStats,
-      };
-    });
-  };
-
-  const handleCreateMatchFromVision2 = (
+  const handleCreateMatchFromVision = (
     visionPlayers: VisionPlayer[],
     visionWinners: VisionPlayer[],
-  ) => {
-    const visionMatchPlayerSessions = processTeamPlayers(visionPlayers);
-    console.log("Vision Match Player Sessions: ", visionMatchPlayerSessions);
-
-    const formattedWinners = visionWinners.map((player: VisionPlayer) => {
-      return {
-        playerId: player?.playerId || 0,
-        playerName: player?.name,
-      };
-    });
-
-    if (formattedWinners && formattedWinners.length > 0) {
-      console.log("Setting Vision Winners!", formattedWinners);
-      append({
-        matchWinners: formattedWinners,
-        playerSessions: visionMatchPlayerSessions,
-      });
-    } else {
-      append({
-        matchWinners: [],
-        playerSessions: visionMatchPlayerSessions,
-      });
-    }
-  };
+  ) => append(visionResultToMatch(visionPlayers, visionWinners));
 
   return (
     <div>
@@ -154,7 +108,7 @@ const MatchManager = (props: Props) => {
           Add Match
         </Button>
         <RDCVisionModal
-          handleCreateMatchFromVision={handleCreateMatchFromVision2}
+          handleCreateMatchFromVision={handleCreateMatchFromVision}
           sessionPlayers={players}
           gameName={gameName}
         />

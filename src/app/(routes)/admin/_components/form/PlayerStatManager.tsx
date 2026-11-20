@@ -55,8 +55,6 @@ const PlayerStatManager = (props: Props) => {
   const currentGame = getValues("game");
   const isMarvelRivals = currentGame === "Marvel Rivals";
 
-  console.log("game stats: ", gameStats);
-
   // TODO: Move to PlayerSessionManager or above
   // TODO: Error message doesn't show up for RL bc refine doesn't pass.
 

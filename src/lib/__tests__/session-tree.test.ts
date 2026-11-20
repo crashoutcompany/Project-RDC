@@ -201,6 +201,58 @@ describe("writeSessionTree", () => {
       expect(db.playerStat.createMany.mock.calls[0][0]?.data).toHaveLength(8);
     });
 
+    it("rewrites only the named sets when the proposal maps 1:1", async () => {
+      await writeSessionTree(tx, SESSION, [set(5, 2), set(6, 2)], {
+        replacingSetIds: [5, 6],
+        onlySetIds: [6],
+      });
+
+      expect(db.gameSet.update.mock.calls).toEqual([
+        [{ where: { setId: 6 }, data: { setWinners: { set: [{ playerId: 2 }] } } }],
+      ]);
+      expect(db.match.deleteMany.mock.calls).toEqual([[{ where: { setId: 6 } }]]);
+      expect(db.match.create.mock.calls.map(([arg]) => arg.data.setId)).toEqual([6]);
+      expect(db.playerStat.createMany.mock.calls[0][0]?.data).toHaveLength(4);
+    });
+
+    it("writes nothing when no set is named", async () => {
+      await writeSessionTree(tx, SESSION, [set(5), set(6)], {
+        replacingSetIds: [5, 6],
+        onlySetIds: [],
+      });
+
+      expect(db.gameSet.update).not.toHaveBeenCalled();
+      expect(db.match.deleteMany).not.toHaveBeenCalled();
+      expect(db.playerStat.createMany).not.toHaveBeenCalled();
+    });
+
+    it("does not validate sets it leaves alone", async () => {
+      // Player 2 no longer exists, but only set 6 (player 1 only) is rewritten.
+      db.player.findMany.mockResolvedValue([{ playerId: 1 }] as never);
+      const onlyMark: SetInput = {
+        setId: 6,
+        setWinners: [{ playerId: 1 }],
+        matches: [{ matchWinners: [{ playerId: 1 }], playerSessions: [player(1, "3", "1")] }],
+      };
+
+      await writeSessionTree(tx, SESSION, [set(5), onlyMark], {
+        replacingSetIds: [5, 6],
+        onlySetIds: [6],
+      });
+
+      expect(db.match.deleteMany.mock.calls).toEqual([[{ where: { setId: 6 } }]]);
+    });
+
+    it("still replaces every set when the structure changed, whatever onlySetIds says", async () => {
+      await writeSessionTree(tx, SESSION, [set(5), set(6)], {
+        replacingSetIds: [5],
+        onlySetIds: [5],
+      });
+
+      expect(db.gameSet.deleteMany).toHaveBeenCalledWith({ where: { sessionId: 10 } });
+      expect(db.gameSet.create).toHaveBeenCalledTimes(2);
+    });
+
     it.each([
       ["a set was added", [set(5), set(6)], [5]],
       ["a set was removed", [set(5)], [5, 6]],

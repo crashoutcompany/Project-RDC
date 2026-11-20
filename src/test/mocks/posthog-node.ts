@@ -5,10 +5,7 @@
 import { vi } from "vitest";
 
 export class PostHog {
-  constructor(_apiKey?: string, _options?: Record<string, unknown>) {
-    // No-op constructor - accepts any args without validation
-  }
-
+  // No constructor: any arguments are accepted and nothing is validated.
   capture = vi.fn();
   identify = vi.fn();
   alias = vi.fn();

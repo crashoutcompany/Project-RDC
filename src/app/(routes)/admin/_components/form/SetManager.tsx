@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import MatchManager from "./MatchManager";
 import PlayerSelector from "./PlayerSelector";
@@ -16,7 +16,7 @@ import WinnerDisplay from "./WinnerDisplay";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import BulkUploadModal, { BulkProcessingResult } from "./BulkUploadModal";
 import BulkReviewModal from "./BulkReviewModal";
-import { Stat, VisionPlayer } from "@/lib/visionTypes";
+import { visionResultToMatch } from "../../_utils/vision-to-match";
 
 const SetManager = () => {
   const {
@@ -69,42 +69,10 @@ const SetManager = () => {
   const players = watch(`players`);
   const gameName = watch(`game`);
 
-  const processTeamPlayers = useCallback((teamPlayers: VisionPlayer[]) => {
-    return teamPlayers.map((player) => {
-      const formattedStats = player.stats.map((stat: Stat) => ({
-        statId: stat.statId,
-        stat: stat.stat,
-        statValue: stat.statValue,
-      })) as Match["playerSessions"][number]["playerStats"];
-
-      return {
-        playerId: player?.playerId || 0,
-        playerSessionName: player?.name || "Unknown Player",
-        playerStats: formattedStats,
-      };
-    });
-  }, []);
-
-  const convertResultToMatch = useCallback(
-    (result: BulkProcessingResult): Match | null => {
-      if (!result.data) return null;
-
-      const playerSessions = processTeamPlayers(result.data.players);
-
-      const formattedWinners = (result.data.winner || []).map(
-        (player: VisionPlayer) => ({
-          playerId: player?.playerId || 0,
-          playerName: player?.name,
-        }),
-      );
-
-      return {
-        matchWinners: formattedWinners,
-        playerSessions: playerSessions,
-      } as Match;
-    },
-    [processTeamPlayers],
-  );
+  const convertResultToMatch = (result: BulkProcessingResult): Match | null =>
+    result.data
+      ? visionResultToMatch(result.data.players, result.data.winner)
+      : null;
 
   const handleBulkProcessingComplete = useCallback(
     (results: BulkProcessingResult[]) => {
@@ -116,11 +84,6 @@ const SetManager = () => {
 
   const handleBulkReviewConfirm = useCallback(
     (assignments: Map<number, BulkProcessingResult[]>, newSetIds: number[]) => {
-      console.log("handleBulkReviewConfirm called", {
-        assignments: Array.from(assignments.entries()),
-        newSetIds,
-      });
-
       const currentSets = getValues("sets") || [];
       let updatedHighestSetId = highestSetId;
 
@@ -138,10 +101,6 @@ const SetManager = () => {
           const matchesForSet = resultsForSet
             .map(convertResultToMatch)
             .filter((m): m is Match => m !== null);
-
-          console.log(
-            `Creating new set ${newSetId} with ${matchesForSet.length} matches`,
-          );
 
           newSetsToAppend.push({
             setId: newSetId,
@@ -170,10 +129,6 @@ const SetManager = () => {
           .map(convertResultToMatch)
           .filter((m): m is Match => m !== null);
 
-        console.log(
-          `Adding ${matches.length} matches to existing set ${setId} at index ${setIndex}`,
-        );
-
         const currentMatches = getValues(`sets.${setIndex}.matches`) || [];
         setValue(`sets.${setIndex}.matches`, [...currentMatches, ...matches], {
           shouldDirty: true,
@@ -182,7 +137,6 @@ const SetManager = () => {
 
       // Append all new sets at once
       if (newSetsToAppend.length > 0) {
-        console.log(`Appending ${newSetsToAppend.length} new sets`);
         newSetsToAppend.forEach((newSet) => {
           append(newSet);
         });
@@ -221,7 +175,7 @@ const SetManager = () => {
       setBulkResults([]);
       setShowReviewModal(false);
     },
-    [append, convertResultToMatch, getValues, highestSetId, setValue],
+    [append, getValues, highestSetId, setValue],
   );
 
   return (
