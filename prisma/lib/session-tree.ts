@@ -165,7 +165,8 @@ export async function writeSessionTree(
     onlySetIds,
   }: { replacingSetIds?: number[]; onlySetIds?: number[] } = {},
 ) {
-  const inPlace = !!replacingSetIds && matchesExistingSets(replacingSetIds, sets);
+  const inPlace =
+    !!replacingSetIds && matchesExistingSets(replacingSetIds, sets);
   const toWrite =
     inPlace && onlySetIds
       ? sets.filter((set) => onlySetIds.includes(set.setId))
