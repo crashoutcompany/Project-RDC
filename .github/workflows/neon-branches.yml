@@ -26,7 +26,7 @@ permissions:
 jobs:
   neon:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@72b17a43589bb357f01c41bed231b8e2390912e2 # v1.6.0
+    uses: crashoutcompany/.github/.github/workflows/neon-branches.yml@03bade3a0c168a59340fb8e338bf19b52c79f9bc # main 03bade3 (post-#16)
     with:
       vercel-preview-env: true
       skip-drafts: true
@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    uses: crashoutcompany/.github/.github/workflows/neon-sweep.yml@72b17a43589bb357f01c41bed231b8e2390912e2 # v1.6.0
+    uses: crashoutcompany/.github/.github/workflows/neon-sweep.yml@03bade3a0c168a59340fb8e338bf19b52c79f9bc # main 03bade3 (post-#16)
     with:
       dry-run: ${{ inputs.dry-run || false }}
       vercel-preview-env: true

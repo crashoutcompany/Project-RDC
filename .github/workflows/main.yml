@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   ci:
-    uses: crashoutcompany/.github/.github/workflows/ci.yml@72b17a43589bb357f01c41bed231b8e2390912e2 # v1.6.0
+    uses: crashoutcompany/.github/.github/workflows/ci.yml@03bade3a0c168a59340fb8e338bf19b52c79f9bc # main 03bade3 (post-#16)
     with:
       install-flags: --ignore-scripts
       needs-prisma: true
