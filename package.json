@@ -41,7 +41,7 @@
     "@ai-sdk/google": "^4.0.118",
     "@ai-sdk/otel": "^1.0.170",
     "@azure-rest/ai-document-intelligence": "^1.0.0-beta.3",
-    "@hookform/resolvers": "^5.2.2",
+    "@hookform/resolvers": "^7.0.7",
     "@neondatabase/serverless": "^1.0.1",
     "@opentelemetry/api": "^1.10.0",
     "@opentelemetry/resources": "^3.1.1",
