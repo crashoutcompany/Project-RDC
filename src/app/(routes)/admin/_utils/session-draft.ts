@@ -70,6 +70,33 @@ const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
 type SessionSet = FormValues["sets"][number];
 
 /**
+ * A set the admin edited: keep matches they didn't touch, so a newer edit to
+ * a sibling race isn't proposed for reverting. Adding or removing matches is
+ * a structural change, so the draft wins for the whole set.
+ */
+function mergeSet(
+  current: SessionSet,
+  draft: SessionSet,
+  before: SessionSet,
+): SessionSet {
+  if (draft.matches.length !== before.matches.length) return draft;
+
+  return {
+    ...current,
+    setWinners: same(draft.setWinners, before.setWinners)
+      ? current.setWinners
+      : draft.setWinners,
+    matches: current.matches.map((match, index) => {
+      const fromDraft = draft.matches[index];
+      const fromBase = before.matches[index];
+      return fromDraft && fromBase && !same(fromDraft, fromBase)
+        ? fromDraft
+        : match;
+    }),
+  };
+}
+
+/**
  * Lays a draft's own changes over the form as it is now.
  *
  * Restoring the draft's values wholesale would make every field the session
@@ -77,10 +104,11 @@ type SessionSet = FormValues["sets"][number];
  * submitting would propose reverting it. So only what the admin changed
  * against the draft's base is applied: top-level fields that differ from the
  * base, and sets, matched by set id, that were changed, added or removed.
- * Everything else stays as `current`, so the form's dirty fields are exactly
- * the admin's edits.
+ * Inside a set, only the matches (and set winners) that differ from the base
+ * are taken from the draft. Everything else stays as `current`, so the form's
+ * dirty fields are exactly the admin's edits.
  *
- * Where the admin and a newer edit touched the same field or set, the
+ * Where the admin and a newer edit touched the same field, set, or match, the
  * admin's draft wins, and the form shows it for review before submitting.
  * Changes to a set that no longer exists (the session's sets were replaced
  * since) can't be placed and are counted in `dropped`.
@@ -110,7 +138,11 @@ export function applyDraft(
     const before = baseSets.get(set.setId);
     const draft = draftSets.get(set.setId);
     if (before && !draft) continue; // the admin removed it
-    sets.push(draft && before && !same(draft, before) ? draft : set);
+    sets.push(
+      draft && before && !same(draft, before)
+        ? mergeSet(set, draft, before)
+        : set,
+    );
   }
   for (const [setId, before] of baseSets) {
     if (currentIds.has(setId)) continue;
