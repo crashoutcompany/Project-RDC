@@ -39,17 +39,25 @@ export function collectImportFlags(
 
   sets.forEach((set, setIndex) =>
     set.matches.forEach((match, matchIndex) => {
-      for (const flag of match.visionFlags ?? []) {
-        const playerSession = match.playerSessions.find(
-          (ps) => ps.playerId === flag.playerId,
-        );
-        if (!playerSession) continue;
+      if (!match.visionFlags?.length) return;
+      // Each player's stat values in this match, by stat name.
+      const statsByPlayer = new Map(
+        match.playerSessions.map((ps) => [
+          ps.playerId,
+          new Map(ps.playerStats.map((s) => [s.stat, s.statValue])),
+        ]),
+      );
+
+      for (const flag of match.visionFlags) {
+        const stats = statsByPlayer.get(flag.playerId);
+        if (!stats) continue;
 
         if (flag.field !== PLAYER_NAME_FIELD) {
-          const stat = playerSession.playerStats.find(
-            (s) => s.stat === flag.field,
-          );
-          if (!stat || normalize(stat.statValue) !== normalize(flag.value))
+          const statValue = stats.get(flag.field);
+          if (
+            statValue === undefined ||
+            normalize(statValue) !== normalize(flag.value)
+          )
             continue;
         }
 

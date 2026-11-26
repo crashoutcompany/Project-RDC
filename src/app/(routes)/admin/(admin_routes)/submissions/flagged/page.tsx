@@ -21,6 +21,16 @@ const fieldLabel = (field: string) =>
     : (Object.values(STAT_CONFIGS).find((config) => config.name === field)
         ?.displayName ?? field);
 
+const COLUMNS = [
+  "Session",
+  "Match",
+  "Player",
+  "Field",
+  "Read as",
+  "Confidence",
+  "Review",
+];
+
 export default function Page() {
   return (
     <div>
@@ -60,13 +70,9 @@ async function FlaggedImports() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Session</TableHead>
-            <TableHead>Match</TableHead>
-            <TableHead>Player</TableHead>
-            <TableHead>Field</TableHead>
-            <TableHead>Read as</TableHead>
-            <TableHead>Confidence</TableHead>
-            <TableHead>Review</TableHead>
+            {COLUMNS.map((column) => (
+              <TableHead key={column}>{column}</TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
