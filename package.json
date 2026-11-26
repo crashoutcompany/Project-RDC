@@ -108,7 +108,7 @@
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.186.0",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.1.2",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.4.6",
     "husky": "^9.1.7",
@@ -123,7 +123,7 @@
     "react-doctor": "^0.9.23",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.1.2"
   },
   "pnpm": {
     "overrides": {
@@ -137,8 +137,6 @@
       "hono": "^4.13.16",
       "@hono/node-server": "^2.1.6",
       "diff": "^5.2.2",
-      "vitest": "^5.0.3",
-      "@vitest/mocker": "^5.0.3",
       "effect": "^3.22.1"
     }
   }
