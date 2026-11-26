@@ -279,3 +279,65 @@ describe("writeSessionTree", () => {
     });
   });
 });
+
+describe("vision flags after an edit", () => {
+  const goals = (value: string) => [{ value, gameStat: { statName: "RL_GOALS" } }];
+  const savedFlag = (id: number, overrides: Record<string, unknown> = {}) => ({
+    id,
+    setIndex: 0,
+    matchIndex: 0,
+    playerId: 1,
+    field: "RL_GOALS",
+    readValue: "3",
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    db.gameSet.findMany.mockResolvedValue([
+      {
+        matches: [
+          {
+            matchId: 30,
+            matchWinners: [],
+            playerSessions: [{ playerSessionId: 40, playerId: 1, playerStats: goals("3") }],
+          },
+        ],
+      },
+    ] as never);
+  });
+
+  it("drops open and rejected flags whose field no longer holds the read value", async () => {
+    db.visionImportFlag.findMany.mockResolvedValue([
+      savedFlag(1), // still 3: kept
+      savedFlag(2, { readValue: "5" }), // fixed by the edit: dropped
+      savedFlag(3, { matchIndex: 1 }), // its match was removed: dropped
+      savedFlag(4, { field: "PLAYER_NAME", readValue: "Mark" }), // still playing: kept
+      savedFlag(5, { field: "PLAYER_NAME", playerId: 2, readValue: "Dylan" }), // swapped out: dropped
+    ] as never);
+
+    await writeSessionTree(tx, SESSION, [set(5)], { replacingSetIds: [5] });
+
+    expect(db.visionImportFlag.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionId: 10, status: { in: ["PENDING", "REJECTED"] } },
+      }),
+    );
+    expect(db.visionImportFlag.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [2, 3, 5] } },
+    });
+  });
+
+  it("leaves flags alone when every field still holds its read value", async () => {
+    db.visionImportFlag.findMany.mockResolvedValue([savedFlag(1)] as never);
+
+    await writeSessionTree(tx, SESSION, [set(5)], { replacingSetIds: [5] });
+
+    expect(db.visionImportFlag.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("doesn't look for flags when writing a new session", async () => {
+    await writeSessionTree(tx, SESSION, [set(1)]);
+
+    expect(db.visionImportFlag.findMany).not.toHaveBeenCalled();
+  });
+});

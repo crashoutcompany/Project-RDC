@@ -186,6 +186,28 @@ describe("Gemini output through the game processors", () => {
     expect(result.status).toBe(VisionResultCodes.CheckRequest);
   });
 
+  it("scores the fields Gemini lists as unsure below the review threshold", () => {
+    quiet();
+    const fields = parseGeminiText(
+      GAMES["mario-kart-8"],
+      JSON.stringify({
+        players: [
+          { gamertag: "Mark", member: "Mark", team: null, stats: { mk8_place: 2 }, unsure: ["mk8_place", "gamertag"] },
+          { gamertag: "Dylan", member: "Dylan", team: null, stats: { mk8_place: 1 } },
+        ],
+        winning_team: null,
+      }),
+    );
+    const result = processScoreboard({ fields, gameId: 1, sessionPlayers: players, ocrCorrections: false });
+    if (result.status === VisionResultCodes.Failed) throw new Error(result.message);
+
+    expect(result.status).toBe(VisionResultCodes.Success);
+    expect(result.data.players.map((p) => p.lowConfidence?.map((f) => f.field))).toEqual([
+      ["PLAYER_NAME", "MK8_POS"],
+      undefined,
+    ]);
+  });
+
   it("rejects text that doesn't match the schema", () => {
     expect(() => parseGeminiText(GAMES["mario-kart-8"], '{"players": "nope"}')).toThrow(/schema/);
   });

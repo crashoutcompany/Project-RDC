@@ -18,6 +18,7 @@ import { revalidateSessionData } from "@/lib/revalidate";
 import { PostHogEvents } from "@/posthog/events";
 import { generateMvpForSession } from "@/lib/mvp/generate";
 import { MVP_GAMES } from "@/lib/mvp/process-sets";
+import { collectImportFlags } from "@/lib/vision/import-flags";
 
 export async function approveSession(sessionId: number) {
   try {
@@ -192,6 +193,14 @@ export const insertNewSessionFromAdmin = async (
         },
         validatedSession.sets,
       );
+
+      // Low-confidence vision reads go to the review queue. A warning only:
+      // the session can still be approved with flags open.
+      const flags = collectImportFlags(validatedSession.sets);
+      if (flags.length > 0)
+        await tx.visionImportFlag.createMany({
+          data: flags.map((flag) => ({ ...flag, sessionId })),
+        });
     }, SESSION_TX_OPTIONS);
 
     after(() => logFormSuccess("ADMIN_FORM", user));

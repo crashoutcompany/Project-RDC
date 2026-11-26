@@ -23,6 +23,7 @@ import {
   listPendingEdits,
   rejectEditRequest,
 } from "../editSession";
+import { listFlaggedImports, resolveVisionFlag } from "../visionFlags";
 import { handleAnalyzeBtnClick } from "@/app/(routes)/admin/_utils/rdc-vision-helpers";
 import { analyzeMvp } from "@/app/ai/actions";
 import type { Player } from "@/generated/prisma/client";
@@ -52,6 +53,8 @@ const adminActions: [string, () => Promise<unknown>][] = [
   ["listPendingEdits", () => listPendingEdits()],
   ["approveEditRequest", () => approveEditRequest(1)],
   ["rejectEditRequest", () => rejectEditRequest(1)],
+  ["listFlaggedImports", () => listFlaggedImports()],
+  ["resolveVisionFlag", () => resolveVisionFlag(1, { action: "confirm" })],
   ["getRDCVideoDetails", () => getRDCVideoDetails("dQw4w9WgXcQ", "Call of Duty", "anon")],
   // Throws instead of returning an error object.
   ["analyzeMvp", () => analyzeMvp([], 1).catch((error: Error) => ({ error: error.message }))],

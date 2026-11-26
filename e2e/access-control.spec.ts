@@ -6,7 +6,11 @@ import { TESTER_STORAGE_STATE } from "./global-setup";
  * signed-in users off /signin; pages under it enforce their own auth too.
  */
 test.describe("access control: guest", () => {
-  for (const path of ["/admin", "/admin/submissions"]) {
+  for (const path of [
+    "/admin",
+    "/admin/submissions",
+    "/admin/submissions/flagged",
+  ]) {
     test(`${path} redirects to sign-in`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(/\/signin$/);
@@ -55,6 +59,24 @@ test.describe("access control: admin", () => {
     await expect(page.getByTestId("admin-submissions-content")).toBeVisible({
       timeout: 20000,
     });
+  });
+
+  test("flagged imports queue renders", async ({ page }) => {
+    await page.goto("/admin/submissions/flagged");
+    await expect(page.getByTestId("admin-flagged-shell-marker")).toBeVisible();
+    await expect(page.getByTestId("admin-flagged-content")).toBeVisible({
+      timeout: 20000,
+    });
+    // Admins only: the action behind the queue answered, not a denial.
+    await expect(page.getByTestId("admin-flagged-content")).not.toContainText(
+      "Not Authenticated",
+    );
+  });
+
+  test("sidebar links to the flagged imports queue", async ({ page }) => {
+    await page.goto("/admin/submissions");
+    await page.getByRole("link", { name: "Flagged imports" }).click();
+    await expect(page).toHaveURL(/\/admin\/submissions\/flagged$/);
   });
 
   test("profile renders for the signed-in user", async ({ page }) => {

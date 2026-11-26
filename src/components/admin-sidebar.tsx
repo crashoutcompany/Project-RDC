@@ -12,13 +12,14 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { Gamepad, Home, Notebook } from "lucide-react";
+import { Flag, Gamepad, Home, Notebook } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
   { label: "Dashboard", icon: Home, href: "/admin" },
   { label: "Submissions", icon: Notebook, href: "/admin/submissions" },
+  { label: "Flagged imports", icon: Flag, href: "/admin/submissions/flagged" },
   { label: "Update", icon: Gamepad, href: "/admin/update" },
 ];
 

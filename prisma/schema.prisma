@@ -22,6 +22,7 @@ model Player {
   dayWins         Session[]         @relation("DayWinners")
   mvpOf           Session[]         @relation("Mvp")
   GameSetToPlayer GameSetToPlayer[]
+  visionFlags     VisionImportFlag[]
 
   @@map("players")
 }
@@ -88,6 +89,7 @@ model Session {
   /// [MvpOutput]
   mvpStats            Json? // json not in schema
   sessionRevisions    SessionRevision[]
+  visionFlags         VisionImportFlag[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -299,4 +301,38 @@ model Feedback {
   message   String
   userEmail String  @map("user_email")
   createdAt DateTime @default(now()) @map("created_at")
+}
+
+enum VisionFlagStatus {
+  PENDING
+  CONFIRMED
+  CORRECTED
+  REJECTED
+}
+
+/// A field a vision import read with low model confidence, waiting for an
+/// admin to confirm, correct or reject it. A warning only: it never blocks
+/// approving the session. The match is located by position (nth set by setId,
+/// nth match by matchId) because edits recreate match rows.
+model VisionImportFlag {
+  id             Int              @id @default(autoincrement())
+  sessionId      Int              @map("session_id")
+  session        Session          @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  setIndex       Int              @map("set_index")
+  matchIndex     Int              @map("match_index")
+  playerId       Int              @map("player_id")
+  player         Player           @relation(fields: [playerId], references: [playerId], onDelete: Cascade)
+  /// A StatName, or PLAYER_NAME for the row's player name.
+  field          String
+  readValue      String           @map("read_value")
+  confidence     Float
+  status         VisionFlagStatus @default(PENDING)
+  correctedValue String?          @map("corrected_value")
+  reviewedBy     String?          @map("reviewed_by")
+  reviewedAt     DateTime?        @map("reviewed_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([sessionId, status])
+  @@index([playerId])
+  @@map("vision_import_flags")
 }

@@ -69,6 +69,38 @@ describe("insertNewSessionFromAdmin", () => {
     expect(revalidateTag).toHaveBeenCalledWith("getMember", "max");
   });
 
+  it("saves the import's low-confidence fields for review, without blocking the insert", async () => {
+    const form = codSessionForm();
+    const match = form.sets[0].matches[0];
+    match.visionFlags = [
+      { playerId: 1, field: "COD_SCORE", value: "100", confidence: 0.4 },
+      // Fixed in the form before submitting, so nothing to review.
+      { playerId: 1, field: "COD_POS", value: "3", confidence: 0.5 },
+    ];
+
+    expect(await insertNewSessionFromAdmin(form)).toEqual({ error: null });
+
+    expect(db.visionImportFlag.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          sessionId: 10,
+          setIndex: 0,
+          matchIndex: 0,
+          playerId: 1,
+          field: "COD_SCORE",
+          readValue: "100",
+          confidence: 0.4,
+        },
+      ],
+    });
+  });
+
+  it("saves no flags for a confident import", async () => {
+    await insertNewSessionFromAdmin(codSessionForm());
+
+    expect(db.visionImportFlag.createMany).not.toHaveBeenCalled();
+  });
+
   it("connects the entered day winners to the new session", async () => {
     const dayWinners = [{ playerId: 1, playerName: "Ben" as const }];
 

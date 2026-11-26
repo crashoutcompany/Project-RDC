@@ -1,4 +1,11 @@
-import type { AnalyzedPlayer, Stat, VisionPlayer } from "@/lib/visionTypes";
+import {
+  isLowConfidence,
+  PLAYER_NAME_FIELD,
+  type AnalyzedPlayer,
+  type LowConfidenceField,
+  type Stat,
+  type VisionPlayer,
+} from "@/lib/visionTypes";
 import type { Player } from "@/generated/prisma/client";
 import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";
 import { getStatConfigByFieldKey, type StatConfig } from "../stat-configs";
@@ -10,6 +17,7 @@ type ProcessedPlayer = {
   reqCheckFlag: boolean;
   playerData: { name: string; stats: Stat[] };
   teamKey?: string;
+  lowConfidence: LowConfidenceField[];
 };
 
 /**
@@ -32,6 +40,13 @@ export const processPlayer = (
 ): ProcessedPlayer => {
   let reqCheckFlag = false;
   const stats = new Map<string, Stat>();
+  const lowConfidence = new Map<string, LowConfidenceField>();
+  const nameConfidence = player.valueObject?.PlayerName?.confidence;
+  if (isLowConfidence(nameConfidence))
+    lowConfidence.set(PLAYER_NAME_FIELD, {
+      field: PLAYER_NAME_FIELD,
+      confidence: nameConfidence,
+    });
 
   for (const [fieldName, field] of Object.entries(player.valueObject)) {
     if (fieldName === "PlayerName") continue;
@@ -53,10 +68,18 @@ export const processPlayer = (
       stat: statConfig?.name || "UNKNOWN_STAT",
       statValue,
     });
+    // Only low model confidence flags a field. A stat the configs don't know
+    // isn't saved, so there is nothing to review.
+    if (statConfig && isLowConfidence(field.confidence))
+      lowConfidence.set(statConfig.name, {
+        field: statConfig.name,
+        confidence: field.confidence,
+      });
   }
 
   return {
     reqCheckFlag,
+    lowConfidence: [...lowConfidence.values()],
     playerData: {
       name: player.valueObject?.PlayerName?.content || "Unknown",
       stats: [...stats.values()],
@@ -88,6 +111,9 @@ export const validateProcessedPlayer = (
     name: sessionPlayer.playerName,
     stats: [...processedPlayer.playerData.stats],
     teamKey: processedPlayer.teamKey,
+    ...(processedPlayer.lowConfidence.length > 0 && {
+      lowConfidence: processedPlayer.lowConfidence,
+    }),
   };
 };
 
