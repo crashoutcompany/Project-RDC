@@ -12,6 +12,7 @@ const session = (dayWinners: Winners, sets: { setWinners: Winners; matches: Winn
   sessionId: 1,
   sessionName: "Night",
   sessionUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  date: new Date("2026-01-01"),
   dayWinners,
   sets: sets.map((set, setId) => ({
     setId,

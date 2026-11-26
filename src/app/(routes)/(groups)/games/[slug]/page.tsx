@@ -8,7 +8,8 @@ import { statBoardFor } from "./_helpers/stat-board";
 import { gameImages, gameSlug, GamesEnum } from "@/lib/games";
 import { getAllMembers } from "prisma/lib/members";
 import { NoMembers } from "../../members/_components/members";
-import { calcWinsPerPlayer } from "./_helpers/stats";
+import { calcRecentForm, calcWinsPerPlayer } from "./_helpers/stats";
+import { RecentFormStrip } from "./_components/dashboard/recent-form";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notFound } from "next/navigation";
@@ -110,6 +111,7 @@ async function GameDetailContent({
   const winsData =
     winsResult.success && winsResult.data ? winsResult.data : { sessions: [] };
   const winsPerPlayer = calcWinsPerPlayer(winsData);
+  const recentForm = calcRecentForm(winsData);
 
   if (!membersResult.success || !membersResult.data) return <NoMembers />;
 
@@ -133,7 +135,12 @@ async function GameDetailContent({
 
   return (
     <div data-testid="game-detail-content">
-      <GameDashboard data={dashboardData}>{gameComponent}</GameDashboard>
+      <GameDashboard
+        data={dashboardData}
+        recentForm={<RecentFormStrip form={recentForm} />}
+      >
+        {gameComponent}
+      </GameDashboard>
       <div className="mt-12">
         <GameRecords sessions={sessionsData} />
       </div>

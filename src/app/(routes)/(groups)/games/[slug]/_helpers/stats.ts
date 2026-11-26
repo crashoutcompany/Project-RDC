@@ -33,3 +33,46 @@ export const calcWinsPerPlayer = (
 
   return Array.from(members, ([player, wins]) => ({ player, ...wins }));
 };
+
+export const RECENT_FORM_SESSIONS = 5;
+
+export type RecentForm = {
+  sessions: {
+    sessionId: number;
+    sessionName: string;
+    date: Date;
+    dayWinners: string[];
+  }[];
+  /** Days won across those sessions, most first. */
+  daysWon: { player: string; days: number }[];
+};
+
+/**
+ * The crew's form over the latest sessions: who won each day, newest first,
+ * and a days-won tally for that window. Reads the same `dayWinners` as the
+ * "Days won" tab.
+ */
+export const calcRecentForm = (
+  game: QueryResponseData<Awaited<ReturnType<typeof getWinsPerPlayer>>>,
+  count = RECENT_FORM_SESSIONS,
+): RecentForm => {
+  const sessions = [...game.sessions]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, count)
+    .map((session) => ({
+      sessionId: session.sessionId,
+      sessionName: session.sessionName,
+      date: session.date,
+      dayWinners: session.dayWinners.map((w) => w.playerName),
+    }));
+
+  const tally = new Map<string, number>();
+  for (const { dayWinners } of sessions)
+    for (const player of dayWinners) tally.set(player, (tally.get(player) ?? 0) + 1);
+
+  const daysWon = Array.from(tally, ([player, days]) => ({ player, days })).sort(
+    (a, b) => b.days - a.days,
+  );
+
+  return { sessions, daysWon };
+};
