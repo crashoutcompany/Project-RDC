@@ -11,6 +11,8 @@ import type { GameDashboardData, Sessions } from "../../_helpers/dashboard";
 
 type GameDashboardProps = {
   data: GameDashboardData;
+  /** Rendered right under the banner (the recent-form strip). */
+  recentForm?: React.ReactNode;
   children?: React.ReactNode;
 };
 
@@ -22,7 +24,7 @@ type GameDashboardProps = {
  * @param props - Contains the assembled dashboard data and optional children for game-specific content.
  * @returns The complete game dashboard JSX element.
  */
-export function GameDashboard({ data, children }: GameDashboardProps) {
+export function GameDashboard({ data, recentForm, children }: GameDashboardProps) {
   const [activeSession, setActiveSession] = useState<Sessions[0] | null>(null);
 
   /**
@@ -41,6 +43,8 @@ export function GameDashboard({ data, children }: GameDashboardProps) {
         gameImage={data.gameImage}
         stats={data.bannerStats}
       />
+
+      {recentForm}
 
       <div className="grid gap-8 lg:grid-cols-2">
         <PilotProfile mvp={data.mvpProfile} gameName={data.gameName} />

@@ -29,10 +29,12 @@ export const getWinsPerPlayer = async (gameId: number) =>
       select: {
         sessions: {
           where: approvedSession,
+          orderBy: { date: "desc" },
           select: {
             sessionId: true,
             sessionName: true,
             sessionUrl: true,
+            date: true,
             dayWinners: true,
             sets: {
               select: {
