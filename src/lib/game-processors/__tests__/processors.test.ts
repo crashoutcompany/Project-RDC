@@ -375,3 +375,49 @@ describe("stat fields", () => {
     expect(statsOf(result.players[0])).toEqual({ MR_KILLS: "14" });
   });
 });
+
+describe("low model confidence", () => {
+  /** One MK8 row with chosen confidences for the name and the place. */
+  const read = (name: number, place: number): ScoreboardFields => [
+    {
+      type: "array",
+      valueArray: [
+        {
+          type: "object",
+          valueObject: {
+            PlayerName: { type: "string", content: "Mark", confidence: name },
+            mk8_place: { type: "string", content: "2", confidence: place },
+          },
+        },
+        {
+          type: "object",
+          valueObject: {
+            PlayerName: { type: "string", content: "Dylan", confidence: 1 },
+            mk8_place: { type: "string", content: "1", confidence: 0.99 },
+          },
+        },
+      ],
+    },
+  ];
+
+  it("marks the place and the name a model wasn't sure of, without changing the status", () => {
+    const result = run(MK8, read(0.42, 0.61));
+
+    expect(result.status).toBe(SUCCESS);
+    expect(result.players[0].lowConfidence).toEqual([
+      { field: "PLAYER_NAME", confidence: 0.42 },
+      { field: "MK8_POS", confidence: 0.61 },
+    ]);
+    expect(result.players[1].lowConfidence).toBeUndefined();
+  });
+
+  it("marks nothing at or above the threshold", () => {
+    expect(run(MK8, read(0.8, 0.95)).players[0].lowConfidence).toBeUndefined();
+  });
+
+  it("doesn't mark an unknown player's row: it is dropped, not imported", () => {
+    const result = run(MK8, solo(["Mark", { mk8_place: "1" }], ["xX_Rando_Xx", { mk8_place: "2" }]));
+
+    expect(result.players.every((p) => p.lowConfidence === undefined)).toBe(true);
+  });
+});

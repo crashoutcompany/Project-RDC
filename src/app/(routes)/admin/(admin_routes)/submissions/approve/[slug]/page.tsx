@@ -1,4 +1,6 @@
 import { getSessionById } from "prisma/lib/session";
+import { getVisionFlagCounts } from "prisma/lib/vision-flags";
+import { VisionFlagWarning } from "../_components/VisionFlagWarning";
 import { sessionToFormValues } from "../../../../_utils/session-to-form";
 import { ApproveSessionForm } from "../_components/ApproveSessionForm";
 import { Suspense } from "react";
@@ -30,7 +32,10 @@ const Component = async ({ params }: { params: Promise<{ slug: string }> }) => {
   if (isNaN(sessionId))
     return <div className="container mx-auto py-6">Invalid session ID</div>;
 
-  const session = await getSessionById(sessionId);
+  const [session, flagCounts] = await Promise.all([
+    getSessionById(sessionId),
+    getVisionFlagCounts(sessionId),
+  ]);
 
   if (!session?.data) {
     return <div className="container mx-auto py-6">Session not found</div>;
@@ -38,6 +43,7 @@ const Component = async ({ params }: { params: Promise<{ slug: string }> }) => {
 
   return (
     <div data-testid="admin-approve-content">
+      <VisionFlagWarning {...flagCounts} />
       <ApproveSessionForm
         defaultValues={sessionToFormValues(session.data)}
         sessionId={sessionId}

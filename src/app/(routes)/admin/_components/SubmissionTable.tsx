@@ -43,6 +43,9 @@ export const SubmissionTable = async ({
         sessionEditRequests: {
           select: { id: true },
         },
+        _count: {
+          select: { visionFlags: { where: { status: "PENDING" } } },
+        },
       },
     }),
     prisma.session.count({ where: { isApproved: false } }),
@@ -85,6 +88,14 @@ export const SubmissionTable = async ({
               <TableCell>{`${new Date(session.createdAt).toLocaleString()}`}</TableCell>
               <TableCell>
                 {session.isApproved ? "Approved" : "Pending"}
+                {session._count.visionFlags > 0 && (
+                  <Link
+                    href="/admin/submissions/flagged"
+                    className="ml-2 rounded bg-yellow-500/15 px-1.5 py-0.5 text-xs text-yellow-600 hover:underline dark:text-yellow-400"
+                  >
+                    {session._count.visionFlags} flagged
+                  </Link>
+                )}
               </TableCell>
               <TableCell>
                 <DropdownMenu>

@@ -5,12 +5,17 @@ import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";
 import type { AnalyzedPlayer, AnalyzedPlayersObj } from "@/lib/visionTypes";
 import type { ScoreboardFields } from "./analyze-scoreboard";
 import { UnusableOutputError } from "./api-errors";
-import { buildPrompt, buildSchema, SYSTEM_PROMPT, type ScoreboardOutput } from "./gemini-prompt";
+import { buildPrompt, buildSchema, GAMERTAG_FIELD, SYSTEM_PROMPT, type ScoreboardOutput } from "./gemini-prompt";
 import { screenStatConfigs, specForGameId, type GameSpec } from "./scoreboard-specs";
 
 export const GEMINI_MODEL = "gemini-3.8-flash";
 /** The setting the benchmark validated: "low" thinking for Gemini 3.x. */
 export const GEMINI_THINKING = { thinkingLevel: "low" } as const;
+/**
+ * Gemini has no per-field confidence, so a field it lists as `unsure` gets this
+ * score (below LOW_CONFIDENCE_THRESHOLD) and every other field gets 1.
+ */
+export const GEMINI_UNSURE_CONFIDENCE = 0.5;
 /** Reads take ~5s; a hung request times out (retryable) so the fallback still gets a turn. */
 const GEMINI_TIMEOUT_MS = 60_000;
 
@@ -91,17 +96,23 @@ export function geminiOutputToFields(spec: GameSpec, output: ScoreboardOutput): 
   const toPlayer = (row: ScoreboardOutput["players"][number]): AnalyzedPlayer => {
     const name = (row.member && findPlayer(row.member)?.playerName) || row.gamertag;
     const stats = row.stats as Record<string, number | null>;
+    const unsure = new Set<string>(row.unsure ?? []);
+    const confidenceOf = (field: string) => (unsure.has(field) ? GEMINI_UNSURE_CONFIDENCE : 1);
     return {
       type: "object",
       valueObject: {
-        PlayerName: { type: "string", content: name, confidence: 1 },
+        PlayerName: { type: "string", content: name, confidence: confidenceOf(GAMERTAG_FIELD) },
         ...Object.fromEntries(
           configs.map((config) => {
             const value = stats[config.fieldKey];
             // undefined content makes the processor default to 0 and flag the match for review.
             return [
               config.fieldKey,
-              { type: "string", content: value === null || value === undefined ? undefined : String(value), confidence: 1 },
+              {
+                type: "string",
+                content: value === null || value === undefined ? undefined : String(value),
+                confidence: confidenceOf(config.fieldKey),
+              },
             ];
           }),
         ),

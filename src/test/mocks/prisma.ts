@@ -19,16 +19,20 @@ const mockPrisma = {
     deleteMany: vi.fn(),
   },
   gameSet: {
+    findMany: vi.fn(async () => []),
     create: vi.fn(async () => ({ setId: 1 })),
     update: vi.fn(async () => ({ setId: 1 })),
     deleteMany: vi.fn(),
   },
   match: {
     create: vi.fn(async () => ({ matchId: 1 })),
+    update: vi.fn(async () => ({ matchId: 1 })),
     deleteMany: vi.fn(),
   },
   playerSession: {
     create: vi.fn(async () => ({ playerSessionId: 1, playerId: 1 })),
+    findMany: vi.fn(async () => []),
+    update: vi.fn(async () => ({ playerSessionId: 1 })),
     deleteMany: vi.fn(),
   },
   playerStat: {
@@ -53,6 +57,12 @@ const mockPrisma = {
     deleteMany: vi.fn(),
   },
   feedback: { create: vi.fn() },
+  visionImportFlag: {
+    findMany: vi.fn(async () => []),
+    findUnique: vi.fn(),
+    createMany: vi.fn(async () => ({ count: 0 })),
+    updateMany: vi.fn(async () => ({ count: 1 })),
+  },
   $transaction: vi.fn(
     async (callback: (tx: typeof mockPrisma) => Promise<unknown>) =>
       callback(mockPrisma),

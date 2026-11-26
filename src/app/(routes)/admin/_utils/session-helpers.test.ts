@@ -100,6 +100,31 @@ describe("visionResultToMatch", () => {
 
     expect(match.playerSessions[0]).toMatchObject({ playerId: 0, playerSessionName: "Unknown Player" });
   });
+
+  it("carries low-confidence fields with the values they were imported as", () => {
+    const match = visionResultToMatch([
+      {
+        playerId: 1,
+        name: "Mark",
+        stats,
+        lowConfidence: [
+          { field: "MK8_POS", confidence: 0.5 },
+          { field: "PLAYER_NAME", confidence: 0.6 },
+        ],
+      },
+      // An unidentified row isn't saved, so it can't be reviewed.
+      { name: "???", stats, lowConfidence: [{ field: "MK8_POS", confidence: 0.1 }] },
+    ]);
+
+    expect(match.visionFlags).toEqual([
+      { playerId: 1, field: "MK8_POS", value: "2", confidence: 0.5 },
+      { playerId: 1, field: "PLAYER_NAME", value: "Mark", confidence: 0.6 },
+    ]);
+  });
+
+  it("adds no flags to a confident import", () => {
+    expect(visionResultToMatch([{ playerId: 1, name: "Mark", stats }])).not.toHaveProperty("visionFlags");
+  });
 });
 
 describe("session drafts", () => {

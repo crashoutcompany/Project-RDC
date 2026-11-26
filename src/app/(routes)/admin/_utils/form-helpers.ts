@@ -177,7 +177,24 @@ const playerSessionSchema = z.object({
     .nonempty("At least one player stat is required"),
 });
 
+/**
+ * A field a vision import read with low confidence. Carried on the match so
+ * the server can save it for the admin review queue when the session is
+ * created. It is a warning only and never fails validation.
+ */
+export const visionFlagSchema = z.object({
+  playerId: z.int(),
+  /** A StatName, or PLAYER_NAME_FIELD for the row's name. */
+  field: z.string().min(1),
+  /** The value as imported, so a field the admin already fixed is dropped. */
+  value: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+
+export type VisionFlag = z.infer<typeof visionFlagSchema>;
+
 const matchSchema = z.object({
+  visionFlags: z.array(visionFlagSchema).optional(),
   matchWinners: z
     .array(playerSchema)
     .nonempty("At least one match winner is required"),

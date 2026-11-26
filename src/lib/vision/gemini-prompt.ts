@@ -6,6 +6,9 @@ import { screenStatConfigs, type GameSpec } from "./scoreboard-specs";
 
 const MEMBER_NAMES = Object.keys(PLAYER_MAPPINGS) as [string, ...string[]];
 
+/** The `unsure` entry for a row's gamertag; stats use their field key. */
+export const GAMERTAG_FIELD = "gamertag";
+
 /** The JSON every LLM must return, generated from the game's on-screen stats. */
 export function buildSchema(spec: GameSpec) {
   const stats = Object.fromEntries(
@@ -14,6 +17,7 @@ export function buildSchema(spec: GameSpec) {
       z.number().int().nullable().describe(`${config.displayName}; null if unreadable`),
     ]),
   );
+  const fieldKeys = screenStatConfigs(spec).map((config) => config.fieldKey);
   return z.object({
     players: z.array(
       z.object({
@@ -24,6 +28,10 @@ export function buildSchema(spec: GameSpec) {
           .describe("RDC member this gamertag belongs to, or null if not a member"),
         team: z.string().nullable().describe("Team label as shown, e.g. BLUE; null for solo games"),
         stats: z.object(stats),
+        unsure: z
+          .array(z.enum([GAMERTAG_FIELD, ...fieldKeys]))
+          .optional()
+          .describe("Fields of this row you are not confident you read correctly; empty if sure of all"),
       }),
     ),
     winning_team: z
@@ -62,6 +70,7 @@ export function buildPrompt(spec: GameSpec): string {
     "",
     "Rules:",
     "- Read every number from the image. Use null for a value you cannot read.",
+    "- List in `unsure` any field of a row (`gamertag` or a stat key) you read but are not confident about, e.g. a blurry digit or a partly hidden name. Leave it empty when you are sure.",
     spec.teams
       ? "- Set `team` to the team label shown above the row and `winning_team` to the team marked WINNER."
       : "- Set `team` and `winning_team` to null.",
