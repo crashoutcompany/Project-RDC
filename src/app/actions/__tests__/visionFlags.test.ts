@@ -12,12 +12,15 @@ const flag = (overrides: Record<string, unknown> = {}) => ({
   matchIndex: 1,
   playerId: 1,
   field: "MK8_POS",
+  readValue: "2",
   status: "PENDING",
   session: { isApproved: false },
   ...overrides,
 });
 
-/** Session 10: one set whose second match has Mark (1, the winner) and Dylan (2). */
+const place = (value: string) => [{ value, gameStat: { statName: "MK8_POS" } }];
+
+/** Session 10: one set whose second match has Mark (1, the winner, read 2nd) and Dylan (2). */
 const sessionTree = () => [
   {
     matches: [
@@ -26,8 +29,8 @@ const sessionTree = () => [
         matchId: 31,
         matchWinners: [{ playerId: 1 }],
         playerSessions: [
-          { playerSessionId: 40, playerId: 1 },
-          { playerSessionId: 41, playerId: 2 },
+          { playerSessionId: 40, playerId: 1, playerStats: place("2") },
+          { playerSessionId: 41, playerId: 2, playerStats: place("1") },
         ],
       },
     ],
@@ -112,8 +115,10 @@ describe("resolveVisionFlag", () => {
   });
 
   it("moves a misread name's row, stats and match win to the right player", async () => {
-    db.visionImportFlag.findUnique.mockResolvedValue(flag({ field: "PLAYER_NAME" }) as never);
-    db.player.findUnique.mockResolvedValue({ playerName: "Ben" } as never);
+    db.visionImportFlag.findUnique.mockResolvedValue(
+      flag({ field: "PLAYER_NAME", readValue: "Mark" }) as never,
+    );
+    db.playerSession.findFirst.mockResolvedValue({ player: { playerName: "Ben" } } as never);
 
     expect(await resolveVisionFlag(5, { action: "correct", value: "3" })).toEqual({ error: null });
 
@@ -136,6 +141,57 @@ describe("resolveVisionFlag", () => {
         data: expect.objectContaining({ status: "CORRECTED", correctedValue: "Ben" }),
       }),
     );
+  });
+
+  it("looks for the corrected player among this session's players only", async () => {
+    db.visionImportFlag.findUnique.mockResolvedValue(
+      flag({ field: "PLAYER_NAME", readValue: "Mark" }) as never,
+    );
+    db.playerSession.findFirst.mockResolvedValue(null);
+
+    expect(await resolveVisionFlag(5, { action: "correct", value: "99" })).toEqual({
+      error: "That player isn't in this session.",
+    });
+    expect(db.playerSession.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { sessionId: 10, playerId: 99 } }),
+    );
+    expect(db.playerSession.update).not.toHaveBeenCalled();
+    expect(db.visionImportFlag.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("won't correct a stat an edit already changed", async () => {
+    db.visionImportFlag.findUnique.mockResolvedValue(flag({ readValue: "7" }) as never);
+
+    expect(await resolveVisionFlag(5, { action: "correct", value: "1" })).toEqual({
+      error: "This field changed since import. Review it from Edit.",
+    });
+    expect(db.playerStat.updateMany).not.toHaveBeenCalled();
+    expect(db.visionImportFlag.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("won't write to another match after an edit removed the flagged one", async () => {
+    // Flagged: Mark read 2nd in match 0. An edit then removed match 0, so
+    // position 0 is now the old second match, where Mark finished 4th.
+    db.visionImportFlag.findUnique.mockResolvedValue(flag({ matchIndex: 0 }) as never);
+    db.gameSet.findMany.mockResolvedValue([
+      {
+        matches: [
+          {
+            matchId: 32,
+            matchWinners: [{ playerId: 2 }],
+            playerSessions: [
+              { playerSessionId: 42, playerId: 1, playerStats: place("4") },
+              { playerSessionId: 43, playerId: 2, playerStats: place("1") },
+            ],
+          },
+        ],
+      },
+    ] as never);
+
+    expect(await resolveVisionFlag(5, { action: "correct", value: "1" })).toEqual({
+      error: "This field changed since import. Review it from Edit.",
+    });
+    expect(db.playerStat.updateMany).not.toHaveBeenCalled();
   });
 
   it("won't move a row onto a player already in the match", async () => {

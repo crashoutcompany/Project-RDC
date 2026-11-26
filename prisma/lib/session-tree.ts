@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { reconcileVisionFlags } from "./vision-flags";
 
 type PlayerRef = { playerId: number };
 
@@ -152,6 +153,9 @@ function matchesExistingSets(existingSetIds: number[], sets: SetInput[]) {
  * else (sets added, removed or swapped) deletes every set and recreates them,
  * so no proposed set is silently skipped.
  *
+ * Edits also drop vision flags the rewrite made stale (see
+ * `reconcileVisionFlags`).
+ *
  * `onlySetIds` narrows the in-place case to the sets an edit actually
  * changed; the rest are left untouched, so a stale proposal for one set can't
  * overwrite newer edits to the others. It is ignored when sets are replaced.
@@ -214,4 +218,8 @@ export async function writeSessionTree(
   }
 
   if (stats.length > 0) await tx.playerStat.createMany({ data: stats });
+
+  // An edit rebuilt this session's matches, so vision flags that locate their
+  // match by position may now be stale. New sessions save their flags after this.
+  if (replacingSetIds) await reconcileVisionFlags(tx, session.sessionId);
 }

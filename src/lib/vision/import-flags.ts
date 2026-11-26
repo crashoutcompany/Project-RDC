@@ -20,7 +20,7 @@ export type ImportFlagRow = {
 };
 
 /** "007" and "7" are the same stat; the form stores the canonical string. */
-const normalize = (value: string) => {
+export const normalizeFlagValue = (value: string) => {
   const trimmed = value.trim();
   return /^\d+$/.test(trimmed) ? String(parseInt(trimmed, 10)) : trimmed;
 };
@@ -56,7 +56,7 @@ export function collectImportFlags(
           const statValue = stats.get(flag.field);
           if (
             statValue === undefined ||
-            normalize(statValue) !== normalize(flag.value)
+            normalizeFlagValue(statValue) !== normalizeFlagValue(flag.value)
           )
             continue;
         }
@@ -69,11 +69,32 @@ export function collectImportFlags(
           matchIndex,
           playerId: flag.playerId,
           field: flag.field,
-          readValue: normalize(flag.value),
+          readValue: normalizeFlagValue(flag.value),
           confidence: flag.confidence,
         });
       }
     }),
   );
   return rows;
+}
+
+/**
+ * True while the flagged spot still holds what vision read: for a stat, the
+ * player's stat there still has `readValue`; for a name, the player is still
+ * in that match. `stats` is the player's stats at the flag's position, or
+ * undefined when the player isn't there. A flag that fails this was changed
+ * by an edit (or now points at a different match after sets or matches were
+ * added or removed), so it must not be written through.
+ */
+export function stillHoldsRead(
+  flag: { field: string; readValue: string },
+  stats: { statName: string; value: string }[] | undefined,
+): boolean {
+  if (!stats) return false;
+  if (flag.field === PLAYER_NAME_FIELD) return true;
+  const stat = stats.find((s) => s.statName === flag.field);
+  return (
+    stat !== undefined &&
+    normalizeFlagValue(stat.value) === normalizeFlagValue(flag.readValue)
+  );
 }

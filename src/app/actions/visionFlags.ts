@@ -6,6 +6,13 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { errorCodes } from "@/lib/constants";
 import { revalidateSessionData } from "@/lib/revalidate";
 import { PLAYER_NAME_FIELD } from "@/lib/visionTypes";
+import { stillHoldsRead } from "@/lib/vision/import-flags";
+import {
+  loadFlagTree,
+  matchAt,
+  statsAt,
+  type FlagTreeMatch,
+} from "prisma/lib/vision-flags";
 
 export type FlagResolution =
   | { action: "confirm" }
@@ -66,34 +73,6 @@ export async function listFlaggedImports() {
   return { error: null, data: res.data };
 }
 
-type MatchRef = {
-  matchId: number;
-  matchWinners: { playerId: number }[];
-  playerSessions: { playerSessionId: number; playerId: number }[];
-};
-
-/** The flagged match: the nth set (by setId) and its nth match (by matchId). */
-async function findFlaggedMatch(
-  tx: Prisma.TransactionClient,
-  flag: { sessionId: number; setIndex: number; matchIndex: number },
-): Promise<MatchRef | undefined> {
-  const sets = await tx.gameSet.findMany({
-    where: { sessionId: flag.sessionId },
-    orderBy: { setId: "asc" },
-    select: {
-      matches: {
-        orderBy: { matchId: "asc" },
-        select: {
-          matchId: true,
-          matchWinners: { select: { playerId: true } },
-          playerSessions: { select: { playerSessionId: true, playerId: true } },
-        },
-      },
-    },
-  });
-  return sets[flag.setIndex]?.matches[flag.matchIndex];
-}
-
 /** Writes a stat's corrected value. Returns the value as stored. */
 async function correctStat(
   tx: Prisma.TransactionClient,
@@ -127,7 +106,7 @@ async function correctPlayer(
     matchIndex: number;
     playerId: number;
   },
-  match: MatchRef,
+  match: FlagTreeMatch,
   playerSessionId: number,
   value: string,
 ) {
@@ -139,11 +118,14 @@ async function correctPlayer(
   if (match.playerSessions.some((ps) => ps.playerId === playerId))
     throw new FlagError("That player is already in this match.");
 
-  const player = await tx.player.findUnique({
-    where: { playerId },
-    select: { playerName: true },
+  // Only someone already playing in this session; a stale page or a crafted
+  // call can't add an outsider to one match.
+  const inSession = await tx.playerSession.findFirst({
+    where: { sessionId: flag.sessionId, playerId },
+    select: { player: { select: { playerName: true } } },
   });
-  if (!player) throw new FlagError("Player not found.");
+  if (!inSession) throw new FlagError("That player isn't in this session.");
+  const { player } = inSession;
 
   await tx.playerSession.update({
     where: { playerSessionId },
@@ -200,6 +182,7 @@ export async function resolveVisionFlag(
           matchIndex: true,
           playerId: true,
           field: true,
+          readValue: true,
           status: true,
           session: { select: { isApproved: true } },
         },
@@ -214,12 +197,19 @@ export async function resolveVisionFlag(
 
       let correctedValue: string | undefined;
       if (resolution.action === "correct") {
-        const match = await findFlaggedMatch(tx, flag);
+        const tree = await loadFlagTree(tx, flag.sessionId);
+        const match = matchAt(tree, flag);
         const playerSession = match?.playerSessions.find(
           (ps) => ps.playerId === flag.playerId,
         );
         if (!match || !playerSession)
           throw new FlagError("That player is no longer in this match.");
+        // The flag finds its match by position. If an edit changed this field
+        // or moved matches around, writing here could hit the wrong match.
+        if (!stillHoldsRead(flag, statsAt(tree, flag)))
+          throw new FlagError(
+            "This field changed since import. Review it from Edit.",
+          );
 
         correctedValue =
           flag.field === PLAYER_NAME_FIELD

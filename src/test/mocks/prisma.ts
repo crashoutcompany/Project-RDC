@@ -32,6 +32,7 @@ const mockPrisma = {
   playerSession: {
     create: vi.fn(async () => ({ playerSessionId: 1, playerId: 1 })),
     findMany: vi.fn(async () => []),
+    findFirst: vi.fn(),
     update: vi.fn(async () => ({ playerSessionId: 1 })),
     deleteMany: vi.fn(),
   },
@@ -62,6 +63,7 @@ const mockPrisma = {
     findUnique: vi.fn(),
     createMany: vi.fn(async () => ({ count: 0 })),
     updateMany: vi.fn(async () => ({ count: 1 })),
+    deleteMany: vi.fn(),
   },
   $transaction: vi.fn(
     async (callback: (tx: typeof mockPrisma) => Promise<unknown>) =>
