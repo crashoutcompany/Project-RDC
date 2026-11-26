@@ -1,8 +1,14 @@
+-- Idempotent: databases created with `db push` may already have these.
+
 -- CreateEnum
-CREATE TYPE "VisionFlagStatus" AS ENUM ('PENDING', 'CONFIRMED', 'CORRECTED', 'REJECTED');
+DO $$ BEGIN
+    CREATE TYPE "VisionFlagStatus" AS ENUM ('PENDING', 'CONFIRMED', 'CORRECTED', 'REJECTED');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateTable
-CREATE TABLE "vision_import_flags" (
+CREATE TABLE IF NOT EXISTS "vision_import_flags" (
     "id" SERIAL NOT NULL,
     "session_id" INTEGER NOT NULL,
     "set_index" INTEGER NOT NULL,
@@ -21,14 +27,21 @@ CREATE TABLE "vision_import_flags" (
 );
 
 -- CreateIndex
-CREATE INDEX "vision_import_flags_session_id_status_idx" ON "vision_import_flags"("session_id", "status");
+CREATE INDEX IF NOT EXISTS "vision_import_flags_session_id_status_idx" ON "vision_import_flags"("session_id", "status");
 
 -- CreateIndex
-CREATE INDEX "vision_import_flags_player_id_idx" ON "vision_import_flags"("player_id");
+CREATE INDEX IF NOT EXISTS "vision_import_flags_player_id_idx" ON "vision_import_flags"("player_id");
 
 -- AddForeignKey
-ALTER TABLE "vision_import_flags" ADD CONSTRAINT "vision_import_flags_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "sessions"("session_id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "vision_import_flags" ADD CONSTRAINT "vision_import_flags_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "sessions"("session_id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "vision_import_flags" ADD CONSTRAINT "vision_import_flags_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "players"("player_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
+DO $$ BEGIN
+    ALTER TABLE "vision_import_flags" ADD CONSTRAINT "vision_import_flags_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "players"("player_id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
