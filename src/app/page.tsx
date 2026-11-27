@@ -69,6 +69,13 @@ export default function Home() {
             >
               Meet the fighters
             </ArcadeButton>
+            <ArcadeButton
+              href="/daily"
+              variant="dark"
+              data-testid="home-daily-link"
+            >
+              Daily puzzle
+            </ArcadeButton>
           </div>
         </div>
       </div>
