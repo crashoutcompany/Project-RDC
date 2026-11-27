@@ -167,6 +167,12 @@ describe("applyDraft", () => {
     edit(values);
     return { values, base: base() };
   };
+  const mk8Race = (winner: typeof MARK_P) => mk8Set(1, winner).matches[0];
+  const twoRaces = (setId: number, race1: typeof MARK_P, race2: typeof MARK_P) => ({
+    setId,
+    setWinners: [race1],
+    matches: [mk8Race(race1), mk8Race(race2)],
+  });
 
   it("applies only what the admin changed, so a newer edit is not reverted", () => {
     // The session was renamed and set 2 re-scored by a newer approved edit.
@@ -193,6 +199,49 @@ describe("applyDraft", () => {
     const result = applyDraft(current, draft);
 
     expect(result?.values.sets).toEqual([mk8Set(1, DES_P), mk8Set(2, DES_P)]);
+  });
+
+  it("restores only the match the admin edited, not a sibling a newer edit changed", () => {
+    // One MK8 set, two races: a restored draft of race 1 must not revert race 2.
+    const races = () => mk8SessionForm([twoRaces(1, MARK_P, MARK_P)]);
+    const current = races();
+    current.sets[0].matches[1] = mk8Race(DES_P); // newer approved edit to race 2
+    const values = races();
+    values.sets[0].matches[0] = mk8Race(DES_P); // admin's unfinished edit to race 1
+
+    const result = applyDraft(current, { values, base: races() });
+
+    expect(result?.values.sets[0].matches).toEqual([
+      mk8Race(DES_P),
+      mk8Race(DES_P),
+    ]);
+    expect(result?.values.sets[0].setWinners).toEqual([MARK_P]);
+  });
+
+  it("keeps a newer set-winner change when the admin only edited a match", () => {
+    const races = () => mk8SessionForm([twoRaces(1, MARK_P, MARK_P)]);
+    const current = races();
+    current.sets[0].setWinners = [DES_P];
+    const values = races();
+    values.sets[0].matches[0] = mk8Race(DES_P);
+
+    const result = applyDraft(current, { values, base: races() });
+
+    expect(result?.values.sets[0].setWinners).toEqual([DES_P]);
+    expect(result?.values.sets[0].matches[0]).toEqual(mk8Race(DES_P));
+    expect(result?.values.sets[0].matches[1]).toEqual(mk8Race(MARK_P));
+  });
+
+  it("uses the whole draft set when the admin added or removed a match", () => {
+    const races = () => mk8SessionForm([twoRaces(1, MARK_P, MARK_P)]);
+    const current = races();
+    current.sets[0].matches[1] = mk8Race(DES_P); // newer edit to race 2
+    const values = races();
+    values.sets[0].matches.push(mk8Race(DES_P)); // admin added race 3
+
+    const result = applyDraft(current, { values, base: races() });
+
+    expect(result?.values.sets[0].matches).toEqual(values.sets[0].matches);
   });
 
   it("lets the draft win where the admin and a newer edit changed the same field", () => {
