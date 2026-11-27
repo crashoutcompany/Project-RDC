@@ -12,6 +12,7 @@ import {
 } from "@/posthog/ai-telemetry";
 import { logMvpUpdateSuccess } from "@/posthog/server-analytics";
 import { revalidateSessionData } from "@/lib/revalidate";
+import { findPlayer } from "@/app/(routes)/admin/_utils/player-mappings";
 import { getSetsData, ProcessedSet } from "./process-sets";
 
 type UserSession = Parameters<typeof logMvpUpdateSuccess>[4];
@@ -28,6 +29,19 @@ const storedMvp = (sessionId: number) =>
     where: { sessionId, mvpId: { not: null } },
     include: { mvp: true },
   });
+
+/**
+ * Maps Gemini's MVP name onto a roster player. Prefix matching is unsafe:
+ * `startsWith: ""` matches every player, and `"D"` matches both Dylan and Des.
+ * Empty / whitespace-only names are rejected; aliases and gamertags go through
+ * `findPlayer`, and anything else is tried as an exact (case-insensitive) DB name
+ * so an admin-added player still resolves.
+ */
+export function canonicalMvpName(raw: string): string | null {
+  const name = raw.trim();
+  if (!name) return null;
+  return findPlayer(name)?.playerName ?? name;
+}
 
 /**
  * Generates and stores the MVP for an approved session, returning the stored
@@ -88,9 +102,14 @@ export async function generateMvpForSession(
     await flushAiTelemetry();
   }
 
+  const playerName = canonicalMvpName(output.player);
+  if (!playerName)
+    throw new Error("MVP analysis returned an empty player name");
+
   const player = await prisma.player.findFirst({
-    where: { playerName: { startsWith: output.player } },
+    where: { playerName: { equals: playerName, mode: "insensitive" } },
   });
+  if (!player) throw new Error(`MVP player not found: ${playerName}`);
 
   // Only write while the session still has no MVP, so concurrent runs can't overwrite each other.
   const updateResult = await handlePrismaOperation((prisma) =>
@@ -99,7 +118,7 @@ export async function generateMvpForSession(
       data: {
         mvpDescription: output.description,
         mvpStats: output.stats,
-        mvpId: player?.playerId,
+        mvpId: player.playerId,
       },
     }),
   );

@@ -14,13 +14,29 @@ vi.mock("@/posthog/ai-telemetry", () => ({
 import { generateText } from "ai";
 import prisma from "prisma/db";
 import { revalidateTag } from "next/cache";
-import { generateMvpForSession } from "../generate";
+import { canonicalMvpName, generateMvpForSession } from "../generate";
 
 const db = vi.mocked(prisma, { deep: true });
 const gemini = vi.mocked(generateText);
 
 const sets = [{ setWinners: ["Ben"], matches: [] }];
 const output = { player: "Ben", description: "Carried", stats: [] };
+
+describe("canonicalMvpName", () => {
+  it("rejects empty or whitespace-only names", () => {
+    expect(canonicalMvpName("")).toBeNull();
+    expect(canonicalMvpName("   ")).toBeNull();
+  });
+
+  it("maps aliases and case to the roster name", () => {
+    expect(canonicalMvpName("dyl")).toBe("Dylan");
+    expect(canonicalMvpName("ben")).toBe("Ben");
+  });
+
+  it("does not treat a shared prefix as a match", () => {
+    expect(canonicalMvpName("D")).toBe("D");
+  });
+});
 
 describe("generateMvpForSession", () => {
   it("returns the stored MVP without calling Gemini", async () => {
@@ -47,6 +63,9 @@ describe("generateMvpForSession", () => {
     expect(await generateMvpForSession(7, { sets })).toEqual(output);
 
     expect(gemini).toHaveBeenCalledTimes(1);
+    expect(db.player.findFirst).toHaveBeenCalledWith({
+      where: { playerName: { equals: "Ben", mode: "insensitive" } },
+    });
     expect(db.session.updateMany).toHaveBeenCalledWith({
       where: { sessionId: 7, mvpId: null },
       data: { mvpDescription: "Carried", mvpStats: [], mvpId: 4 },
@@ -54,8 +73,56 @@ describe("generateMvpForSession", () => {
     expect(revalidateTag).toHaveBeenCalledWith("getAllSessions", "max");
   });
 
+  it("resolves an alias to the roster name before writing", async () => {
+    db.session.findFirst.mockResolvedValue(null);
+    db.player.findFirst.mockResolvedValue({ playerId: 2 } as never);
+    db.session.updateMany.mockResolvedValue({ count: 1 } as never);
+    gemini.mockResolvedValue({
+      output: { player: "dyl", description: "Carried", stats: [] },
+      usage: {},
+    } as never);
+
+    await generateMvpForSession(7, { sets });
+
+    expect(db.player.findFirst).toHaveBeenCalledWith({
+      where: { playerName: { equals: "Dylan", mode: "insensitive" } },
+    });
+  });
+
+  it("does not write when Gemini returns an empty player name", async () => {
+    db.session.findFirst.mockResolvedValue(null);
+    gemini.mockResolvedValue({
+      output: { player: "", description: "Unrecognized game", stats: [] },
+      usage: {},
+    } as never);
+
+    await expect(generateMvpForSession(7, { sets })).rejects.toThrow(
+      "empty player name",
+    );
+    expect(db.player.findFirst).not.toHaveBeenCalled();
+    expect(db.session.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not write a guessed player for an unmatched prefix", async () => {
+    db.session.findFirst.mockResolvedValue(null);
+    db.player.findFirst.mockResolvedValue(null);
+    gemini.mockResolvedValue({
+      output: { player: "D", description: "Carried", stats: [] },
+      usage: {},
+    } as never);
+
+    await expect(generateMvpForSession(7, { sets })).rejects.toThrow(
+      "MVP player not found: D",
+    );
+    expect(db.player.findFirst).toHaveBeenCalledWith({
+      where: { playerName: { equals: "D", mode: "insensitive" } },
+    });
+    expect(db.session.updateMany).not.toHaveBeenCalled();
+  });
+
   it("returns the winning MVP when another run stored one first", async () => {
     db.session.findFirst.mockResolvedValue(null);
+    db.player.findFirst.mockResolvedValue({ playerId: 4 } as never);
     db.session.updateMany.mockResolvedValue({ count: 0 } as never);
     db.session.findFirstOrThrow.mockResolvedValue({
       mvpDescription: "Someone else",
